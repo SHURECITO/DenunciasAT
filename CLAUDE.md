@@ -72,7 +72,7 @@ DenunciasAT/
 - [ ] Fase 0 — Repo y GitHub Projects configurados
 - [x] Fase 1 — Scaffold monorepo NestJS
 - [x] Fase 2 — dashboard-api con auth, denuncias, Swagger
-- [ ] Fase 3 — Frontend Next.js con login y listado
+- [x] Fase 3 — Frontend Next.js con login y listado
 - [ ] Fase 4 — Dockerización y docker-compose
 - [ ] Fase 5 — DockerHub + README
 
@@ -186,6 +186,15 @@ Para entrega 3 y 4. No implementar aún, solo mantener carpetas vacías.
 - Decisión: `NODE_ENV !== 'production'` activa `synchronize` en TypeORM para dev; en prod usar migraciones.
 - Fix: eliminar `node_modules` anidado en `dashboard-api` para evitar conflictos de tipos en monorepo.
 - `infrastructure/postgres/init.sql` con `CREATE SEQUENCE IF NOT EXISTS radicado_seq`.
+
+### Sesión 2 — 2026-04-14
+- Fase 3 completada: frontend Next.js 14 con App Router, Tailwind CSS.
+- Login con cookie httpOnly `token` (set por Route Handler `/api/auth/login` que proxea a NestJS; `sameSite: strict`, `secure` en prod).
+- Middleware protege todas las rutas salvo `/login` y `/api/auth/login`.
+- `lib/api.ts` server-side usa `cookies()` de `next/headers`; `getDenuncias`, `createDenuncia`, `patchEstadoDenuncia`.
+- Dashboard (Server Component): sidebar fijo 240px, filtros por estado como `<Link>` con `searchParams`, tabla con `DenunciaEstadoBadge`, estado vacío.
+- Decisión: filtrado via URL (`/?estado=RECIBIDA`) para mantener todo server-side sin SWR/React Query.
+- Decisión: cookie httpOnly impide leer el JWT desde JS; el email del usuario se muestra como placeholder hasta implementar decodificación server-side en Fase 4+.
 
 ---
 
