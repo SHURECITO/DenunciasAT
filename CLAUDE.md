@@ -1,0 +1,187 @@
+# CLAUDE.md
+
+## Approach
+- Think before acting. Read existing files before writing code.
+- Be concise in output but thorough in reasoning.
+- Prefer editing over rewriting whole files.
+- Do not re-read files you have already read unless the file may have changed.
+- Skip files over 100KB unless explicitly required.
+- Recommend starting a new session when switching to an unrelated task.
+- Test your code before declaring done.
+- No sycophantic openers or closing fluff.
+- Keep solutions simple and direct.
+- User instructions always override this file.
+
+# DenunciasAT — Contexto del proyecto para Claude Code
+
+> Este archivo es la memoria persistente del proyecto. Actualízalo al final de cada sesión de trabajo con los cambios relevantes. Mantenerlo conciso es crítico para no desperdiciar tokens.
+
+---
+
+## Qué es este proyecto
+
+Sistema de gestión de denuncias ciudadanas para el concejal de Medellín Andrés Tobón. Los ciudadanos denuncian por WhatsApp (chatbot IA), el equipo gestiona desde un dashboard web, se genera un documento oficial .docx que el abogado imprime y radica presencialmente en el Concejo.
+
+## Stack
+
+| Capa | Tecnología |
+|------|-----------|
+| Monorepo | NestJS workspace (nest-cli.json) |
+| Backend | NestJS 10, Node.js 20, TypeORM, PostgreSQL 16 |
+| Frontend | Next.js 14, TypeScript, Tailwind CSS |
+| Almacenamiento archivos | MinIO (self-hosted S3) |
+| WhatsApp | Evolution API |
+| IA | LLM económico (GPT-4o-mini / Claude Haiku) |
+| RAG | pgvector (dentro del mismo PostgreSQL) |
+| Infraestructura | Docker, Docker Compose → Kubernetes (entregas futuras) |
+
+## Estructura del monorepo
+
+```
+DenunciasAT/
+├── CLAUDE.md                  # ← este archivo, actualizar siempre
+├── package.json               # único, compartido
+├── nest-cli.json              # registra las apps activas
+├── tsconfig.json
+├── docker-compose.yml
+├── .env                       # no commitear, usar .env.example
+├── .env.example
+├── README.md
+├── apps/
+│   ├── dashboard-api/         # ✅ ENTREGA 2 — activo
+│   ├── chatbot-service/       # 🔜 ENTREGA 3
+│   ├── whatsapp-service/      # 🔜 ENTREGA 3
+│   ├── document-service/      # 🔜 ENTREGA 4
+│   ├── notification-service/  # 🔜 ENTREGA 4
+│   └── rag-service/           # 🔜 ENTREGA 4
+├── libs/
+│   ├── common/                # DTOs e interfaces compartidas
+│   ├── database/              # módulo TypeORM compartido
+│   └── messaging/             # abstracciones entre servicios
+├── frontend/                  # Next.js 14 — dashboard
+└── infrastructure/
+    ├── postgres/init.sql
+    └── k8s/                   # manifiestos Kubernetes (entrega final)
+```
+
+## Estado actual del proyecto
+
+> Actualizar esta sección al terminar cada sesión.
+
+- [ ] Fase 0 — Repo y GitHub Projects configurados
+- [x] Fase 1 — Scaffold monorepo NestJS
+- [ ] Fase 2 — dashboard-api con auth, denuncias, Swagger
+- [ ] Fase 3 — Frontend Next.js con login y listado
+- [ ] Fase 4 — Dockerización y docker-compose
+- [ ] Fase 5 — DockerHub + README
+
+## Entidades principales (TypeORM)
+
+### Denuncia
+```typescript
+id: number (PK, SERIAL)
+radicado: string (ÚNICO, generado con SEQUENCE atómica — nunca manual)
+nombreCiudadano: string
+cedula: string
+telefono: string
+ubicacion: string
+descripcion: string
+estado: enum DenunciaEstado
+dependenciaAsignada: string
+esEspecial: boolean (default: false)
+fechaCreacion: Date
+fechaActualizacion: Date
+```
+
+### DenunciaEstado (enum)
+```typescript
+RECIBIDA = 'RECIBIDA'
+EN_GESTION = 'EN_GESTION'
+RADICADA = 'RADICADA'
+CON_RESPUESTA = 'CON_RESPUESTA'
+```
+
+### Usuario
+```typescript
+id: number (PK)
+nombre: string
+email: string (ÚNICO)
+passwordHash: string
+activo: boolean (default: true)
+fechaCreacion: Date
+```
+
+## Variables de entorno (.env.example)
+
+```env
+# Base de datos
+DB_HOST=postgres
+DB_PORT=5432
+DB_USER=denunciasAt
+DB_PASSWORD=denunciasAt2024
+DB_NAME=denunciasAt
+
+# Auth
+JWT_SECRET=dev_secret_change_in_production
+JWT_EXPIRES_IN=8h
+
+# Frontend
+NEXT_PUBLIC_API_URL=http://localhost:3000
+```
+
+## Reglas de negocio críticas (resumen)
+
+1. El radicado es ÚNICO por denuncia — usar SEQUENCE de PostgreSQL, nunca lógica manual
+2. Los estados solo avanzan, nunca retroceden
+3. No se puede pasar a RADICADA sin documento revisado cargado
+4. Solo se notifica al ciudadano en estado CON_RESPUESTA
+5. Las denuncias especiales (esEspecial=true) no generan .docx ni pasan por estados
+6. El chat de cada denuncia se guarda completo en base de datos
+
+## Microservicios (referencia futura)
+
+Para entrega 3 y 4. No implementar aún, solo mantener carpetas vacías.
+
+| Servicio | Puerto | Responsabilidad |
+|----------|--------|-----------------|
+| dashboard-api | 3000 | REST API del dashboard |
+| dashboard-frontend | 3001 | Next.js |
+| chatbot-service | 3002 | Lógica conversacional + LLM |
+| whatsapp-service | 3003 | Evolution API bridge |
+| document-service | 3004 | Generación .docx y PDF merge |
+| notification-service | 3005 | Notificaciones salientes WA |
+| rag-service | 3006 | Búsqueda semántica pgvector |
+| postgres | 5432 | Base de datos |
+| minio | 9000 | Almacenamiento de archivos |
+
+## Convenciones de código
+
+- Idioma del código: inglés (variables, funciones, clases)
+- Idioma de comentarios y commits: español
+- Commits: `feat:`, `fix:`, `chore:`, `docs:` — en español descriptivo
+- Ejemplo: `feat: crear módulo de denuncias con CRUD básico`
+- DTOs siempre con class-validator
+- Nunca exponer passwordHash en respuestas de la API
+- Guards JWT aplicados globalmente en dashboard-api, excepto /auth/login y /health
+
+## Links del proyecto
+
+- Repo: https://github.com/SHURECITO/DenunciasAT
+- GitHub Projects (backlog): https://github.com/SHURECITO/DenunciasAT/projects
+- DockerHub API: shurecito/denunciasat-api
+- DockerHub Frontend: shurecito/denunciasat-frontend
+
+---
+
+## Historial de sesiones
+
+### Sesión 1 — 2026-04-14
+- Scaffold completo del monorepo NestJS con `nest-cli.json` en modo `monorepo: true`.
+- `dashboard-api` generado en `apps/dashboard-api/` con NestJS 11, compilación verificada (`nest build` limpio).
+- Libs vacías creadas: `common`, `database`, `messaging` con módulos NestJS mínimos y paths configurados en `tsconfig.json`.
+- Carpetas placeholder con `.gitkeep` para los 5 servicios futuros y `infrastructure/`.
+- `package.json` raíz único con scripts, jest config y moduleNameMapper para las libs.
+
+---
+
+> INSTRUCCIÓN PARA CLAUDE CODE: Al final de cada sesión de trabajo, actualiza la sección "Estado actual del proyecto" marcando las fases completadas, agrega una entrada en "Historial de sesiones" con un resumen de 3-5 líneas de lo que se hizo, y actualiza cualquier decisión técnica nueva que se haya tomado. Mantén el archivo bajo 200 líneas.
