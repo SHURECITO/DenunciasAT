@@ -14,7 +14,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         username: config.get<string>('DB_USER', 'denunciasAt'),
         password: config.get<string>('DB_PASSWORD', 'denunciasAt2026'),
         database: config.get<string>('DB_NAME', 'denunciasAt'),
-        entities: [__dirname + '/../../apps/**/*.entity{.ts,.js}'],
+        autoLoadEntities: true,
         synchronize: config.get<string>('NODE_ENV') !== 'production',
         logging: false,
       }),
