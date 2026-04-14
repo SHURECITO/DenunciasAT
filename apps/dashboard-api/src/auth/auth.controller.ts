@@ -1,0 +1,24 @@
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+
+@ApiTags('auth')
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Iniciar sesión y obtener JWT' })
+  login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
+  }
+
+  @Post('seed')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Crear usuario admin inicial (solo si no existe)' })
+  seed() {
+    return this.authService.seed();
+  }
+}

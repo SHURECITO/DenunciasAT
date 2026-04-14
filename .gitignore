@@ -35,3 +35,6 @@ coverage/
 
 # NestJS
 .nest/
+
+# Claude Code
+.claude/

@@ -11,6 +11,7 @@
 - No sycophantic openers or closing fluff.
 - Keep solutions simple and direct.
 - User instructions always override this file.
+- Pay close attention to good cybersecurity practices and application protection.
 
 # DenunciasAT — Contexto del proyecto para Claude Code
 
@@ -70,7 +71,7 @@ DenunciasAT/
 
 - [ ] Fase 0 — Repo y GitHub Projects configurados
 - [x] Fase 1 — Scaffold monorepo NestJS
-- [ ] Fase 2 — dashboard-api con auth, denuncias, Swagger
+- [x] Fase 2 — dashboard-api con auth, denuncias, Swagger
 - [ ] Fase 3 — Frontend Next.js con login y listado
 - [ ] Fase 4 — Dockerización y docker-compose
 - [ ] Fase 5 — DockerHub + README
@@ -176,11 +177,15 @@ Para entrega 3 y 4. No implementar aún, solo mantener carpetas vacías.
 ## Historial de sesiones
 
 ### Sesión 1 — 2026-04-14
-- Scaffold completo del monorepo NestJS con `nest-cli.json` en modo `monorepo: true`.
-- `dashboard-api` generado en `apps/dashboard-api/` con NestJS 11, compilación verificada (`nest build` limpio).
-- Libs vacías creadas: `common`, `database`, `messaging` con módulos NestJS mínimos y paths configurados en `tsconfig.json`.
-- Carpetas placeholder con `.gitkeep` para los 5 servicios futuros y `infrastructure/`.
-- `package.json` raíz único con scripts, jest config y moduleNameMapper para las libs.
+- Fase 1 y Fase 2 completadas en la misma sesión.
+- Scaffold monorepo NestJS 11, `nest-cli.json` monorepo, libs `common/database/messaging`, placeholders servicios futuros.
+- dashboard-api implementado: auth JWT (passport-jwt), entidades `Usuario` y `Denuncia` con TypeORM, SEQUENCE PostgreSQL para radicado (`DAT-000001`).
+- Endpoints: `POST /auth/login`, `POST /auth/seed`, `GET /health`, CRUD denuncias con validación de estados hacia adelante.
+- Swagger en `/api` con BearerAuth; ValidationPipe global con whitelist.
+- Decisión: `passwordHash` con `select: false` en la entidad — nunca se expone en queries normales.
+- Decisión: `NODE_ENV !== 'production'` activa `synchronize` en TypeORM para dev; en prod usar migraciones.
+- Fix: eliminar `node_modules` anidado en `dashboard-api` para evitar conflictos de tipos en monorepo.
+- `infrastructure/postgres/init.sql` con `CREATE SEQUENCE IF NOT EXISTS radicado_seq`.
 
 ---
 
