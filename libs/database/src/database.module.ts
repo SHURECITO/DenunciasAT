@@ -12,7 +12,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         host: config.get<string>('DB_HOST', 'localhost'),
         port: config.get<number>('DB_PORT', 5432),
         username: config.get<string>('DB_USER', 'denunciasAt'),
-        password: config.get<string>('DB_PASSWORD', 'denunciasAt2024'),
+        password: config.get<string>('DB_PASSWORD', 'denunciasAt2026'),
         database: config.get<string>('DB_NAME', 'denunciasAt'),
         entities: [__dirname + '/../../apps/**/*.entity{.ts,.js}'],
         synchronize: config.get<string>('NODE_ENV') !== 'production',

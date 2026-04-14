@@ -119,7 +119,7 @@ fechaCreacion: Date
 DB_HOST=postgres
 DB_PORT=5432
 DB_USER=denunciasAt
-DB_PASSWORD=denunciasAt2024
+DB_PASSWORD=denunciasAt2026
 DB_NAME=denunciasAt
 
 # Auth
