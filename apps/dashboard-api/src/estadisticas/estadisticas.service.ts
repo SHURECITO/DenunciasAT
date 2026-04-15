@@ -2,7 +2,8 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
 import { Response } from 'express';
 import * as ExcelJS from 'exceljs';
-import PDFDocument from 'pdfkit';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const PDFDocument = require('pdfkit') as typeof import('pdfkit');
 
 @Injectable()
 export class EstadisticasService implements OnModuleInit {
