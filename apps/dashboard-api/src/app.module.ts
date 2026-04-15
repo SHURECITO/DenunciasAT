@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { DenunciasModule } from './denuncias/denuncias.module';
 import { MensajesModule } from './mensajes/mensajes.module';
 import { UsuariosModule } from './usuarios/usuarios.module';
+import { EstadisticasModule } from './estadisticas/estadisticas.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -15,6 +16,7 @@ import { AppController } from './app.controller';
     DenunciasModule,
     MensajesModule,
     UsuariosModule,
+    EstadisticasModule,
   ],
   controllers: [AppController],
 })

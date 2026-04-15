@@ -137,3 +137,95 @@ export function toggleActivoUsuario(id: number): Promise<Usuario> {
     method: 'PATCH',
   });
 }
+
+// ── Estadísticas ──────────────────────────────────────────────────────────────
+
+export interface ResumenEstadisticas {
+  totalDenuncias: number;
+  porEstado: {
+    RECIBIDA: number;
+    EN_GESTION: number;
+    RADICADA: number;
+    CON_RESPUESTA: number;
+  };
+  especiales: number;
+  manuales: number;
+  tasaResolucion: number;
+  casosEstancados: number;
+  tiempoPromedioResolucion: number | null;
+}
+
+export interface DependenciaStat {
+  dependencia: string;
+  total: number;
+  resueltas: number;
+  porcentajeResolucion: number;
+}
+
+export interface PeriodoStat {
+  periodo: string;
+  recibidas: number;
+  resueltas: number;
+}
+
+export function getResumenEstadisticas(
+  desde?: string,
+  hasta?: string,
+): Promise<ResumenEstadisticas> {
+  const q = new URLSearchParams();
+  if (desde) q.set('desde', desde);
+  if (hasta) q.set('hasta', hasta);
+  return apiFetch<ResumenEstadisticas>(`/estadisticas/resumen${q.size ? '?' + q : ''}`);
+}
+
+export function getEstadisticasPorDependencia(
+  desde?: string,
+  hasta?: string,
+): Promise<DependenciaStat[]> {
+  const q = new URLSearchParams();
+  if (desde) q.set('desde', desde);
+  if (hasta) q.set('hasta', hasta);
+  return apiFetch<DependenciaStat[]>(`/estadisticas/por-dependencia${q.size ? '?' + q : ''}`);
+}
+
+export function getEstadisticasPorPeriodo(
+  desde?: string,
+  hasta?: string,
+  agrupacion?: 'semana' | 'mes',
+): Promise<PeriodoStat[]> {
+  const q = new URLSearchParams();
+  if (desde) q.set('desde', desde);
+  if (hasta) q.set('hasta', hasta);
+  if (agrupacion) q.set('agrupacion', agrupacion);
+  return apiFetch<PeriodoStat[]>(`/estadisticas/por-periodo${q.size ? '?' + q : ''}`);
+}
+
+export async function exportarExcel(desde?: string, hasta?: string): Promise<void> {
+  const q = new URLSearchParams();
+  if (desde) q.set('desde', desde);
+  if (hasta) q.set('hasta', hasta);
+  const url = `/api/estadisticas/exportar-excel${q.size ? '?' + q : ''}`;
+  const res = await fetch(url);
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = `denunciantes-${new Date().toISOString().split('T')[0]}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(href);
+}
+
+export async function exportarPdf(desde?: string, hasta?: string): Promise<void> {
+  const q = new URLSearchParams();
+  if (desde) q.set('desde', desde);
+  if (hasta) q.set('hasta', hasta);
+  const url = `/api/estadisticas/exportar-pdf${q.size ? '?' + q : ''}`;
+  const res = await fetch(url);
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = `informe-${new Date().toISOString().split('T')[0]}.pdf`;
+  a.click();
+  URL.revokeObjectURL(href);
+}
