@@ -78,6 +78,7 @@ DenunciasAT/
 - [x] Fase 5 — DockerHub + README
 - [x] Fase 6 — Dashboard completo: detalle, chat, form manual, especiales
 - [x] Fase 7B — Gestión completa de usuarios
+- [x] Fase 7C — Módulo de estadísticas con gráficas y exportación
 
 ## Entidades principales (TypeORM)
 
@@ -217,6 +218,14 @@ Para entrega 3 y 4. No implementar aún, solo mantener carpetas vacías.
 - `next.config.mjs`: `output: 'standalone'` para imagen mínima Next.js.
 - `NODE_ENV=development` en docker-compose para habilitar `synchronize` de TypeORM (en prod usar migraciones).
 - Fase 5 completada: README.md completo, imágenes subidas a DockerHub (`shurecito/denunciasat-api`, `shurecito/denunciasat-frontend`).
+
+### Sesión 6 — 2026-04-15
+- Fase 7C completada: módulo de estadísticas con gráficas y exportación.
+- Backend: EstadisticasModule; vistas materializadas `stats_por_estado` y `stats_por_dependencia` creadas en `onModuleInit`; refrescadas en cada llamada a endpoints.
+- 5 endpoints: resumen (con tasa resolución, estancados, promedio días), por-dependencia, por-periodo (DATE_TRUNC semana/mes), exportar-excel (ExcelJS), exportar-pdf (PDFKit).
+- Frontend: `EstadisticasClient.tsx` con selector período (semana/mes/año/personalizado), 4 tarjetas con semáforo de color, Recharts barras estado + línea período + barras horizontales dependencias.
+- Fix arquitectónico: `import type` en client components para tipos de `lib/api.ts` evita bundling de `next/headers` en el cliente.
+- Todos los items del sidebar ahora activos (Estadísticas y Usuarios); NAV_DISABLED vacío.
 
 ### Sesión 5 — 2026-04-15
 - Fase 7B completada: gestión completa de usuarios.
