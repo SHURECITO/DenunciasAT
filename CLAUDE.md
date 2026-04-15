@@ -76,6 +76,7 @@ DenunciasAT/
 - [x] Fase 3 — Frontend Next.js con login y listado
 - [x] Fase 4 — Dockerización y docker-compose
 - [x] Fase 5 — DockerHub + README
+- [x] Fase 6 — Dashboard completo: detalle, chat, form manual, especiales
 
 ## Entidades principales (TypeORM)
 
@@ -91,8 +92,20 @@ descripcion: string
 estado: enum DenunciaEstado
 dependenciaAsignada: string
 esEspecial: boolean (default: false)
+origenManual: boolean (default: false)
+documentoRevisado: boolean (default: false)
 fechaCreacion: Date
 fechaActualizacion: Date
+```
+
+### Mensaje
+```typescript
+id: number (PK, SERIAL)
+denunciaId: number (FK → denuncias, CASCADE DELETE)
+contenido: text
+tipo: enum TipoMensaje (TEXTO, AUDIO_TRANSCRITO, IMAGEN, PDF)
+direccion: enum DireccionMensaje (ENTRANTE, SALIENTE)
+timestamp: Date (auto)
 ```
 
 ### DenunciaEstado (enum)
@@ -203,6 +216,14 @@ Para entrega 3 y 4. No implementar aún, solo mantener carpetas vacías.
 - `next.config.mjs`: `output: 'standalone'` para imagen mínima Next.js.
 - `NODE_ENV=development` en docker-compose para habilitar `synchronize` de TypeORM (en prod usar migraciones).
 - Fase 5 completada: README.md completo, imágenes subidas a DockerHub (`shurecito/denunciasat-api`, `shurecito/denunciasat-frontend`).
+
+### Sesión 4 — 2026-04-15
+- Fase 6 completada: dashboard con todas las funcionalidades.
+- Backend: campos `origenManual` y `documentoRevisado` en Denuncia; entidad `Mensaje` con tabla `mensajes`; módulo MensajesModule.
+- Nuevos endpoints: POST /denuncias/manual, GET /denuncias/especiales, GET+POST /mensajes/:denunciaId, PATCH /denuncias/:id.
+- Validación: transición a RADICADA bloqueada si `documentoRevisado` es false.
+- Frontend: Sidebar.tsx compartido; página detalle `/denuncias/[id]` con DenunciaDetalle (client) + ChatPanel deslizante; `/denuncias/nueva` con form y modal radicado; `/denuncias/especiales`.
+- Route Handlers proxy en `/api/denuncias/*` para exponer acciones mutantes a client components sin exponer JWT.
 
 ---
 
