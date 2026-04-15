@@ -77,6 +77,7 @@ DenunciasAT/
 - [x] Fase 4 — Dockerización y docker-compose
 - [x] Fase 5 — DockerHub + README
 - [x] Fase 6 — Dashboard completo: detalle, chat, form manual, especiales
+- [x] Fase 7B — Gestión completa de usuarios
 
 ## Entidades principales (TypeORM)
 
@@ -216,6 +217,13 @@ Para entrega 3 y 4. No implementar aún, solo mantener carpetas vacías.
 - `next.config.mjs`: `output: 'standalone'` para imagen mínima Next.js.
 - `NODE_ENV=development` en docker-compose para habilitar `synchronize` de TypeORM (en prod usar migraciones).
 - Fase 5 completada: README.md completo, imágenes subidas a DockerHub (`shurecito/denunciasat-api`, `shurecito/denunciasat-frontend`).
+
+### Sesión 5 — 2026-04-15
+- Fase 7B completada: gestión completa de usuarios.
+- Backend: UsuariosModule (GET/POST/PATCH /usuarios, PATCH /toggle-activo); GET /auth/me devuelve usuario autenticado.
+- Seguridad: POST /usuarios re-fetcha tras save para que select:false en passwordHash aplique correctamente; 409 en email duplicado; self-deactivation bloqueada con 400.
+- Frontend: /usuarios con tabla, badges, modales crear/editar, toast de confirmación; botón toggle deshabilitado para usuario con sesión activa; Sidebar "Usuarios" activado.
+- Patrón: /api/auth/me Route Handler expone usuario actual a client components sin tocar el JWT directamente.
 
 ### Sesión 4 — 2026-04-15
 - Fase 6 completada: dashboard con todas las funcionalidades.
