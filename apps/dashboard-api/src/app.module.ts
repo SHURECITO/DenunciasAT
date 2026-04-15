@@ -4,6 +4,7 @@ import { DatabaseModule } from '@app/database';
 import { AuthModule } from './auth/auth.module';
 import { DenunciasModule } from './denuncias/denuncias.module';
 import { MensajesModule } from './mensajes/mensajes.module';
+import { UsuariosModule } from './usuarios/usuarios.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -13,6 +14,7 @@ import { AppController } from './app.controller';
     AuthModule,
     DenunciasModule,
     MensajesModule,
+    UsuariosModule,
   ],
   controllers: [AppController],
 })

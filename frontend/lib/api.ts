@@ -96,3 +96,44 @@ export function patchEstadoDenuncia(id: number, estado: DenunciaEstado): Promise
     body: JSON.stringify({ estado }),
   });
 }
+
+// ── Usuarios ─────────────────────────────────────────────────────────────────
+
+export interface Usuario {
+  id: number;
+  nombre: string;
+  email: string;
+  activo: boolean;
+  fechaCreacion: string;
+}
+
+export function getUsuarios(): Promise<Usuario[]> {
+  return apiFetch<Usuario[]>('/usuarios');
+}
+
+export function createUsuario(data: {
+  nombre: string;
+  email: string;
+  password: string;
+}): Promise<Usuario> {
+  return apiFetch<Usuario>('/usuarios', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateUsuario(
+  id: number,
+  data: { nombre?: string; email?: string },
+): Promise<Usuario> {
+  return apiFetch<Usuario>(`/usuarios/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export function toggleActivoUsuario(id: number): Promise<Usuario> {
+  return apiFetch<Usuario>(`/usuarios/${id}/toggle-activo`, {
+    method: 'PATCH',
+  });
+}
