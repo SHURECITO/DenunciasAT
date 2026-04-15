@@ -49,6 +49,12 @@ export class Denuncia {
   @Column({ default: false })
   esEspecial: boolean;
 
+  @Column({ default: false })
+  origenManual: boolean;
+
+  @Column({ default: false })
+  documentoRevisado: boolean;
+
   @CreateDateColumn()
   fechaCreacion: Date;
 

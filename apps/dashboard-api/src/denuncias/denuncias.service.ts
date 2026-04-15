@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CreateDenunciaDto } from './dto/create-denuncia.dto';
+import { UpdateDenunciaDto } from './dto/update-denuncia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { Denuncia, DenunciaEstado } from './entities/denuncia.entity';
 
@@ -24,7 +25,10 @@ export class DenunciasService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async create(dto: CreateDenunciaDto): Promise<Denuncia> {
+  private async createWithRunner(
+    dto: CreateDenunciaDto,
+    extra: Partial<Denuncia> = {},
+  ): Promise<Denuncia> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -37,6 +41,7 @@ export class DenunciasService {
 
       const denuncia = queryRunner.manager.create(Denuncia, {
         ...dto,
+        ...extra,
         radicado,
         estado: DenunciaEstado.RECIBIDA,
       });
@@ -51,6 +56,14 @@ export class DenunciasService {
     }
   }
 
+  create(dto: CreateDenunciaDto): Promise<Denuncia> {
+    return this.createWithRunner(dto);
+  }
+
+  createManual(dto: CreateDenunciaDto): Promise<Denuncia> {
+    return this.createWithRunner(dto, { origenManual: true });
+  }
+
   findAll(estado?: DenunciaEstado): Promise<Denuncia[]> {
     const where = estado ? { estado } : {};
     return this.denunciasRepo.find({
@@ -59,10 +72,23 @@ export class DenunciasService {
     });
   }
 
+  findEspeciales(): Promise<Denuncia[]> {
+    return this.denunciasRepo.find({
+      where: { esEspecial: true },
+      order: { fechaCreacion: 'DESC' },
+    });
+  }
+
   async findOne(id: number): Promise<Denuncia> {
     const denuncia = await this.denunciasRepo.findOne({ where: { id } });
     if (!denuncia) throw new NotFoundException(`Denuncia #${id} no encontrada`);
     return denuncia;
+  }
+
+  async update(id: number, dto: UpdateDenunciaDto): Promise<Denuncia> {
+    const denuncia = await this.findOne(id);
+    Object.assign(denuncia, dto);
+    return this.denunciasRepo.save(denuncia);
   }
 
   async updateEstado(id: number, dto: UpdateEstadoDto): Promise<Denuncia> {
@@ -74,6 +100,15 @@ export class DenunciasService {
     if (idxNuevo <= idxActual) {
       throw new BadRequestException(
         `No se puede retroceder de "${denuncia.estado}" a "${dto.estado}"`,
+      );
+    }
+
+    if (
+      dto.estado === DenunciaEstado.RADICADA &&
+      !denuncia.documentoRevisado
+    ) {
+      throw new BadRequestException(
+        'El documento debe estar revisado antes de radicar la denuncia',
       );
     }
 

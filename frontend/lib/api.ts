@@ -3,6 +3,8 @@ import { cookies } from 'next/headers';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 export type DenunciaEstado = 'RECIBIDA' | 'EN_GESTION' | 'RADICADA' | 'CON_RESPUESTA';
+export type TipoMensaje = 'TEXTO' | 'AUDIO_TRANSCRITO' | 'IMAGEN' | 'PDF';
+export type DireccionMensaje = 'ENTRANTE' | 'SALIENTE';
 
 export interface Denuncia {
   id: number;
@@ -15,8 +17,19 @@ export interface Denuncia {
   estado: DenunciaEstado;
   dependenciaAsignada: string | null;
   esEspecial: boolean;
+  origenManual: boolean;
+  documentoRevisado: boolean;
   fechaCreacion: string;
   fechaActualizacion: string;
+}
+
+export interface Mensaje {
+  id: number;
+  denunciaId: number;
+  contenido: string;
+  tipo: TipoMensaje;
+  direccion: DireccionMensaje;
+  timestamp: string;
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -44,9 +57,35 @@ export function getDenuncias(estado?: DenunciaEstado): Promise<Denuncia[]> {
   return apiFetch<Denuncia[]>(`/denuncias${query}`);
 }
 
+export function getDenuncia(id: number): Promise<Denuncia> {
+  return apiFetch<Denuncia>(`/denuncias/${id}`);
+}
+
+export function getDenunciasEspeciales(): Promise<Denuncia[]> {
+  return apiFetch<Denuncia[]>('/denuncias/especiales');
+}
+
+export function getMensajes(denunciaId: number): Promise<Mensaje[]> {
+  return apiFetch<Mensaje[]>(`/mensajes/${denunciaId}`);
+}
+
 export function createDenuncia(data: Partial<Denuncia>): Promise<Denuncia> {
   return apiFetch<Denuncia>('/denuncias', {
     method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function createDenunciaManual(data: Partial<Denuncia>): Promise<Denuncia> {
+  return apiFetch<Denuncia>('/denuncias/manual', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function patchDenuncia(id: number, data: Partial<Denuncia>): Promise<Denuncia> {
+  return apiFetch<Denuncia>(`/denuncias/${id}`, {
+    method: 'PATCH',
     body: JSON.stringify(data),
   });
 }
