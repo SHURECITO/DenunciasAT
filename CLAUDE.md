@@ -74,8 +74,8 @@ DenunciasAT/
 - [x] Fase 1 — Scaffold monorepo NestJS
 - [x] Fase 2 — dashboard-api con auth, denuncias, Swagger
 - [x] Fase 3 — Frontend Next.js con login y listado
-- [ ] Fase 4 — Dockerización y docker-compose
-- [ ] Fase 5 — DockerHub + README
+- [x] Fase 4 — Dockerización y docker-compose
+- [x] Fase 5 — DockerHub + README
 
 ## Entidades principales (TypeORM)
 
@@ -196,6 +196,23 @@ Para entrega 3 y 4. No implementar aún, solo mantener carpetas vacías.
 - Dashboard (Server Component): sidebar fijo 240px, filtros por estado como `<Link>` con `searchParams`, tabla con `DenunciaEstadoBadge`, estado vacío.
 - Decisión: filtrado via URL (`/?estado=RECIBIDA`) para mantener todo server-side sin SWR/React Query.
 - Decisión: cookie httpOnly impide leer el JWT desde JS; el email del usuario se muestra como placeholder hasta implementar decodificación server-side en Fase 4+.
+
+### Sesión 3 — 2026-04-15
+- Fase 4 completada: Dockerización multi-stage (deps/build/production) para API y frontend.
+- Fix crítico: `tsconfig.app.json` necesita `rootDir: "../../"` — sin esto TypeScript anida salida en `dist/apps/.../apps/.../src/main.js`.
+- `next.config.mjs`: `output: 'standalone'` para imagen mínima Next.js.
+- `NODE_ENV=development` en docker-compose para habilitar `synchronize` de TypeORM (en prod usar migraciones).
+- Fase 5 completada: README.md completo, imágenes subidas a DockerHub (`shurecito/denunciasat-api`, `shurecito/denunciasat-frontend`).
+
+---
+
+## Próximas entregas
+
+| Entrega | Servicios | Estado |
+|---------|-----------|--------|
+| Entrega 3 | `chatbot-service` + `whatsapp-service` + Evolution API | 🔜 |
+| Entrega 4 | `document-service` + `notification-service` + `rag-service` (pgvector) | 🔜 |
+| Entrega final | Migración completa a Kubernetes | 🔜 |
 
 ---
 
