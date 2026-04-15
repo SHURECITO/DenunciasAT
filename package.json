@@ -10,7 +10,7 @@
     "start": "nest start dashboard-api",
     "start:dev": "nest start dashboard-api --watch",
     "start:debug": "nest start dashboard-api --debug --watch",
-    "start:prod": "node dist/apps/dashboard-api/main",
+    "start:prod": "node dist/apps/dashboard-api/src/main",
     "lint": "eslint \"{apps,libs}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
