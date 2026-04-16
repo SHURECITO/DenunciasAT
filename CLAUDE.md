@@ -23,7 +23,7 @@ Sistema de gestión de denuncias ciudadanas para el concejal Andrés Tobón (Med
 | Backend | NestJS 11, TypeORM, PostgreSQL 16 |
 | Frontend | Next.js 14, Tailwind CSS |
 | WhatsApp | Evolution API v2.1.1 |
-| IA | OpenAI gpt-4o-mini |
+| IA | Google Gemini gemini-2.0-flash-lite |
 | Estado conversacional | Redis (TTL 24h) |
 | Archivos | MinIO |
 | Infra | Docker Compose → Kubernetes (futuro) |
@@ -113,6 +113,7 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 | `API_PORT` | Puerto host expuesto API | `8741` |
 | `FRONTEND_PORT` | Puerto host expuesto frontend | `8742` |
 | `DASHBOARD_API_INTERNAL_KEY` | Auth interna chatbot→API | String random |
+| `GEMINI_API_KEY` | API Key Google Gemini (clasificación) | Obtener en AI Studio |
 
 ## Patrones y decisiones técnicas establecidas
 
@@ -122,6 +123,8 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **`passwordHash`**: `select: false` en entidad — siempre re-fetchear tras save en usuarios
 - **EitherAuthGuard**: JWT OR `x-internal-key` header para endpoints que usan tanto dashboard como chatbot
 - **Chatbot**: máquina de estados en Redis (INICIO→NOMBRE→CEDULA→UBICACION→DESCRIPCION→CONFIRMACION→FINALIZADO)
+- **GeminiService** (`libs/ai/src/gemini.service.ts`): servicio compartido con `clasificarDenuncia()` y `generarJustificacionLegal()`. Modelos pre-inicializados con systemInstruction de normativa colombiana. `generarJustificacionLegal()` será usado por document-service en Entrega 4.
+- **chatbot-service Dockerfile**: copia `dist/` completo (no solo `dist/apps/chatbot-service`) para preservar rutas relativas a `libs/ai` compilado.
 - **Vistas materializadas**: `stats_por_estado`, `stats_por_dependencia` — refresh en cada call de estadísticas
 - **docker-compose**: `restart: unless-stopped` + límites de memoria en todos los servicios
 
@@ -148,6 +151,8 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 **Sesión 7b (2026-04-15) — Fase 9:** whatsapp-service (webhook Evolution), chatbot-service (máquina de estados + Redis + OpenAI), InternalKeyGuard + EitherAuthGuard en dashboard-api, WhatsappModule (estado QR), página /configuracion en frontend con polling de estado.
 
 **Sesión 8 (2026-04-15) — Reconciliación auditoría + Entrega 3:** Puertos internos Docker confirmados (dashboard-api usa 3000 internamente, 8741 solo en host — no cambiar). evolution-api, whatsapp-service y chatbot-service actualizados a 512M + reservations: 256M. .env.example completado con ADMIN_WHATSAPP_NUMBER, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (activos, no comentados). Evolution API v2.1.1 requiere DATABASE_PROVIDER=postgresql + DATABASE_CONNECTION_URI + BD `evolution` en postgres. BD `evolution` creada en init.sql. Build limpio + 7/7 servicios activos confirmados (`/health` OK).
+
+**Sesión 9 (2026-04-15) — Migración LLM OpenAI→Gemini:** Reemplazado openai por @google/generative-ai. GeminiService en libs/ai/src/ con systemInstruction de normativa colombiana (definida una vez, reutilizada). Métodos: clasificarDenuncia() (temp 0.2) y generarJustificacionLegal() (temp 0.3). OPENAI_API_KEY→GEMINI_API_KEY en docker-compose y .env.example. Mensajes del chatbot actualizados a español colombiano empático. Dockerfile corregido para copiar dist/ completo (libs compiladas incluidas). Build NestJS limpio confirmado.
 
 ---
 

@@ -153,7 +153,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3002
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
       REDIS_URL: redis://redis:6379
       # dashboard-api se referencia por puerto INTERNO Docker (3000), no por el host (8741)
       DASHBOARD_API_URL: http://dashboard-api:3000

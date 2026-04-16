@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
+import { GeminiService } from '@app/ai';
 import {
   ConversacionService,
   DatosConversacion,
@@ -11,17 +10,11 @@ import { DashboardApiService } from './dashboard-api.service';
 
 @Injectable()
 export class ChatbotService {
-  private readonly openai: OpenAI;
-
   constructor(
     private readonly conversacion: ConversacionService,
     private readonly dashboardApi: DashboardApiService,
-    private readonly config: ConfigService,
-  ) {
-    this.openai = new OpenAI({
-      apiKey: this.config.get<string>('OPENAI_API_KEY', ''),
-    });
-  }
+    private readonly gemini: GeminiService,
+  ) {}
 
   async procesarMensaje(numero: string, mensaje: string): Promise<string> {
     let estado = await this.conversacion.getEstado(numero);
@@ -78,9 +71,10 @@ export class ChatbotService {
     estado.paso = PasoConversacion.ESPERANDO_NOMBRE;
     await this.conversacion.setEstado(numero, estado);
     return (
-      '¡Bienvenido al sistema de denuncias ciudadanas del *Concejal Andrés Tobón*! 🏛️\n\n' +
-      'Con tu denuncia ayudas a mejorar Medellín. El proceso toma solo unos minutos.\n\n' +
-      '¿Cuál es tu *nombre completo*?'
+      '¡Hola! 👋 Soy el asistente del concejal Andrés Tobón. ' +
+      'Estoy aquí para ayudarte a presentar tu denuncia.\n\n' +
+      'Todo lo que me cuentes será tratado con total confidencialidad. ' +
+      '¿Me puedes decir tu nombre para empezar?'
     );
   }
 
@@ -96,7 +90,7 @@ export class ChatbotService {
     estado.datos.nombre = nombre;
     estado.paso = PasoConversacion.ESPERANDO_CEDULA;
     await this.conversacion.setEstado(numero, estado);
-    return `Gracias, *${nombre}*. ¿Cuál es tu número de *cédula*?`;
+    return `Gracias, ${nombre}. Ahora necesito tu número de cédula para identificarte en el radicado oficial.`;
   }
 
   private async recibirCedula(
@@ -111,7 +105,7 @@ export class ChatbotService {
     estado.datos.cedula = cedula;
     estado.paso = PasoConversacion.ESPERANDO_UBICACION;
     await this.conversacion.setEstado(numero, estado);
-    return '¿En qué *barrio o dirección* ocurrió el problema que deseas reportar?';
+    return 'Perfecto. ¿En qué dirección o sector de Medellín ocurrió lo que quieres reportar?';
   }
 
   private async recibirUbicacion(
@@ -127,8 +121,8 @@ export class ChatbotService {
     estado.paso = PasoConversacion.ESPERANDO_DESCRIPCION;
     await this.conversacion.setEstado(numero, estado);
     return (
-      'Cuéntame con detalle: ¿*qué problema deseas denunciar*?\n\n' +
-      '_Escribe con la mayor claridad posible para que podamos gestionarlo correctamente._'
+      'Cuéntame con detalle qué está pasando. No te preocupes por usar términos legales, cuéntamelo todo. ' +
+      'Es mejor tener muchos más detalles, para poder ayudarte mucho mejor. 🙏'
     );
   }
 
@@ -143,9 +137,9 @@ export class ChatbotService {
     }
     estado.datos.descripcion = descripcion;
 
-    // Clasificar con OpenAI
+    // Clasificar con Gemini
     try {
-      const clasificacion = await this.clasificarDenuncia(descripcion);
+      const clasificacion = await this.gemini.clasificarDenuncia(descripcion);
       estado.datos.esEspecial = clasificacion.esEspecial;
       estado.datos.dependencia = clasificacion.dependencia;
     } catch {
@@ -157,15 +151,17 @@ export class ChatbotService {
     await this.conversacion.setEstado(numero, estado);
 
     const datos = estado.datos;
+    const descripcionCorta =
+      descripcion.length > 100 ? descripcion.substring(0, 100) + '...' : descripcion;
+
     return (
-      '✅ *Resumen de tu denuncia:*\n\n' +
+      'Perfecto, déjame resumirte lo que voy a radicar:\n\n' +
       `👤 Nombre: ${datos.nombre}\n` +
       `🪪 Cédula: ${datos.cedula}\n` +
       `📍 Ubicación: ${datos.ubicacion}\n` +
-      `📝 Descripción: ${datos.descripcion}\n` +
-      `🏢 Dependencia sugerida: ${datos.dependencia}\n\n` +
-      '¿Confirmas el envío de esta denuncia?\n\n' +
-      'Responde *SÍ* para confirmar o *NO* para cancelar.'
+      `🏛️ Dirigido a: ${datos.dependencia}\n` +
+      `📝 Descripción: ${descripcionCorta}\n\n` +
+      '¿Está todo correcto? Responde *sí* para confirmar o dime qué dato quieres corregir.'
     );
   }
 
@@ -179,14 +175,12 @@ export class ChatbotService {
     const esNegativo = ['no', 'n', 'cancelar', 'cancel', '0'].includes(respuesta);
 
     if (!esAfirmativo && !esNegativo) {
-      return 'Por favor responde *SÍ* para confirmar el envío o *NO* para cancelar.';
+      return 'Por favor responde *sí* para confirmar el envío o *no* para cancelar.';
     }
 
     if (esNegativo) {
       await this.conversacion.clearEstado(numero);
-      return (
-        'Tu denuncia ha sido cancelada. Si deseas iniciar una nueva, escribe *hola* en cualquier momento.'
-      );
+      return 'Tu denuncia ha sido cancelada. Si deseas iniciar una nueva, escribe *hola* en cualquier momento.';
     }
 
     const datos = estado.datos as Required<DatosConversacion>;
@@ -204,12 +198,22 @@ export class ChatbotService {
       estado.paso = PasoConversacion.FINALIZADO;
       await this.conversacion.setEstado(numero, estado);
 
+      // Mensaje diferenciado para denuncias especiales (confidenciales)
+      if (datos.esEspecial) {
+        return (
+          'Gracias por tu confianza al compartir esto con nosotros. 🙏 ' +
+          'Tu denuncia ha sido registrada de forma confidencial.\n\n' +
+          'Por la naturaleza delicada de lo que reportas, una persona de confianza del equipo del concejal ' +
+          'se encargará de atenderte directamente. Por favor estate pendiente.'
+        );
+      }
+
       return (
-        `✅ *Tu denuncia ha sido radicada exitosamente.*\n\n` +
-        `📋 Número de radicado: *${radicado}*\n\n` +
-        'El equipo del Concejal Andrés Tobón dará seguimiento a tu caso. ' +
-        'Te notificaremos cuando haya una respuesta.\n\n' +
-        '_Gracias por contribuir a una mejor Medellín._ 🏙️'
+        '✅ ¡Tu denuncia ha sido radicada exitosamente!\n\n' +
+        `Tu número de radicado es: *${radicado}*\n\n` +
+        `El equipo del concejal Andrés Tobón gestionará tu caso ante ${datos.dependencia}. ` +
+        'Cuando tengamos respuesta de la administración te notificaremos por este mismo chat.\n\n' +
+        '¡Gracias por confiar en nosotros! 🤝'
       );
     } catch (err) {
       console.error('Error creando denuncia:', err);
@@ -218,43 +222,5 @@ export class ChatbotService {
         'o comunícate directamente con el despacho.'
       );
     }
-  }
-
-  private async clasificarDenuncia(
-    descripcion: string,
-  ): Promise<{ esEspecial: boolean; dependencia: string }> {
-    const completion = await this.openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content:
-            'Eres un asistente que clasifica denuncias ciudadanas del Concejo de Medellín. ' +
-            'Una denuncia es "especial" si involucra corrupción, derechos humanos, amenazas o violencia. ' +
-            'Sugiere la dependencia municipal más adecuada para tramitarla. ' +
-            'Responde SOLO con JSON válido: { "esEspecial": boolean, "dependencia": string }',
-        },
-        {
-          role: 'user',
-          content: `Clasifica esta denuncia ciudadana:\n\n"${descripcion}"`,
-        },
-      ],
-      max_tokens: 100,
-      temperature: 0.1,
-    });
-
-    const content = completion.choices[0]?.message?.content ?? '{}';
-    // Extraer el JSON de la respuesta
-    const match = content.match(/\{[^}]+\}/);
-    if (!match) return { esEspecial: false, dependencia: 'Sin asignar' };
-
-    const parsed = JSON.parse(match[0]) as {
-      esEspecial?: boolean;
-      dependencia?: string;
-    };
-    return {
-      esEspecial: parsed.esEspecial ?? false,
-      dependencia: parsed.dependencia ?? 'Sin asignar',
-    };
   }
 }
