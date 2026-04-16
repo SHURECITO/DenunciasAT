@@ -85,7 +85,7 @@ Cuando tengas TODOS los datos (nombre/anónimo, cédula si aplica, barrio, direc
 
 NUNCA inventes normas ni números de artículos.`;
 
-const MODEL_ID = 'gemini-2.0-flash';
+const MODEL_ID = 'gemini-2.0-flash-lite'; // gemini-2.0-flash no tiene cuota en el free tier
 
 const BASE_GENERATION_CONFIG = {
   topP: 0.8,

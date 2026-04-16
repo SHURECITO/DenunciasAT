@@ -119,9 +119,11 @@ export class ChatbotService {
 
     let respuestaFinal = resultado.respuesta;
 
-    // Guardar parcial si tenemos nombre + teléfono (antes de radicar)
+    // Guardar parcial solo cuando Gemini extrajo datos nuevos con nombre disponible
+    const hayDatosNuevos = Object.keys(resultado.datosExtraidos ?? {}).length > 0;
     if (
       estado.datosConfirmados.nombre &&
+      hayDatosNuevos &&
       !resultado.listaParaRadicar &&
       resultado.etapaSiguiente !== 'especial_cerrado'
     ) {
