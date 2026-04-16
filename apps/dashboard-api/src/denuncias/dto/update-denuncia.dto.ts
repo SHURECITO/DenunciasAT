@@ -16,4 +16,9 @@ export class UpdateDenunciaDto {
   @IsBoolean()
   @IsOptional()
   esEspecial?: boolean;
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  documentoPendiente?: boolean;
 }

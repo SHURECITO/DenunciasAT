@@ -52,14 +52,23 @@ export class WebhookController {
       data.message?.extendedTextMessage?.text ??
       '';
 
-    // Solo procesar mensajes de texto
-    if (!contenido) return { ok: true };
+    // URL de media para imágenes y documentos (usada en paso ESPERANDO_EVIDENCIA)
+    const mediaUrl: string | undefined =
+      data.message?.imageMessage?.url ??
+      data.message?.documentMessage?.url ??
+      undefined;
+
+    const esMediaSoportada = ['imageMessage', 'documentMessage'].includes(messageType);
+
+    // Ignorar si no hay texto Y no es un tipo de media soportado
+    if (!contenido && !esMediaSoportada) return { ok: true };
 
     try {
       const { respuesta } = await this.chatbotClientService.procesar(
         numero,
         contenido,
         messageType,
+        mediaUrl,
       );
       if (respuesta) {
         await this.evolutionService.sendText(remoteJid, respuesta);

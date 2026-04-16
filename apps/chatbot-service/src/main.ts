@@ -6,5 +6,6 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3002;
   await app.listen(port);
   console.log(`chatbot-service escuchando en puerto ${port}`);
+  console.log('Gemini API Key configurada:', !!process.env.GEMINI_API_KEY);
 }
 bootstrap();

@@ -82,11 +82,32 @@ export class GeminiService {
     this.logger.log(`GeminiService inicializado con modelo ${MODEL_ID}`);
   }
 
+  private clasificarPorPalabrasClave(descripcion: string): string {
+    const d = descripcion.toLowerCase();
+    if (/hueco|v[ií]a|calle|and[eé]n|pavimento|acera|puente|infraestructura/.test(d))
+      return 'Secretaría de Infraestructura Física';
+    if (/basura|[aá]rbol|quebrada|contaminaci[oó]n|parque|aire|ruido|ambiental/.test(d))
+      return 'Secretaría de Medio Ambiente';
+    if (/pelea|robo|inseguridad|combo|delincuencia|hurto|amenaza|pandilla|violencia/.test(d))
+      return 'Secretaría de Seguridad y Convivencia';
+    if (/acueducto|alcantarillado|agua|luz|energ[ií]a|gas|epm|servicio p[uú]blico/.test(d))
+      return 'EPM';
+    if (/tr[aá]nsito|semáforo|movilidad|transporte|bus|metro|paradero/.test(d))
+      return 'Secretaría de Movilidad';
+    if (/salud|hospital|cl[ií]nica|eps|vacuna|m[eé]dico/.test(d))
+      return 'Secretaría de Salud';
+    if (/colegio|escuela|educaci[oó]n|profesor|estudiante/.test(d))
+      return 'Secretaría de Educación';
+    return 'Secretaría de Gobierno';
+  }
+
   async clasificarDenuncia(descripcion: string): Promise<{
     esEspecial: boolean;
     dependencia: string;
     justificacionBreve: string;
   }> {
+    console.log('Enviando a Gemini:', descripcion);
+
     const prompt = `Analiza esta denuncia ciudadana de Medellín Colombia.
 
 Denuncia: ${descripcion}
@@ -98,16 +119,27 @@ Clasifica y responde SOLO con JSON sin markdown:
   "justificacionBreve": "una sola oración explicando por qué esa dependencia"
 }`;
 
-    const result = await this.modelClasificacion.generateContent(prompt);
-    const content = result.response.text();
-
-    // Extrae el JSON (puede venir con markdown ```json ... ```)
-    const match = content.match(/\{[\s\S]*?\}/);
-    if (!match) {
-      return { esEspecial: false, dependencia: 'Sin asignar', justificacionBreve: '' };
-    }
-
     try {
+      const result = await this.modelClasificacion.generateContent(prompt);
+      const responseText = result.response.text();
+      console.log('Respuesta raw Gemini:', responseText);
+
+      // Limpiar markdown y extraer JSON
+      const clean = responseText
+        .replace(/```json/g, '')
+        .replace(/```/g, '')
+        .trim();
+
+      const match = clean.match(/\{[\s\S]*?\}/);
+      if (!match) {
+        this.logger.warn('Gemini no devolvió JSON válido — usando clasificación por palabras clave');
+        return {
+          esEspecial: false,
+          dependencia: this.clasificarPorPalabrasClave(descripcion),
+          justificacionBreve: '',
+        };
+      }
+
       const parsed = JSON.parse(match[0]) as {
         esEspecial?: boolean;
         dependencia?: string;
@@ -115,11 +147,16 @@ Clasifica y responde SOLO con JSON sin markdown:
       };
       return {
         esEspecial: parsed.esEspecial ?? false,
-        dependencia: parsed.dependencia ?? 'Sin asignar',
+        dependencia: parsed.dependencia ?? this.clasificarPorPalabrasClave(descripcion),
         justificacionBreve: parsed.justificacionBreve ?? '',
       };
-    } catch {
-      return { esEspecial: false, dependencia: 'Sin asignar', justificacionBreve: '' };
+    } catch (err) {
+      this.logger.warn(`Error llamando a Gemini (${(err as Error).message}) — usando clasificación por palabras clave`);
+      return {
+        esEspecial: false,
+        dependencia: this.clasificarPorPalabrasClave(descripcion),
+        justificacionBreve: '',
+      };
     }
   }
 

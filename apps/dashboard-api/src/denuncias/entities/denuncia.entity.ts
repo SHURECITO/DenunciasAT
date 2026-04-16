@@ -68,6 +68,14 @@ export class Denuncia {
   @Column({ nullable: true, type: 'timestamptz' })
   documentoGeneradoEn: Date;
 
+  // true mientras document-service aún no ha generado el .docx (pendiente Entrega 4)
+  @Column({ default: false })
+  documentoPendiente: boolean;
+
+  // Denuncia incompleta guardada desde el chatbot antes de que el ciudadano terminara el flujo
+  @Column({ default: false })
+  incompleta: boolean;
+
   @CreateDateColumn()
   fechaCreacion: Date;
 

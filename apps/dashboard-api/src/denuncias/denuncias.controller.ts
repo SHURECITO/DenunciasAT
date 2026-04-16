@@ -20,6 +20,7 @@ import { EitherAuthGuard } from '../auth/guards/either-auth.guard';
 import { SkipJwt } from '../auth/decorators/skip-jwt.decorator';
 import { DenunciasService } from './denuncias.service';
 import { CreateDenunciaDto } from './dto/create-denuncia.dto';
+import { CreateIncompletaDto } from './dto/create-incompleta.dto';
 import { UpdateDenunciaDto } from './dto/update-denuncia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { DenunciaEstado } from './entities/denuncia.entity';
@@ -43,6 +44,14 @@ export class DenunciasController {
   @ApiOperation({ summary: 'Crear denuncia manual (desde el dashboard)' })
   createManual(@Body() dto: CreateDenunciaDto) {
     return this.denunciasService.createManual(dto);
+  }
+
+  @Post('incompleta')
+  @SkipJwt()
+  @UseGuards(EitherAuthGuard)
+  @ApiOperation({ summary: 'Guardar denuncia incompleta (chatbot — datos parciales del ciudadano)' })
+  createIncompleta(@Body() dto: CreateIncompletaDto) {
+    return this.denunciasService.createIncompleta(dto);
   }
 
   @Get()

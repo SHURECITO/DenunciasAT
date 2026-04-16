@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CreateDenunciaDto } from './dto/create-denuncia.dto';
+import { CreateIncompletaDto } from './dto/create-incompleta.dto';
 import { UpdateDenunciaDto } from './dto/update-denuncia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { Denuncia, DenunciaEstado } from './entities/denuncia.entity';
@@ -40,6 +41,8 @@ export class DenunciasService {
       const radicado = `DAT-${String(seq).padStart(6, '0')}`;
 
       const denuncia = queryRunner.manager.create(Denuncia, {
+        documentoPendiente: false,
+        incompleta: false,
         ...dto,
         ...extra,
         radicado,
@@ -64,11 +67,26 @@ export class DenunciasService {
     return this.createWithRunner(dto, { origenManual: true });
   }
 
+  createIncompleta(dto: CreateIncompletaDto): Promise<Denuncia> {
+    // Campos obligatorios en DB usan string vacío como placeholder para registros incompletos
+    return this.createWithRunner(
+      {
+        nombreCiudadano: dto.nombreCiudadano,
+        cedula: dto.cedula ?? '',
+        telefono: dto.telefono,
+        ubicacion: dto.ubicacion ?? '',
+        descripcion: dto.descripcion ?? '',
+      } as CreateDenunciaDto,
+      { incompleta: true },
+    );
+  }
+
   findAll(estado?: DenunciaEstado): Promise<Denuncia[]> {
     const where = estado ? { estado } : {};
     return this.denunciasRepo.find({
       where,
-      order: { fechaCreacion: 'DESC' },
+      // incompletas al final (false=0 < true=1 en ASC)
+      order: { incompleta: 'ASC', fechaCreacion: 'DESC' },
     });
   }
 

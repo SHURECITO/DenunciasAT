@@ -8,6 +8,7 @@ export enum PasoConversacion {
   ESPERANDO_CEDULA = 'ESPERANDO_CEDULA',
   ESPERANDO_UBICACION = 'ESPERANDO_UBICACION',
   ESPERANDO_DESCRIPCION = 'ESPERANDO_DESCRIPCION',
+  ESPERANDO_EVIDENCIA = 'ESPERANDO_EVIDENCIA',
   ESPERANDO_CONFIRMACION = 'ESPERANDO_CONFIRMACION',
   FINALIZADO = 'FINALIZADO',
 }
@@ -20,6 +21,9 @@ export interface DatosConversacion {
   descripcion?: string;
   dependencia?: string;
   esEspecial?: boolean;
+  imagenes?: string[];
+  pdfs?: string[];
+  parcialId?: number;
 }
 
 export interface EstadoConversacion {

@@ -71,6 +71,8 @@ documentoGeneradoEn, fechaCreacion, fechaActualizacion
 ```
 - `estado` y `dependenciaAsignada` tienen `@Index()`
 - `documentoUrl/Ok/En` preparados para document-service (Entrega 4)
+- `documentoPendiente`: true cuando chatbot crea denuncia (doc aún no generado por document-service)
+- `incompleta`: true cuando ciudadano abandona flujo con nombre+teléfono ya dados
 
 ### Mensaje
 ```
@@ -122,7 +124,7 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **Filtrado denuncias**: via `?estado=X` en URL (server-side, sin React Query)
 - **`passwordHash`**: `select: false` en entidad — siempre re-fetchear tras save en usuarios
 - **EitherAuthGuard**: JWT OR `x-internal-key` header para endpoints que usan tanto dashboard como chatbot
-- **Chatbot**: máquina de estados en Redis (INICIO→NOMBRE→CEDULA→UBICACION→DESCRIPCION→CONFIRMACION→FINALIZADO)
+- **Chatbot**: máquina de estados en Redis (INICIO→ESPERANDO_NOMBRE→ESPERANDO_CEDULA→ESPERANDO_UBICACION→ESPERANDO_DESCRIPCION→ESPERANDO_EVIDENCIA→ESPERANDO_CONFIRMACION→FINALIZADO)
 - **GeminiService** (`libs/ai/src/gemini.service.ts`): servicio compartido con `clasificarDenuncia()` y `generarJustificacionLegal()`. Modelos pre-inicializados con systemInstruction de normativa colombiana. `generarJustificacionLegal()` será usado por document-service en Entrega 4.
 - **chatbot-service Dockerfile**: copia `dist/` completo (no solo `dist/apps/chatbot-service`) para preservar rutas relativas a `libs/ai` compilado.
 - **QR WhatsApp**: Evolution API envía QR via webhook `qrcode.updated` → whatsapp-service guarda en Redis `evolution:qr` (TTL 90s) → dashboard-api lo lee llamando a `GET /qr` del whatsapp-service (no polling directo a Evolution API)
@@ -145,32 +147,21 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 
 ## Historial de sesiones (resumen comprimido)
 
-**Sesiones 1–5 (2026-04-14/15):** Scaffold monorepo NestJS 11, dashboard-api completo (auth JWT, denuncias CRUD con SEQUENCE, mensajes, usuarios), frontend Next.js con login httpOnly, Docker multi-stage, DockerHub, dashboard completo con detalle/chat/especiales, estadísticas con Recharts + exportación Excel/PDF.
+**Sesiones 1–9 (2026-04-14/15):** Scaffold NestJS monorepo, dashboard-api (auth JWT, CRUD denuncias con SEQUENCE, usuarios), frontend Next.js, Docker multi-stage, DockerHub, dashboard completo (detalle/chat/especiales/estadísticas), hardening seguridad (Helmet/CORS/throttler), whatsapp-service + chatbot-service + Evolution API, migración OpenAI→Gemini (gemini-2.0-flash-lite, normativa colombiana, systemInstruction compartida).
 
-**Sesión 7a (2026-04-15) — Fase 8:** Hardening post-auditoría. Helmet, CORS, throttler, validación env vars al startup, DB_SYNC desacoplado, puertos no estándar, restart policies, límites memoria, scripts backup/healthcheck. Build limpio confirmado.
+**Sesiones 10–12 (2026-04-15/16) — Fixes Evolution API:** (10) QR: EVOLUTION_API_KEY debe ser UUID, CONFIG_SESSION_PHONE_VERSION=2.3000.1035194821, webhook por instancia (not global). (11) @lid JID: parche Baileys en patch-lid.js, tests 21/21 OK. (12) 400 Bad Request: para @s.whatsapp.net strip suffix, para @lid pasar JID completo. EvolutionService con logging y retry 2s.
 
-**Sesión 7b (2026-04-15) — Fase 9:** whatsapp-service (webhook Evolution), chatbot-service (máquina de estados + Redis + OpenAI), InternalKeyGuard + EitherAuthGuard en dashboard-api, WhatsappModule (estado QR), página /configuracion en frontend con polling de estado.
+**CRITICAL — Evolution API key:** UUID válido obligatorio. Cambiar: `docker volume rm denunciasat_evolution_data` + restart. Parche @lid: automático al startup, verificar `[patch-lid] Parcheados N archivos` en logs.
 
-**Sesión 8 (2026-04-15) — Reconciliación auditoría + Entrega 3:** Puertos internos Docker confirmados (dashboard-api usa 3000 internamente, 8741 solo en host — no cambiar). evolution-api, whatsapp-service y chatbot-service actualizados a 512M + reservations: 256M. .env.example completado con ADMIN_WHATSAPP_NUMBER, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (activos, no comentados). Evolution API v2.1.1 requiere DATABASE_PROVIDER=postgresql + DATABASE_CONNECTION_URI + BD `evolution` en postgres. BD `evolution` creada en init.sql. Build limpio + 7/7 servicios activos confirmados (`/health` OK).
+**Evolution API v2 sendText:** `POST /message/sendText/{instance}` · body `{number, text}` · header `apikey:<UUID>`. number = solo dígitos para @s.whatsapp.net, JID completo para @lid.
 
-**Sesión 9 (2026-04-15) — Migración LLM OpenAI→Gemini:** Reemplazado openai por @google/generative-ai. GeminiService en libs/ai/src/ con systemInstruction de normativa colombiana (definida una vez, reutilizada). Métodos: clasificarDenuncia() (temp 0.2) y generarJustificacionLegal() (temp 0.3). OPENAI_API_KEY→GEMINI_API_KEY en docker-compose y .env.example. Mensajes del chatbot actualizados a español colombiano empático. Dockerfile corregido para copiar dist/ completo (libs compiladas incluidas). Build NestJS limpio confirmado.
-
-**Sesión 10 (2026-04-15) — Fix Evolution API QR:** Diagnóstico exhaustivo del fallo de QR. Problemas encontrados y resueltos: (1) EVOLUTION_API_KEY en formato no-UUID → Evolution API genera clave propia; fix: UUID en .env + docker volume rm denunciasat_evolution_data; (2) Baileys version hardcoded en imagen (2.3000.1015901307) → fix: CONFIG_SESSION_PHONE_VERSION=2.3000.1035194821 en docker-compose; (3) webhook global de Evolution API v2.2.3 usa isURL() sin require_tld:false → falla silenciosamente con hostnames Docker (sin TLD); fix: configurar webhook POR INSTANCIA en POST /instance/create (usa require_tld:false); (4) ruta @Post(':event?') no compatible con path-to-regexp nuevo → fix: @Post(':event'); (5) getQr() y reconectar() reescritos en dashboard-api. Pipeline final: webhook qrcode.updated → whatsapp-service → Redis (TTL 90s) → GET /qr → dashboard-api → frontend. QR base64 real confirmado end-to-end.
-
-**Sesión 11 (2026-04-16) — Fix @lid JID + Tests:** Diagnóstico y fix del problema de envío de respuestas. El `@lid` (Linked Device ID) es un identificador interno de WhatsApp multi-device, NO un número de teléfono. Evolution API v2.2.3 hacía `onWhatsApp()` check que fallaba para `@lid`. Fix: parche al JS compilado de Evolution API (`infrastructure/evolution-api/patch-lid.js`) aplicado automáticamente al startup via `entrypoint` en docker-compose (monta `./infrastructure/evolution-api:/patches:ro`). El parche añade `&&!n.jid.includes("@lid")` a la condición de throw en `sendMessageWithTyping`. Tests unitarios creados: 21 tests en 3 archivos (`evolution.service.spec.ts`, `chatbot-client.service.spec.ts`, `webhook.controller.spec.ts`) — todos pasan. Flujo end-to-end confirmado: usuario escribe → chatbot procesa → bot responde.
-
-**CRITICAL NOTE — Evolution API key:** `EVOLUTION_API_KEY` DEBE ser UUID válido (formato xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx). Sin esto Evolution API genera su propia clave y todos los servicios reciben 401. Al cambiar la clave: `docker volume rm denunciasat_evolution_data` + restart.
-
-**Parche @lid (permanente):** `infrastructure/evolution-api/patch-lid.js` parcheado automáticamente en cada startup de evolution-api. Si se actualiza la versión de Evolution API, verificar que el parche sigue aplicando (`[patch-lid] Parcheados N archivos` en logs).
-
-**Sesión 12 (2026-04-16) — Fix 400 Bad Request envío mensajes @lid:** El parche de Baileys (Sesión 11) fixeó la capa interna pero el endpoint HTTP `/message/sendText` seguía rechazando `181011514171514` como número inválido. Fix en `EvolutionService.sendText()`: para `@s.whatsapp.net` → strip suffix; para `@lid` y otros → pasar JID completo (Evolution API lo acepta con el parche). Logging detallado añadido + retry único 2s. Verificado: ambos JIDs responden PENDING correctamente.
-
-**Evolution API v2 — formato correcto endpoint sendText:**
-- URL: `POST /message/sendText/{instanceName}`
-- Body: `{ "number": "573001234567", "text": "mensaje" }` (para @s.whatsapp.net)
-- Body: `{ "number": "181011514171514@lid", "text": "mensaje" }` (para @lid — con parche)
-- Auth: header `apikey: <UUID>` (NO Bearer token)
-- IMPORTANTE: `number` debe ser solo dígitos para @s.whatsapp.net, JID completo para @lid
+**Sesión 13 (2026-04-16) — Fixes chatbot + Gemini + Evidencia + Parciales:**
+- **Flujo:** Estados FINALIZADO/corrupto → reset a INICIO. Validación nombre (letras+espacios, min 3). Validación cédula (6–10 dígitos). Antitontos en cada paso. Saludos detectados en INICIO.
+- **Gemini:** Clasificación por palabras clave como fallback cuando Gemini falla (incluye 429). Todo el `generateContent` envuelto en try/catch. Logging `Enviando a Gemini` + `Respuesta raw Gemini`.
+- **Evidencia:** Nuevo paso `ESPERANDO_EVIDENCIA` entre DESCRIPCION y CONFIRMACION. Acepta imageMessage/documentMessage (guarda URLs en `estado.datos.imagenes[]`/`pdfs[]`). Resumen incluye `📎 X imagen(es) y X anexo(s)`.
+- **Parciales:** `guardarParcial()` llamado tras recibir nombre; crea `POST /denuncias/incompleta` (endpoint nuevo, EitherAuthGuard). Estado Redis guarda `parcialId` para no duplicar.
+- **documentoPendiente:** true en todas las denuncias creadas por el chatbot; badge amarillo ⏳ en frontend.
+- **incompleta:** true en denuncias parciales; badge gris en listado y detalle. `findAll()` ordena incompletas al final.
 
 ---
 

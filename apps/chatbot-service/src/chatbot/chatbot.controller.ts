@@ -5,6 +5,7 @@ interface ProcesarDto {
   numero: string;
   mensaje: string;
   tipo: string;
+  mediaUrl?: string;
 }
 
 @Controller()
@@ -17,6 +18,8 @@ export class ChatbotController {
     const respuesta = await this.chatbotService.procesarMensaje(
       dto.numero,
       dto.mensaje,
+      dto.tipo,
+      dto.mediaUrl,
     );
     return { respuesta };
   }

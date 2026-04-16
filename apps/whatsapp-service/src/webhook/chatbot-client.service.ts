@@ -17,10 +17,11 @@ export class ChatbotClientService {
     numero: string,
     mensaje: string,
     tipo: string,
+    mediaUrl?: string,
   ): Promise<{ respuesta: string }> {
     const res = await axios.post<{ respuesta: string }>(
       `${this.chatbotUrl}/procesar`,
-      { numero, mensaje, tipo },
+      { numero, mensaje, tipo, mediaUrl },
     );
     return res.data;
   }

@@ -43,4 +43,14 @@ export class CreateDenunciaDto {
   @IsBoolean()
   @IsOptional()
   esEspecial?: boolean;
+
+  @ApiPropertyOptional({ default: false })
+  @IsBoolean()
+  @IsOptional()
+  documentoPendiente?: boolean;
+
+  @ApiPropertyOptional({ default: false })
+  @IsBoolean()
+  @IsOptional()
+  incompleta?: boolean;
 }

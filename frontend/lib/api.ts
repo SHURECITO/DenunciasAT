@@ -19,6 +19,9 @@ export interface Denuncia {
   esEspecial: boolean;
   origenManual: boolean;
   documentoRevisado: boolean;
+  documentoGeneradoOk: boolean;
+  documentoPendiente: boolean;
+  incompleta: boolean;
   fechaCreacion: string;
   fechaActualizacion: string;
 }

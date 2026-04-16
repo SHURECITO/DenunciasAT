@@ -101,6 +101,16 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
               Manual
             </span>
           )}
+          {denuncia.incompleta && (
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+              Incompleta
+            </span>
+          )}
+          {denuncia.documentoPendiente && !denuncia.documentoGeneradoOk && (
+            <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
+              ⏳ Documento pendiente
+            </span>
+          )}
         </div>
       </header>
 
