@@ -44,6 +44,24 @@
       "compilerOptions": {
         "tsConfigPath": "libs/messaging/tsconfig.lib.json"
       }
+    },
+    "whatsapp-service": {
+      "type": "application",
+      "root": "apps/whatsapp-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/whatsapp-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/whatsapp-service/tsconfig.app.json"
+      }
+    },
+    "chatbot-service": {
+      "type": "application",
+      "root": "apps/chatbot-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/chatbot-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/chatbot-service/tsconfig.app.json"
+      }
     }
   }
 }

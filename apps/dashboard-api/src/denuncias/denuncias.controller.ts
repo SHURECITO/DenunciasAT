@@ -16,6 +16,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EitherAuthGuard } from '../auth/guards/either-auth.guard';
+import { SkipJwt } from '../auth/decorators/skip-jwt.decorator';
 import { DenunciasService } from './denuncias.service';
 import { CreateDenunciaDto } from './dto/create-denuncia.dto';
 import { UpdateDenunciaDto } from './dto/update-denuncia.dto';
@@ -30,7 +32,9 @@ export class DenunciasController {
   constructor(private readonly denunciasService: DenunciasService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Crear nueva denuncia (vía chatbot)' })
+  @SkipJwt()
+  @UseGuards(EitherAuthGuard)
+  @ApiOperation({ summary: 'Crear nueva denuncia (JWT del dashboard o x-internal-key del chatbot)' })
   create(@Body() dto: CreateDenunciaDto) {
     return this.denunciasService.create(dto);
   }

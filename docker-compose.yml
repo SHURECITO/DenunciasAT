@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -8,28 +9,64 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # PostgreSQL NO expone puerto al host en producción — solo accesible dentro de la red Docker
+    # Para acceso local en desarrollo: descomentar la siguiente línea
+    # ports:
+    #   - "127.0.0.1:54321:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
   dashboard-api:
     build:
       context: .
       dockerfile: apps/dashboard-api/Dockerfile
+    restart: unless-stopped
+    # Puerto externo no estándar — cambiar si es necesario
     ports:
-      - "3000:3000"
+      - "${API_PORT:-8741}:3000"
     environment:
+      NODE_ENV: production
+      PORT: 3000
       DB_HOST: postgres
       DB_PORT: ${DB_PORT:-5432}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
+      DB_SYNC: ${DB_SYNC:-false}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
-      NODE_ENV: development
+      SEED_ENABLED: ${SEED_ENABLED:-false}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8742}
+      DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-denunciasAt2026}
+      EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-denunciasAt}
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,21 +76,130 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  evolution-api:
+    image: atendai/evolution-api:v2.1.1
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-denunciasAt2026}
+      # Base de datos (Evolution API v2 requiere DB_PROVIDER explícito)
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/evolution
+      DATABASE_CONNECTION_CLIENT_NAME: evolution
+      # Redis para caché de sesiones
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379
+      CACHE_REDIS_PREFIX_KEY: evolution
+      # Webhook al whatsapp-service
+      WEBHOOK_GLOBAL_URL: http://whatsapp-service:3003/webhook
+      WEBHOOK_GLOBAL_ENABLED: "true"
+      CONFIG_SESSION_PHONE_CLIENT: DenunciasAT
+    volumes:
+      - evolution_data:/evolution/instances
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  whatsapp-service:
+    build:
+      context: .
+      dockerfile: apps/whatsapp-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-denunciasAt2026}
+      EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-denunciasAt}
+      CHATBOT_SERVICE_URL: http://chatbot-service:3002
+      # dashboard-api se referencia por puerto INTERNO Docker (3000), no por el host (8741)
+      DASHBOARD_API_URL: http://dashboard-api:3000
+    depends_on:
+      - evolution-api
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  chatbot-service:
+    build:
+      context: .
+      dockerfile: apps/chatbot-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: redis://redis:6379
+      # dashboard-api se referencia por puerto INTERNO Docker (3000), no por el host (8741)
+      DASHBOARD_API_URL: http://dashboard-api:3000
+      DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
+      ADMIN_WHATSAPP_NUMBER: ${ADMIN_WHATSAPP_NUMBER}
+    depends_on:
+      redis:
+        condition: service_healthy
+      dashboard-api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
   frontend:
     build:
       context: frontend
       dockerfile: Dockerfile
+    restart: unless-stopped
+    # Puerto externo no estándar — cambiar si es necesario
     ports:
-      - "3001:3001"
+      - "${FRONTEND_PORT:-8742}:3001"
     environment:
-      NEXT_PUBLIC_API_URL: http://dashboard-api:3000
       HOSTNAME: "0.0.0.0"
       PORT: "3001"
       NODE_ENV: production
+      # URL interna (servidor Next.js → API dentro de la red Docker)
+      NEXT_PUBLIC_API_URL: http://dashboard-api:3000
     depends_on:
       dashboard-api:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
 volumes:
   postgres_data:
+  redis_data:
+  evolution_data:
+
+networks:
+  default:
+    name: denunciasat_network

@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -36,6 +37,7 @@ export class Denuncia {
   @Column('text')
   descripcion: string;
 
+  @Index()
   @Column({
     type: 'enum',
     enum: DenunciaEstado,
@@ -43,6 +45,7 @@ export class Denuncia {
   })
   estado: DenunciaEstado;
 
+  @Index()
   @Column({ nullable: true })
   dependenciaAsignada: string;
 
@@ -54,6 +57,16 @@ export class Denuncia {
 
   @Column({ default: false })
   documentoRevisado: boolean;
+
+  // Campos para trazabilidad del documento generado por document-service
+  @Column({ nullable: true })
+  documentoUrl: string;
+
+  @Column({ default: false })
+  documentoGeneradoOk: boolean;
+
+  @Column({ nullable: true, type: 'timestamptz' })
+  documentoGeneradoEn: Date;
 
   @CreateDateColumn()
   fechaCreacion: Date;

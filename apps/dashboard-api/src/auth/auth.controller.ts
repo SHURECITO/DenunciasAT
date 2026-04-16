@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -9,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -18,17 +20,26 @@ import { LoginDto } from './dto/login.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // Login tiene un límite estricto para mitigar fuerza bruta
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ burst: { ttl: 60000, limit: 10 }, sustained: { ttl: 300000, limit: 20 } })
   @ApiOperation({ summary: 'Iniciar sesión y obtener JWT' })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
 
+  // Seed solo disponible si SEED_ENABLED=true en las variables de entorno
   @Post('seed')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Crear usuario admin inicial (solo si no existe)' })
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Crear usuario admin inicial (requiere SEED_ENABLED=true)' })
   seed() {
+    if (process.env.SEED_ENABLED !== 'true') {
+      throw new ForbiddenException(
+        'Endpoint deshabilitado. Configure SEED_ENABLED=true para habilitarlo.',
+      );
+    }
     return this.authService.seed();
   }
 
