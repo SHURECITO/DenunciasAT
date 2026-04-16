@@ -21,6 +21,7 @@ import { SkipJwt } from '../auth/decorators/skip-jwt.decorator';
 import { DenunciasService } from './denuncias.service';
 import { CreateDenunciaDto } from './dto/create-denuncia.dto';
 import { CreateIncompletaDto } from './dto/create-incompleta.dto';
+import { CreateParcialDto } from './dto/create-parcial.dto';
 import { UpdateDenunciaDto } from './dto/update-denuncia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { DenunciaEstado } from './entities/denuncia.entity';
@@ -52,6 +53,14 @@ export class DenunciasController {
   @ApiOperation({ summary: 'Guardar denuncia incompleta (chatbot — datos parciales del ciudadano)' })
   createIncompleta(@Body() dto: CreateIncompletaDto) {
     return this.denunciasService.createIncompleta(dto);
+  }
+
+  @Post('parcial')
+  @SkipJwt()
+  @UseGuards(EitherAuthGuard)
+  @ApiOperation({ summary: 'Upsert denuncia parcial (chatbot IA — actualiza si ya existe una incompleta del mismo teléfono)' })
+  upsertParcial(@Body() dto: CreateParcialDto) {
+    return this.denunciasService.upsertParcial(dto);
   }
 
   @Get()

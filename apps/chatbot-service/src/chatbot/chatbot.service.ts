@@ -1,17 +1,26 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { GeminiService } from '@app/ai';
-import {
-  ConversacionService,
-  DatosConversacion,
-  EstadoConversacion,
-  PasoConversacion,
-} from './conversacion.service';
+import { ConversacionService, EstadoConversacionIA } from './conversacion.service';
 import { DashboardApiService } from './dashboard-api.service';
 
-const SALUDOS = ['hola', 'buenas', 'buenos días', 'buenos dias', 'hey', 'hi', 'start', 'iniciar', 'inicio', 'comenzar'];
+const MSG_BIENVENIDA =
+  '¡Hola! 👋 Soy el asistente del concejal Andrés Tobón. ' +
+  'Estoy aquí para ayudarte a presentar tu denuncia.\n\n' +
+  '¿Me puedes decir tu nombre completo para empezar?';
+
+const MSG_REINICIADO =
+  '¡Hola de nuevo! 😊 Empecemos desde el principio. ¿Cuál es tu nombre completo?';
+
+const MSG_AUDIO =
+  'No puedo procesar mensajes de voz 🎤 Por favor escribe tu mensaje y te ayudo con gusto.';
+
+const MSG_PERDIDO =
+  'Parece que hay alguna confusión 😊 ¿Quieres que empecemos de nuevo? Escribe *reiniciar* cuando quieras.';
 
 @Injectable()
 export class ChatbotService {
+  private readonly logger = new Logger(ChatbotService.name);
+
   constructor(
     private readonly conversacion: ConversacionService,
     private readonly dashboardApi: DashboardApiService,
@@ -24,330 +33,216 @@ export class ChatbotService {
     tipo = 'conversation',
     mediaUrl?: string,
   ): Promise<string> {
+    const mensajeNorm = mensaje.trim().toLowerCase();
+
+    // Comando reiniciar — manejo prioritario
+    if (mensajeNorm === 'reiniciar') {
+      await this.conversacion.clearEstado(numero);
+      return MSG_REINICIADO;
+    }
+
+    // Audio — no tenemos bytes para transcribir, pedir que escriba
+    if (tipo === 'audioMessage') {
+      return MSG_AUDIO;
+    }
+
     let estado = await this.conversacion.getEstado(numero);
 
-    // Estado nulo, FINALIZADO o corrupto → reiniciar desde INICIO
-    const pasosValidos = Object.values(PasoConversacion) as string[];
-    if (!estado || estado.paso === PasoConversacion.FINALIZADO || !pasosValidos.includes(estado.paso)) {
-      estado = {
-        paso: PasoConversacion.INICIO,
-        datos: { telefono: numero },
-      };
+    // Sin estado o flujo terminado → nuevo estado con bienvenida
+    if (!estado || ['finalizado', 'especial_cerrado'].includes(estado.datosConfirmados.etapa)) {
+      estado = this.conversacion.crearEstadoNuevo(numero);
+      await this.conversacion.setEstado(numero, estado);
+
+      // Si la primera interacción es solo un saludo, responder bienvenida
+      const esSaludo = /^(hola|buenas|buenos|hey|hi|start|iniciar|inicio|comenzar)/.test(mensajeNorm);
+      if (esSaludo) {
+        const bienvenida: typeof estado.historial[0] = {
+          rol: 'assistant',
+          contenido: MSG_BIENVENIDA,
+          timestamp: new Date().toISOString(),
+        };
+        estado.historial.push(bienvenida);
+        await this.conversacion.setEstado(numero, estado);
+        return MSG_BIENVENIDA;
+      }
     }
 
-    const respuesta = await this.manejarPaso(estado, mensaje, numero, tipo, mediaUrl);
+    // Manejo de media (imágenes / documentos PDF)
+    let mensajeEfectivo = mensaje.trim();
+    if (tipo === 'imageMessage') {
+      if (!estado.datosConfirmados.imagenes) estado.datosConfirmados.imagenes = [];
+      estado.datosConfirmados.imagenes.push(mediaUrl ?? 'imagen_sin_url');
+      mensajeEfectivo = '[Imagen enviada]';
+    } else if (tipo === 'documentMessage') {
+      if (!estado.datosConfirmados.pdfs) estado.datosConfirmados.pdfs = [];
+      estado.datosConfirmados.pdfs.push(mediaUrl ?? 'documento_sin_url');
+      mensajeEfectivo = '[Documento PDF enviado]';
+    }
 
-    // Guardar parcial si tenemos nombre y la conversación está en progreso
+    // Detección de mensajes repetidos para usuarios perdidos
+    if (estado.ultimoMensaje === mensajeEfectivo && tipo === 'conversation') {
+      estado.contadorRepeticiones = (estado.contadorRepeticiones ?? 0) + 1;
+      if ((estado.contadorRepeticiones ?? 0) >= 2) {
+        estado.intentosFallidos = (estado.intentosFallidos ?? 0) + 1;
+      }
+    } else {
+      estado.contadorRepeticiones = 0;
+      estado.ultimoMensaje = mensajeEfectivo;
+    }
+
+    if ((estado.intentosFallidos ?? 0) >= 3) {
+      await this.conversacion.setEstado(numero, estado);
+      return MSG_PERDIDO;
+    }
+
+    // Llamar a Gemini con el historial previo + datos actuales + mensaje del usuario
+    // El historial aún no incluye el mensaje actual (se agrega después junto con la respuesta)
+    const resultado = await this.gemini.procesarMensajeChatbot(
+      estado.historial,
+      estado.datosConfirmados as unknown as Record<string, unknown>,
+      mensajeEfectivo,
+    );
+
+    // Mergear datos extraídos por Gemini
+    if (resultado.datosExtraidos && Object.keys(resultado.datosExtraidos).length > 0) {
+      Object.assign(estado.datosConfirmados, resultado.datosExtraidos);
+    }
+
+    // Actualizar etapa
+    estado.datosConfirmados.etapa = resultado.etapaSiguiente;
+
+    // Persistir turno completo en el historial
+    estado.historial.push(
+      { rol: 'user', contenido: mensajeEfectivo, timestamp: new Date().toISOString() },
+      { rol: 'assistant', contenido: resultado.respuesta, timestamp: new Date().toISOString() },
+    );
+
+    let respuestaFinal = resultado.respuesta;
+
+    // Guardar parcial si tenemos nombre + teléfono (antes de radicar)
     if (
-      estado.datos.nombre &&
-      !estado.datos.parcialId &&
-      estado.paso !== PasoConversacion.INICIO &&
-      estado.paso !== PasoConversacion.FINALIZADO
+      estado.datosConfirmados.nombre &&
+      !resultado.listaParaRadicar &&
+      resultado.etapaSiguiente !== 'especial_cerrado'
     ) {
-      await this.guardarParcial(estado, numero);
+      await this.guardarParcialSiPosible(estado, numero);
     }
 
-    // Simular delay de escritura humana
-    const delay = Math.min(1500 + mensaje.length * 30, 8000);
+    // Caso especial detectado por Gemini
+    if (resultado.etapaSiguiente === 'especial_cerrado') {
+      respuestaFinal = await this.cerrarCasoEspecial(estado, numero);
+    }
+
+    // Lista para radicar — crear denuncia completa
+    if (resultado.listaParaRadicar && resultado.etapaSiguiente !== 'especial_cerrado') {
+      respuestaFinal = await this.radicarDenuncia(estado, numero);
+    }
+
+    await this.conversacion.setEstado(numero, estado);
+
+    // Delay humano: 2s base + 40ms por carácter, máximo 8s
+    const delay = Math.min(2000 + respuestaFinal.length * 40, 8000);
     await new Promise((r) => setTimeout(r, delay));
 
-    return respuesta;
+    return respuestaFinal;
   }
 
-  private async manejarPaso(
-    estado: EstadoConversacion,
-    mensaje: string,
-    numero: string,
-    tipo: string,
-    mediaUrl?: string,
-  ): Promise<string> {
-    switch (estado.paso) {
-      case PasoConversacion.INICIO:
-        return this.iniciarConversacion(estado, mensaje, numero);
+  private async radicarDenuncia(estado: EstadoConversacionIA, numero: string): Promise<string> {
+    const d = estado.datosConfirmados;
 
-      case PasoConversacion.ESPERANDO_NOMBRE:
-        return this.recibirNombre(estado, mensaje, numero);
-
-      case PasoConversacion.ESPERANDO_CEDULA:
-        return this.recibirCedula(estado, mensaje, numero);
-
-      case PasoConversacion.ESPERANDO_UBICACION:
-        return this.recibirUbicacion(estado, mensaje, numero);
-
-      case PasoConversacion.ESPERANDO_DESCRIPCION:
-        return this.recibirDescripcion(estado, mensaje, numero);
-
-      case PasoConversacion.ESPERANDO_EVIDENCIA:
-        return this.manejarEvidencia(estado, mensaje, numero, tipo, mediaUrl);
-
-      case PasoConversacion.ESPERANDO_CONFIRMACION:
-        return this.recibirConfirmacion(estado, mensaje, numero);
-
-      default:
-        // Estado corrupto — reiniciar
-        estado.paso = PasoConversacion.INICIO;
-        estado.datos = { telefono: numero };
-        return this.iniciarConversacion(estado, mensaje, numero);
-    }
-  }
-
-  private async iniciarConversacion(
-    estado: EstadoConversacion,
-    mensaje: string,
-    numero: string,
-  ): Promise<string> {
-    const mensajeNorm = mensaje.trim().toLowerCase();
-    const esSaludo = SALUDOS.some((s) => mensajeNorm.startsWith(s));
-
-    // Si no es saludo, mostrar bienvenida de todas formas (estado corrupto o primer mensaje)
-    // No guardar el mensaje como nombre
-    estado.paso = PasoConversacion.ESPERANDO_NOMBRE;
-    await this.conversacion.setEstado(numero, estado);
-
-    return (
-      '¡Hola! 👋 Soy el asistente del concejal Andrés Tobón. ' +
-      'Estoy aquí para ayudarte a presentar tu denuncia.\n\n' +
-      'Todo lo que me cuentes será tratado con total confidencialidad. ' +
-      '¿Me puedes decir tu nombre completo para empezar?'
-    );
-  }
-
-  private async recibirNombre(
-    estado: EstadoConversacion,
-    mensaje: string,
-    numero: string,
-  ): Promise<string> {
-    const nombre = mensaje.trim();
-    const soloLetras = /^[a-záéíóúüñA-ZÁÉÍÓÚÜÑ\s'.-]+$/.test(nombre);
-
-    if (nombre.length < 3 || !soloLetras) {
-      return 'Por favor escribe tu nombre completo (solo letras, mínimo 3 caracteres) 😊';
-    }
-
-    estado.datos.nombre = nombre;
-    estado.paso = PasoConversacion.ESPERANDO_CEDULA;
-    await this.conversacion.setEstado(numero, estado);
-    return `Gracias, ${nombre}. Ahora necesito tu número de cédula para identificarte en el radicado oficial.`;
-  }
-
-  private async recibirCedula(
-    estado: EstadoConversacion,
-    mensaje: string,
-    numero: string,
-  ): Promise<string> {
-    const cedula = mensaje.replace(/\D/g, '');
-
-    if (cedula.length < 6 || cedula.length > 10) {
-      return (
-        'Entiendo 😊 Para continuar con tu denuncia necesito tu número de cédula. ' +
-        'Debe tener entre 6 y 10 dígitos. ¿Me lo puedes compartir?'
-      );
-    }
-
-    estado.datos.cedula = cedula;
-    estado.paso = PasoConversacion.ESPERANDO_UBICACION;
-    await this.conversacion.setEstado(numero, estado);
-    return 'Perfecto. ¿En qué dirección o sector de Medellín ocurrió lo que quieres reportar?';
-  }
-
-  private async recibirUbicacion(
-    estado: EstadoConversacion,
-    mensaje: string,
-    numero: string,
-  ): Promise<string> {
-    const ubicacion = mensaje.trim();
-    if (ubicacion.length < 3) {
-      return (
-        'Entiendo 😊 Para continuar con tu denuncia necesito la ubicación del problema. ' +
-        '¿Me puedes indicar la dirección o el barrio donde ocurrió?'
-      );
-    }
-
-    estado.datos.ubicacion = ubicacion;
-    estado.paso = PasoConversacion.ESPERANDO_DESCRIPCION;
-    await this.conversacion.setEstado(numero, estado);
-    return (
-      'Cuéntame con detalle qué está pasando. No te preocupes por usar términos legales, cuéntamelo todo. ' +
-      'Es mejor tener muchos más detalles, para poder ayudarte mucho mejor. 🙏'
-    );
-  }
-
-  private async recibirDescripcion(
-    estado: EstadoConversacion,
-    mensaje: string,
-    numero: string,
-  ): Promise<string> {
-    const descripcion = mensaje.trim();
-    if (descripcion.length < 10) {
-      return (
-        'Entiendo 😊 Para continuar con tu denuncia necesito que me cuentes el problema con más detalle ' +
-        '(mínimo 10 caracteres). ¿Me puedes dar más información?'
-      );
-    }
-
-    estado.datos.descripcion = descripcion;
-
-    // Clasificar con Gemini
     try {
-      const clasificacion = await this.gemini.clasificarDenuncia(descripcion);
-      estado.datos.esEspecial = clasificacion.esEspecial;
-      estado.datos.dependencia = clasificacion.dependencia;
-    } catch (err) {
-      // GeminiService ya maneja internamente el fallback; este catch es por si todo lo demás falla
-      console.error('Error inesperado en clasificación:', err);
-      estado.datos.esEspecial = false;
-      estado.datos.dependencia = 'Secretaría de Gobierno';
-    }
+      // Generar resumen para el dashboard
+      const resumen = await this.gemini.generarResumen({
+        nombre: d.nombre,
+        barrio: d.barrio,
+        direccion: d.direccion,
+        descripcion: d.descripcion,
+        dependencia: d.dependencia,
+      });
+      d.descripcionResumen = resumen;
 
-    // Pasar a evidencia antes de confirmación
-    estado.paso = PasoConversacion.ESPERANDO_EVIDENCIA;
-    await this.conversacion.setEstado(numero, estado);
-
-    return (
-      '¿Tienes fotos o documentos que respalden tu denuncia? Puedes enviarme:\n' +
-      '📸 *Imágenes* — fotos del problema (se incluirán en el documento oficial)\n' +
-      '📄 *PDFs* — documentos de soporte (irán como anexos)\n\n' +
-      'Si no tienes evidencia en este momento, responde *no* o *continuar* para seguir sin adjuntos.'
-    );
-  }
-
-  private async manejarEvidencia(
-    estado: EstadoConversacion,
-    mensaje: string,
-    numero: string,
-    tipo: string,
-    mediaUrl?: string,
-  ): Promise<string> {
-    const mensajeNorm = mensaje.trim().toLowerCase();
-    const palabrasContinuar = ['no', 'continuar', 'listo', 'ya', 'siguiente', 'n', 'skip', 'omitir', 'sin evidencia'];
-
-    if (tipo === 'imageMessage') {
-      if (!estado.datos.imagenes) estado.datos.imagenes = [];
-      estado.datos.imagenes.push(mediaUrl ?? 'imagen_sin_url');
-      await this.conversacion.setEstado(numero, estado);
-      return '📸 Imagen recibida. ¿Tienes algo más? Envía otra imagen, un PDF, o responde *continuar*';
-    }
-
-    if (tipo === 'documentMessage') {
-      if (!estado.datos.pdfs) estado.datos.pdfs = [];
-      estado.datos.pdfs.push(mediaUrl ?? 'documento_sin_url');
-      await this.conversacion.setEstado(numero, estado);
-      return '📄 Documento recibido como anexo. ¿Tienes algo más? Envía otro archivo o responde *continuar*';
-    }
-
-    if (palabrasContinuar.some((p) => mensajeNorm.startsWith(p))) {
-      estado.paso = PasoConversacion.ESPERANDO_CONFIRMACION;
-      await this.conversacion.setEstado(numero, estado);
-      return this.generarResumenConfirmacion(estado.datos);
-    }
-
-    // Mensaje inesperado en este paso
-    return (
-      'Entiendo 😊 Para continuar, puedes enviar una *imagen* 📸, un *PDF* 📄, ' +
-      'o responder *continuar* para ir al siguiente paso.'
-    );
-  }
-
-  private generarResumenConfirmacion(datos: DatosConversacion): string {
-    const descripcionCorta =
-      datos.descripcion && datos.descripcion.length > 100
-        ? datos.descripcion.substring(0, 100) + '...'
-        : (datos.descripcion ?? '');
-
-    const nImagenes = datos.imagenes?.length ?? 0;
-    const nPdfs = datos.pdfs?.length ?? 0;
-    const evidenciaTexto =
-      nImagenes > 0 || nPdfs > 0
-        ? `📎 Evidencia: ${nImagenes} imagen(es) y ${nPdfs} anexo(s) PDF`
-        : '📎 Sin evidencia adjunta';
-
-    return (
-      'Perfecto, déjame resumirte lo que voy a radicar:\n\n' +
-      `👤 Nombre: ${datos.nombre}\n` +
-      `🪪 Cédula: ${datos.cedula}\n` +
-      `📍 Ubicación: ${datos.ubicacion}\n` +
-      `🏛️ Dirigido a: ${datos.dependencia}\n` +
-      `📝 Descripción: ${descripcionCorta}\n` +
-      `${evidenciaTexto}\n\n` +
-      '¿Está todo correcto? Responde *sí* para confirmar o dime qué dato quieres corregir.'
-    );
-  }
-
-  private async recibirConfirmacion(
-    estado: EstadoConversacion,
-    mensaje: string,
-    numero: string,
-  ): Promise<string> {
-    const respuesta = mensaje.trim().toLowerCase();
-    const esAfirmativo = ['si', 'sí', 's', 'yes', 'confirmo', 'ok', '1'].includes(respuesta);
-    const esNegativo = ['no', 'n', 'cancelar', 'cancel', '0'].includes(respuesta);
-
-    if (!esAfirmativo && !esNegativo) {
-      return 'Por favor responde *sí* para confirmar el envío o *no* para cancelar.';
-    }
-
-    if (esNegativo) {
-      await this.conversacion.clearEstado(numero);
-      return 'Tu denuncia ha sido cancelada. Si deseas iniciar una nueva, escribe *hola* en cualquier momento.';
-    }
-
-    const datos = estado.datos as Required<DatosConversacion>;
-    try {
       const { radicado } = await this.dashboardApi.crearDenuncia({
-        nombreCiudadano: datos.nombre,
-        cedula: datos.cedula,
-        telefono: datos.telefono,
-        ubicacion: datos.ubicacion,
-        descripcion: datos.descripcion,
-        dependenciaAsignada: datos.dependencia,
-        esEspecial: datos.esEspecial,
+        nombreCiudadano: d.nombre ?? 'Anónimo',
+        cedula: d.esAnonimo ? 'ANONIMO' : (d.cedula ?? ''),
+        telefono: d.telefono,
+        ubicacion: d.direccion ?? `${d.barrio ?? ''} - ${d.comuna ?? ''}`.trim(),
+        descripcion: d.descripcion ?? '',
+        dependenciaAsignada: d.dependencia,
+        esEspecial: false,
+        barrio: d.barrio,
+        comuna: d.comuna,
+        descripcionResumen: d.descripcionResumen,
+        esAnonimo: d.esAnonimo ?? false,
+        documentoPendiente: true,
       });
 
-      estado.paso = PasoConversacion.FINALIZADO;
-      await this.conversacion.setEstado(numero, estado);
-
-      if (datos.esEspecial) {
-        return (
-          'Gracias por tu confianza al compartir esto con nosotros. 🙏 ' +
-          'Tu denuncia ha sido registrada de forma confidencial.\n\n' +
-          'Por la naturaleza delicada de lo que reportas, una persona de confianza del equipo del concejal ' +
-          'se encargará de atenderte directamente. Por favor estate pendiente.'
-        );
-      }
+      d.etapa = 'finalizado';
 
       return (
         '✅ ¡Tu denuncia ha sido radicada exitosamente!\n\n' +
         `Tu número de radicado es: *${radicado}*\n\n` +
-        `El equipo del concejal Andrés Tobón gestionará tu caso ante ${datos.dependencia}. ` +
-        'Cuando tengamos respuesta de la administración te notificaremos por este mismo chat.\n\n' +
+        `El equipo del concejal Andrés Tobón gestionará tu caso ante ${d.dependencia ?? 'la entidad competente'}. ` +
+        'Cuando tengamos respuesta te notificaremos aquí mismo.\n\n' +
         '¡Gracias por confiar en nosotros! 🤝'
       );
     } catch (err) {
-      console.error('Error creando denuncia:', err);
+      this.logger.error(`Error radicando denuncia para ${numero}:`, err);
       return (
-        'Hubo un error al registrar tu denuncia. Por favor intenta de nuevo en unos minutos ' +
-        'o comunícate directamente con el despacho.'
+        'Tuve un problema técnico al registrar tu denuncia 😔 ' +
+        'Por favor intenta de nuevo en unos minutos o comunícate directamente con el despacho.'
       );
     }
   }
 
-  private async guardarParcial(estado: EstadoConversacion, numero: string): Promise<void> {
-    if (estado.datos.parcialId) return;
-    if (!estado.datos.nombre) return;
+  private async cerrarCasoEspecial(estado: EstadoConversacionIA, numero: string): Promise<string> {
+    const d = estado.datosConfirmados;
 
     try {
-      const { id } = await this.dashboardApi.crearIncompleta({
-        nombreCiudadano: estado.datos.nombre,
-        telefono: numero,
-        cedula: estado.datos.cedula,
-        ubicacion: estado.datos.ubicacion,
-        descripcion: estado.datos.descripcion,
+      await this.dashboardApi.crearDenuncia({
+        nombreCiudadano: d.nombre ?? 'Anónimo',
+        cedula: d.esAnonimo ? 'ANONIMO' : (d.cedula ?? ''),
+        telefono: d.telefono,
+        ubicacion: d.direccion ?? `${d.barrio ?? ''} - ${d.comuna ?? ''}`.trim(),
+        descripcion: d.descripcion ?? '',
+        dependenciaAsignada: d.dependencia ?? 'Secretaría de Seguridad y Convivencia',
+        esEspecial: true,
+        barrio: d.barrio,
+        comuna: d.comuna,
+        esAnonimo: d.esAnonimo ?? false,
+        documentoPendiente: false,
       });
-      estado.datos.parcialId = id;
-      await this.conversacion.setEstado(numero, estado);
-      console.log(`Parcial guardado para ${numero}, id=${id}`);
+
+      d.etapa = 'especial_cerrado';
     } catch (err) {
-      console.error('Error guardando parcial:', err);
+      this.logger.error(`Error creando denuncia especial para ${numero}:`, err);
+    }
+
+    return (
+      'Gracias por tu confianza al compartir esto con nosotros. 🙏\n\n' +
+      'Tu denuncia ha sido registrada de forma confidencial. Por la naturaleza delicada de lo que reportas, ' +
+      'una persona de confianza del equipo del concejal se encargará de atenderte directamente.\n\n' +
+      'Por favor estate pendiente.'
+    );
+  }
+
+  private async guardarParcialSiPosible(estado: EstadoConversacionIA, numero: string): Promise<void> {
+    const d = estado.datosConfirmados;
+    if (!d.nombre || !d.telefono) return;
+
+    try {
+      const { id } = await this.dashboardApi.upsertParcial({
+        nombreCiudadano: d.nombre,
+        telefono: numero,
+        cedula: d.esAnonimo ? 'ANONIMO' : d.cedula,
+        barrio: d.barrio,
+        comuna: d.comuna,
+        direccion: d.direccion,
+        descripcion: d.descripcion,
+      });
+      estado.parcialId = id;
+      this.logger.log(`Parcial guardado/actualizado para ${numero}, id=${id}`);
+    } catch (err) {
+      this.logger.warn(`Error guardando parcial para ${numero}: ${(err as Error).message}`);
     }
   }
 }

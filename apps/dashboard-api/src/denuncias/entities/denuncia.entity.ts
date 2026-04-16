@@ -34,8 +34,17 @@ export class Denuncia {
   @Column()
   ubicacion: string;
 
+  @Column({ nullable: true })
+  barrio: string;
+
+  @Column({ nullable: true })
+  comuna: string;
+
   @Column('text')
   descripcion: string;
+
+  @Column({ nullable: true, type: 'text' })
+  descripcionResumen: string;
 
   @Index()
   @Column({
@@ -75,6 +84,10 @@ export class Denuncia {
   // Denuncia incompleta guardada desde el chatbot antes de que el ciudadano terminara el flujo
   @Column({ default: false })
   incompleta: boolean;
+
+  // Ciudadano eligió reportar de forma anónima
+  @Column({ default: false })
+  esAnonimo: boolean;
 
   @CreateDateColumn()
   fechaCreacion: Date;

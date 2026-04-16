@@ -2,33 +2,37 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
-export enum PasoConversacion {
-  INICIO = 'INICIO',
-  ESPERANDO_NOMBRE = 'ESPERANDO_NOMBRE',
-  ESPERANDO_CEDULA = 'ESPERANDO_CEDULA',
-  ESPERANDO_UBICACION = 'ESPERANDO_UBICACION',
-  ESPERANDO_DESCRIPCION = 'ESPERANDO_DESCRIPCION',
-  ESPERANDO_EVIDENCIA = 'ESPERANDO_EVIDENCIA',
-  ESPERANDO_CONFIRMACION = 'ESPERANDO_CONFIRMACION',
-  FINALIZADO = 'FINALIZADO',
+export interface MensajeHistorial {
+  rol: 'user' | 'assistant';
+  contenido: string;
+  timestamp: string;
 }
 
-export interface DatosConversacion {
+export interface DatosConfirmados {
   nombre?: string;
+  esAnonimo?: boolean;
   cedula?: string;
   telefono: string;
-  ubicacion?: string;
+  barrio?: string;
+  comuna?: string;
+  direccion?: string;
+  direccionConfirmada?: boolean;
   descripcion?: string;
+  descripcionResumen?: string;
   dependencia?: string;
   esEspecial?: boolean;
   imagenes?: string[];
   pdfs?: string[];
-  parcialId?: number;
+  etapa: 'recopilando' | 'confirmando' | 'finalizado' | 'especial_cerrado';
 }
 
-export interface EstadoConversacion {
-  paso: PasoConversacion;
-  datos: DatosConversacion;
+export interface EstadoConversacionIA {
+  historial: MensajeHistorial[];
+  datosConfirmados: DatosConfirmados;
+  intentosFallidos: number;
+  ultimoMensaje?: string;
+  contadorRepeticiones?: number;
+  parcialId?: number;
 }
 
 const TTL_SEGUNDOS = 60 * 60 * 24; // 24 horas
@@ -50,21 +54,25 @@ export class ConversacionService implements OnModuleDestroy {
     return `chatbot:conv:${numero}`;
   }
 
-  async getEstado(numero: string): Promise<EstadoConversacion | null> {
+  async getEstado(numero: string): Promise<EstadoConversacionIA | null> {
     const raw = await this.redis.get(this.key(numero));
     if (!raw) return null;
-    return JSON.parse(raw) as EstadoConversacion;
+    return JSON.parse(raw) as EstadoConversacionIA;
   }
 
-  async setEstado(numero: string, estado: EstadoConversacion): Promise<void> {
-    await this.redis.setex(
-      this.key(numero),
-      TTL_SEGUNDOS,
-      JSON.stringify(estado),
-    );
+  async setEstado(numero: string, estado: EstadoConversacionIA): Promise<void> {
+    await this.redis.setex(this.key(numero), TTL_SEGUNDOS, JSON.stringify(estado));
   }
 
   async clearEstado(numero: string): Promise<void> {
     await this.redis.del(this.key(numero));
+  }
+
+  crearEstadoNuevo(telefono: string): EstadoConversacionIA {
+    return {
+      historial: [],
+      datosConfirmados: { telefono, etapa: 'recopilando' },
+      intentosFallidos: 0,
+    };
   }
 }

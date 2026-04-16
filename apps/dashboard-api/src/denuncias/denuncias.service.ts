@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CreateDenunciaDto } from './dto/create-denuncia.dto';
 import { CreateIncompletaDto } from './dto/create-incompleta.dto';
+import { CreateParcialDto } from './dto/create-parcial.dto';
 import { UpdateDenunciaDto } from './dto/update-denuncia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { Denuncia, DenunciaEstado } from './entities/denuncia.entity';
@@ -44,6 +45,7 @@ export class DenunciasService {
         documentoPendiente: false,
         incompleta: false,
         ...dto,
+        cedula: dto.cedula ?? '',   // cedula es NOT NULL — '' para anónimos/parciales
         ...extra,
         radicado,
         estado: DenunciaEstado.RECIBIDA,
@@ -75,6 +77,36 @@ export class DenunciasService {
         cedula: dto.cedula ?? '',
         telefono: dto.telefono,
         ubicacion: dto.ubicacion ?? '',
+        descripcion: dto.descripcion ?? '',
+      } as CreateDenunciaDto,
+      { incompleta: true },
+    );
+  }
+
+  async upsertParcial(dto: CreateParcialDto): Promise<Denuncia> {
+    // Buscar denuncia incompleta existente del mismo número para actualizar en lugar de duplicar
+    const existente = await this.denunciasRepo.findOne({
+      where: { telefono: dto.telefono, incompleta: true },
+    });
+
+    if (existente) {
+      if (dto.nombreCiudadano) existente.nombreCiudadano = dto.nombreCiudadano;
+      if (dto.cedula) existente.cedula = dto.cedula;
+      if (dto.barrio) existente.barrio = dto.barrio;
+      if (dto.comuna) existente.comuna = dto.comuna;
+      if (dto.direccion) existente.ubicacion = dto.direccion;
+      if (dto.descripcion) existente.descripcion = dto.descripcion;
+      return this.denunciasRepo.save(existente);
+    }
+
+    return this.createWithRunner(
+      {
+        nombreCiudadano: dto.nombreCiudadano,
+        cedula: dto.cedula ?? '',
+        telefono: dto.telefono,
+        ubicacion: dto.direccion ?? '',
+        barrio: dto.barrio,
+        comuna: dto.comuna,
         descripcion: dto.descripcion ?? '',
       } as CreateDenunciaDto,
       { incompleta: true },

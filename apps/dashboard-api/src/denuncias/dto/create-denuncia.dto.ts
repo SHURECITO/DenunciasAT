@@ -13,26 +13,41 @@ export class CreateDenunciaDto {
   @IsNotEmpty()
   nombreCiudadano: string;
 
-  @ApiProperty({ example: '1234567890' })
+  @ApiPropertyOptional({ example: '1234567890' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @Length(6, 12)
-  cedula: string;
+  cedula?: string;
 
   @ApiProperty({ example: '3001234567' })
   @IsString()
   @IsNotEmpty()
   telefono: string;
 
-  @ApiProperty({ example: 'Barrio El Poblado, Medellín' })
+  @ApiProperty({ example: 'Calle 44 #52-49' })
   @IsString()
   @IsNotEmpty()
   ubicacion: string;
+
+  @ApiPropertyOptional({ example: 'El Poblado' })
+  @IsString()
+  @IsOptional()
+  barrio?: string;
+
+  @ApiPropertyOptional({ example: 'Comuna 14' })
+  @IsString()
+  @IsOptional()
+  comuna?: string;
 
   @ApiProperty({ example: 'Descripción detallada del problema...' })
   @IsString()
   @IsNotEmpty()
   descripcion: string;
+
+  @ApiPropertyOptional({ example: 'Resumen breve generado por IA' })
+  @IsString()
+  @IsOptional()
+  descripcionResumen?: string;
 
   @ApiPropertyOptional({ example: 'Secretaría de Movilidad' })
   @IsString()
@@ -43,6 +58,11 @@ export class CreateDenunciaDto {
   @IsBoolean()
   @IsOptional()
   esEspecial?: boolean;
+
+  @ApiPropertyOptional({ default: false })
+  @IsBoolean()
+  @IsOptional()
+  esAnonimo?: boolean;
 
   @ApiPropertyOptional({ default: false })
   @IsBoolean()
