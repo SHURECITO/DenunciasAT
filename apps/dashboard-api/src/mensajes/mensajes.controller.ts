@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EitherAuthGuard } from '../auth/guards/either-auth.guard';
+import { SkipJwt } from '../auth/decorators/skip-jwt.decorator';
 import { CreateMensajeDto } from './dto/create-mensaje.dto';
 import { MensajesService } from './mensajes.service';
 
@@ -26,6 +28,8 @@ export class MensajesController {
   }
 
   @Post(':denunciaId')
+  @SkipJwt()
+  @UseGuards(EitherAuthGuard)
   @ApiOperation({ summary: 'Agregar mensaje a una denuncia' })
   create(
     @Param('denunciaId', ParseIntPipe) denunciaId: number,

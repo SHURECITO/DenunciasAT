@@ -165,4 +165,14 @@ export class DenunciasService {
     denuncia.estado = dto.estado;
     return this.denunciasRepo.save(denuncia);
   }
+
+  async findDatosUsuarioPorTelefono(telefono: string): Promise<{ nombreCiudadano: string; cedula: string; esAnonimo: boolean } | null> {
+    const d = await this.denunciasRepo.findOne({
+      where: { telefono, incompleta: false },
+      order: { fechaCreacion: 'DESC' },
+      select: ['nombreCiudadano', 'cedula', 'esAnonimo'],
+    });
+    if (!d) return null;
+    return { nombreCiudadano: d.nombreCiudadano, cedula: d.cedula, esAnonimo: d.esAnonimo };
+  }
 }

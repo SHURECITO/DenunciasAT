@@ -65,8 +65,10 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8742}
       DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
       EVOLUTION_API_URL: http://evolution-api:8080
-      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-denunciasAt2026}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
       EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-denunciasAt}
+      # URL interna del whatsapp-service para leer QR desde Redis
+      WHATSAPP_SERVICE_URL: http://whatsapp-service:3003
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,12 +86,17 @@ services:
           memory: 256M
 
   evolution-api:
-    image: atendai/evolution-api:v2.1.1
+    # Pinear versión explícita — :latest puede traer versiones inestables
+    image: atendai/evolution-api:v2.2.3
     restart: unless-stopped
+    # Parche @lid: aplicar antes de arrancar el servidor (ver infrastructure/evolution-api/patch-lid.js)
+    entrypoint: ["/bin/bash", "-c", "node /patches/patch-lid.js && . ./Docker/scripts/deploy_database.sh && npm run start:prod"]
     ports:
       - "8080:8080"
     environment:
-      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-denunciasAt2026}
+      # IMPORTANTE: el valor DEBE tener formato UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+      # Si no es UUID, Evolution API lo ignora y genera su propia clave aleatoria
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
       # Base de datos (Evolution API v2 requiere DB_PROVIDER explícito)
       DATABASE_ENABLED: "true"
       DATABASE_PROVIDER: postgresql
@@ -102,9 +109,18 @@ services:
       # Webhook al whatsapp-service
       WEBHOOK_GLOBAL_URL: http://whatsapp-service:3003/webhook
       WEBHOOK_GLOBAL_ENABLED: "true"
-      CONFIG_SESSION_PHONE_CLIENT: DenunciasAT
+      # Websockets (Evolution API v2)
+      WEBSOCKET_ENABLED: "true"
+      WEBSOCKET_GLOBAL_EVENTS: "true"
+      CONFIG_SESSION_PHONE_CLIENT: "Ubuntu"
+      CONFIG_SESSION_PHONE_NAME: "Chrome"
+      # Sobreescribe el valor hardcoded del .env interno del imagen (2.3000.1015901307)
+      # Actualizar cuando WA rechace con statusReason: 408/401:
+      # https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json
+      CONFIG_SESSION_PHONE_VERSION: "2.3000.1035194821"
     volumes:
       - evolution_data:/evolution/instances
+      - ./infrastructure/evolution-api:/patches:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -128,14 +144,18 @@ services:
       NODE_ENV: production
       PORT: 3003
       EVOLUTION_API_URL: http://evolution-api:8080
-      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-denunciasAt2026}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
       EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-denunciasAt}
       CHATBOT_SERVICE_URL: http://chatbot-service:3002
       # dashboard-api se referencia por puerto INTERNO Docker (3000), no por el host (8741)
       DASHBOARD_API_URL: http://dashboard-api:3000
+      # Redis para almacenar QR temporalmente (TTL 90s)
+      REDIS_URL: redis://redis:6379
     depends_on:
-      - evolution-api
-      - redis
+      evolution-api:
+        condition: service_started
+      redis:
+        condition: service_healthy
     deploy:
       resources:
         limits:

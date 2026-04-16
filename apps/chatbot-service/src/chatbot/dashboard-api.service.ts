@@ -27,6 +27,12 @@ interface UpsertParcialPayload {
   descripcion?: string;
 }
 
+interface GuardarMensajePayload {
+  contenido: string;
+  tipo: 'TEXTO' | 'AUDIO_TRANSCRITO' | 'IMAGEN' | 'PDF';
+  direccion: 'ENTRANTE' | 'SALIENTE';
+}
+
 @Injectable()
 export class DashboardApiService {
   private readonly logger = new Logger(DashboardApiService.name);
@@ -61,5 +67,25 @@ export class DashboardApiService {
       { headers: this.headers },
     );
     return res.data;
+  }
+
+  async buscarUsuarioPorTelefono(telefono: string): Promise<{ nombreCiudadano: string; cedula: string; esAnonimo: boolean } | null> {
+    try {
+      const res = await axios.get<{ nombreCiudadano: string; cedula: string; esAnonimo: boolean } | null>(
+        `${this.baseUrl}/denuncias/usuario/${telefono}`,
+        { headers: this.headers },
+      );
+      return res.data ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async guardarMensaje(denunciaId: number, payload: GuardarMensajePayload): Promise<void> {
+    await axios.post(
+      `${this.baseUrl}/mensajes/${denunciaId}`,
+      payload,
+      { headers: this.headers },
+    );
   }
 }

@@ -11,12 +11,15 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         type: 'postgres',
         host: config.get<string>('DB_HOST', 'localhost'),
         port: config.get<number>('DB_PORT', 5432),
-        username: config.get<string>('DB_USER', 'denunciasAt'),
-        password: config.get<string>('DB_PASSWORD', 'denunciasAt2026'),
-        database: config.get<string>('DB_NAME', 'denunciasAt'),
+        username: config.get<string>('DB_USER'),
+        password: config.get<string>('DB_PASSWORD'),
+        database: config.get<string>('DB_NAME'),
         autoLoadEntities: true,
-        synchronize: config.get<string>('NODE_ENV') !== 'production',
-        logging: false,
+        // DB_SYNC=true solo para desarrollo local o primer deploy
+        // NUNCA activar en producción con datos reales
+        // Nota: class-transformer convierte DB_SYNC a boolean, por eso se evalúa con Boolean()
+        synchronize: Boolean(config.get('DB_SYNC')),
+        logging: config.get<string>('NODE_ENV') !== 'production',
       }),
       inject: [ConfigService],
     }),

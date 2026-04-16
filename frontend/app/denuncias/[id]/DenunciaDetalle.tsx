@@ -21,6 +21,14 @@ const ESTADOS_LABEL: Record<DenunciaEstado, string> = {
   CON_RESPUESTA: '',
 };
 
+function formatTelefono(tel: string): string {
+  // Colombia: 573XXXXXXXXX → +57 3XX XXX XXXX
+  if (/^57\d{10}$/.test(tel)) {
+    return `+57 ${tel.slice(2, 5)} ${tel.slice(5, 8)} ${tel.slice(8)}`;
+  }
+  return tel;
+}
+
 interface Props {
   denuncia: Denuncia;
   mensajes: Mensaje[];
@@ -133,12 +141,20 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
               </div>
               <div>
                 <dt className="text-xs text-gray-400">Teléfono</dt>
-                <dd className="mt-0.5 text-gray-700">{denuncia.telefono}</dd>
+                <dd className="mt-0.5 text-gray-700">{formatTelefono(denuncia.telefono)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-gray-400">Ubicación</dt>
                 <dd className="mt-0.5 text-gray-700">{denuncia.ubicacion}</dd>
               </div>
+              {(denuncia.barrio || denuncia.comuna) && (
+                <div>
+                  <dt className="text-xs text-gray-400">Barrio / Comuna</dt>
+                  <dd className="mt-0.5 text-gray-700">
+                    {[denuncia.barrio, denuncia.comuna].filter(Boolean).join(' — ')}
+                  </dd>
+                </div>
+              )}
             </dl>
           </section>
 
@@ -147,6 +163,11 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
               Descripción de la denuncia
             </h2>
+            {denuncia.descripcionResumen && (
+              <p className="mb-3 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+                {denuncia.descripcionResumen}
+              </p>
+            )}
             <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
               {denuncia.descripcion}
             </p>

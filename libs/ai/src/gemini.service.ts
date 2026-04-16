@@ -55,13 +55,20 @@ Si confirma (sí/si/ok/1/yes/confirmo) → listaParaRadicar:true, etapaSiguiente
 
 CASOS ESPECIALES: si menciona corrupción/extorsión/grupos armados/sicariato → etapaSiguiente:"especial_cerrado".
 
+CUANDO TENGAS LA DESCRIPCIÓN DEL PROBLEMA:
+Clasifica e incluye en datosExtraidos:
+- dependencia: nombre exacto de la secretaría/entidad competente (puede ser múltiple separado por coma si aplica a varias)
+  Guía: huecos/vías/puentes→"Secretaría de Infraestructura Física", basura/aseo→"Emvarias", agua/luz/gas→"EPM", tránsito/semáforos→"Secretaría de Movilidad", crimen/inseguridad→"Secretaría de Seguridad y Convivencia", salud/EPS→"Secretaría de Salud", colegio/PAE→"Secretaría de Educación", construcción ilegal→"Secretaría de Gestión y Control Territorial", violencia género→"Secretaría de las Mujeres", emergencias→"DAGRD"
+- esEspecial: true si menciona corrupción/extorsión/vacunas/grupos armados/sicariato
+
 RESPONDE ÚNICAMENTE CON JSON VÁLIDO (sin texto extra):
 {"respuesta":"...","datosExtraidos":{},"etapaSiguiente":"recopilando","listaParaRadicar":false}`;
 
 // Modelos confirmados disponibles con la API key (verificado 2026-04-16)
 // gemini-2.5-flash-lite: estable, sin -preview, responde correctamente en free tier
-const MODEL_CHATBOT = 'gemini-2.5-flash-lite';
-const MODEL_LEGAL   = 'gemini-2.5-flash-lite';
+const MODEL_CHATBOT          = 'gemini-2.5-flash-lite';
+const MODEL_CHATBOT_FALLBACK = 'gemini-3.1-flash-lite-preview';
+const MODEL_LEGAL            = 'gemini-2.5-flash-lite';
 
 const BASE_CONFIG = { topP: 0.8, topK: 40, maxOutputTokens: 512 };
 
@@ -80,6 +87,7 @@ export class GeminiService {
   private readonly modelClasificacion: GenerativeModel;
   private readonly modelJustificacion: GenerativeModel;
   private readonly modelChatbot: GenerativeModel;
+  private readonly modelChatbotFallback: GenerativeModel;
 
   constructor(private readonly config: ConfigService) {
     const apiKey = this.config.get<string>('GEMINI_API_KEY', '');
@@ -99,6 +107,12 @@ export class GeminiService {
 
     this.modelChatbot = this.genAI.getGenerativeModel({
       model: MODEL_CHATBOT,
+      systemInstruction: SYSTEM_PROMPT_CHATBOT,
+      generationConfig: { ...BASE_CONFIG, temperature: 0.4 },
+    });
+
+    this.modelChatbotFallback = this.genAI.getGenerativeModel({
+      model: MODEL_CHATBOT_FALLBACK,
       systemInstruction: SYSTEM_PROMPT_CHATBOT,
       generationConfig: { ...BASE_CONFIG, temperature: 0.4 },
     });
@@ -178,8 +192,8 @@ Clasifica. SOLO JSON: {"esEspecial":bool,"dependencia":"nombre exacto","justific
 
     const prompt = `HISTORIAL:\n${hist || '(inicio)'}\n\nDATOS: ${JSON.stringify(datos)}\n\nUSUARIO: ${mensaje}\n\nJSON:`;
 
-    try {
-      const result = await this.modelChatbot.generateContent(prompt);
+    const intentarConModelo = async (model: GenerativeModel): Promise<RespuestaChatbot> => {
+      const result = await model.generateContent(prompt);
       const raw = result.response.text();
       this.logger.debug(`Gemini raw: ${raw.substring(0, 200)}`);
 
@@ -191,13 +205,27 @@ Clasifica. SOLO JSON: {"esEspecial":bool,"dependencia":"nombre exacto","justific
 
       const p = JSON.parse(jsonStr) as Partial<RespuestaChatbot>;
       return {
-        respuesta:       p.respuesta ?? '¿Me repites eso?',
-        datosExtraidos:  (p.datosExtraidos as Record<string, unknown>) ?? {},
-        etapaSiguiente:  p.etapaSiguiente ?? 'recopilando',
+        respuesta:        p.respuesta ?? '¿Me repites eso?',
+        datosExtraidos:   (p.datosExtraidos as Record<string, unknown>) ?? {},
+        etapaSiguiente:   p.etapaSiguiente ?? 'recopilando',
         listaParaRadicar: p.listaParaRadicar ?? false,
       };
+    };
+
+    try {
+      return await intentarConModelo(this.modelChatbot);
     } catch (err) {
-      this.logger.error(`Error Gemini chatbot: ${(err as Error).message}`);
+      const msg = (err as Error).message ?? '';
+      if (msg.includes('429')) {
+        this.logger.warn(`429 modelo primario — usando fallback ${MODEL_CHATBOT_FALLBACK}`);
+        try {
+          return await intentarConModelo(this.modelChatbotFallback);
+        } catch (err2) {
+          this.logger.error(`Error Gemini chatbot fallback: ${(err2 as Error).message}`);
+          return this.fallback(datosConfirmados);
+        }
+      }
+      this.logger.error(`Error Gemini chatbot: ${msg}`);
       return this.fallback(datosConfirmados);
     }
   }

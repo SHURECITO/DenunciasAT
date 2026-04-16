@@ -22,6 +22,10 @@ export interface Denuncia {
   documentoGeneradoOk: boolean;
   documentoPendiente: boolean;
   incompleta: boolean;
+  barrio: string | null;
+  comuna: string | null;
+  descripcionResumen: string | null;
+  esAnonimo: boolean;
   fechaCreacion: string;
   fechaActualizacion: string;
 }

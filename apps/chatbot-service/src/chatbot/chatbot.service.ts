@@ -51,19 +51,30 @@ export class ChatbotService {
     // Sin estado, formato antiguo (FSM) o flujo terminado → nuevo estado
     if (!estado || !estado.datosConfirmados || ['finalizado', 'especial_cerrado'].includes(estado.datosConfirmados.etapa)) {
       estado = this.conversacion.crearEstadoNuevo(numero);
+
+      // Buscar si el usuario ya tiene denuncias previas para pre-llenar sus datos
+      const usuarioExistente = await this.dashboardApi.buscarUsuarioPorTelefono(numero);
+      if (usuarioExistente && !usuarioExistente.esAnonimo) {
+        estado.datosConfirmados.nombre = usuarioExistente.nombreCiudadano;
+        estado.datosConfirmados.cedula = usuarioExistente.cedula;
+      }
+
       await this.conversacion.setEstado(numero, estado);
 
       // Si la primera interacción es solo un saludo, responder bienvenida
       const esSaludo = /^(hola|buenas|buenos|hey|hi|start|iniciar|inicio|comenzar)/.test(mensajeNorm);
       if (esSaludo) {
+        const msgBienvenida = usuarioExistente && !usuarioExistente.esAnonimo
+          ? `¡Hola de nuevo, ${usuarioExistente.nombreCiudadano}! 👋 Soy el asistente del concejal Andrés Tobón.\n\n¿En qué te puedo ayudar hoy?`
+          : MSG_BIENVENIDA;
         const bienvenida: typeof estado.historial[0] = {
           rol: 'assistant',
-          contenido: MSG_BIENVENIDA,
+          contenido: msgBienvenida,
           timestamp: new Date().toISOString(),
         };
         estado.historial.push(bienvenida);
         await this.conversacion.setEstado(numero, estado);
-        return MSG_BIENVENIDA;
+        return msgBienvenida;
       }
     }
 
@@ -163,7 +174,7 @@ export class ChatbotService {
       });
       d.descripcionResumen = resumen;
 
-      const { radicado } = await this.dashboardApi.crearDenuncia({
+      const { id, radicado } = await this.dashboardApi.crearDenuncia({
         nombreCiudadano: d.nombre ?? 'Anónimo',
         cedula: d.esAnonimo ? 'ANONIMO' : (d.cedula ?? ''),
         telefono: d.telefono,
@@ -179,6 +190,11 @@ export class ChatbotService {
       });
 
       d.etapa = 'finalizado';
+
+      // Guardar conversación en tabla mensajes (async, no bloquea la respuesta)
+      this.guardarHistorialComoMensajes(id, estado.historial).catch((e) =>
+        this.logger.warn(`No se pudo guardar historial: ${(e as Error).message}`),
+      );
 
       return (
         '✅ ¡Tu denuncia ha sido radicada exitosamente!\n\n' +
@@ -225,6 +241,19 @@ export class ChatbotService {
       'una persona de confianza del equipo del concejal se encargará de atenderte directamente.\n\n' +
       'Por favor estate pendiente.'
     );
+  }
+
+  private async guardarHistorialComoMensajes(
+    denunciaId: number,
+    historial: Array<{ rol: string; contenido: string }>,
+  ): Promise<void> {
+    for (const m of historial) {
+      await this.dashboardApi.guardarMensaje(denunciaId, {
+        contenido: m.contenido,
+        tipo: 'TEXTO',
+        direccion: m.rol === 'user' ? 'ENTRANTE' : 'SALIENTE',
+      });
+    }
   }
 
   private async guardarParcialSiPosible(estado: EstadoConversacionIA, numero: string): Promise<void> {

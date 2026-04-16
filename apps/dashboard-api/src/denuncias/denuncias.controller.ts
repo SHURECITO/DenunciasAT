@@ -76,6 +76,14 @@ export class DenunciasController {
     return this.denunciasService.findEspeciales();
   }
 
+  @Get('usuario/:telefono')
+  @SkipJwt()
+  @UseGuards(EitherAuthGuard)
+  @ApiOperation({ summary: 'Obtener datos de usuario por teléfono (chatbot — para personalizar bienvenida)' })
+  findUsuarioPorTelefono(@Param('telefono') telefono: string) {
+    return this.denunciasService.findDatosUsuarioPorTelefono(telefono);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener detalle de una denuncia' })
   findOne(@Param('id', ParseIntPipe) id: number) {
