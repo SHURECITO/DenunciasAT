@@ -48,8 +48,8 @@ export class ChatbotService {
 
     let estado = await this.conversacion.getEstado(numero);
 
-    // Sin estado o flujo terminado → nuevo estado con bienvenida
-    if (!estado || ['finalizado', 'especial_cerrado'].includes(estado.datosConfirmados.etapa)) {
+    // Sin estado, formato antiguo (FSM) o flujo terminado → nuevo estado
+    if (!estado || !estado.datosConfirmados || ['finalizado', 'especial_cerrado'].includes(estado.datosConfirmados.etapa)) {
       estado = this.conversacion.crearEstadoNuevo(numero);
       await this.conversacion.setEstado(numero, estado);
 
