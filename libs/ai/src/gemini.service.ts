@@ -190,7 +190,29 @@ Clasifica. SOLO JSON: {"esEspecial":bool,"dependencia":"nombre exacto","justific
       Object.entries(datosConfirmados).filter(([, v]) => v !== undefined && v !== null && v !== '' && v !== false),
     );
 
-    const prompt = `HISTORIAL:\n${hist || '(inicio)'}\n\nDATOS: ${JSON.stringify(datos)}\n\nUSUARIO: ${mensaje}\n\nJSON:`;
+    // Calcular campos pendientes para guiar al modelo
+    const pendientes = [
+      !(datos['nombre'] || datos['esAnonimo']) ? '- Nombre completo' : null,
+      !(datos['esAnonimo'] === true || datos['cedula']) ? '- Cédula' : null,
+      !datos['barrio'] ? '- Barrio' : null,
+      !datos['direccion'] ? '- Dirección exacta' : null,
+      !datos['direccionConfirmada'] ? '- Confirmar dirección' : null,
+      !datos['descripcion'] ? '- Descripción del problema' : null,
+    ].filter(Boolean).join('\n') || 'TODOS LOS DATOS RECOPILADOS';
+
+    const instruccionFinal = pendientes === 'TODOS LOS DATOS RECOPILADOS'
+      ? '\nACCIÓN REQUERIDA: Todos los datos están. Muestra resumen y setea listaParaRadicar:true en el JSON.'
+      : '';
+
+    const prompt = `HISTORIAL:\n${hist || '(inicio)'}
+
+DATOS RECOPILADOS: ${JSON.stringify(datos)}
+
+DATOS PENDIENTES:\n${pendientes}${instruccionFinal}
+
+USUARIO: ${mensaje}
+
+JSON:`;
 
     const intentarConModelo = async (model: GenerativeModel): Promise<RespuestaChatbot> => {
       const result = await model.generateContent(prompt);

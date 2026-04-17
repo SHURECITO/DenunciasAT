@@ -12,6 +12,9 @@ import { UpdateDenunciaDto } from './dto/update-denuncia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { Denuncia, DenunciaEstado } from './entities/denuncia.entity';
 
+const capitalizar = (str: string): string =>
+  str.toLowerCase().split(' ').map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+
 const ESTADOS_ORDEN: DenunciaEstado[] = [
   DenunciaEstado.RECIBIDA,
   DenunciaEstado.EN_GESTION,
@@ -45,6 +48,7 @@ export class DenunciasService {
         documentoPendiente: false,
         incompleta: false,
         ...dto,
+        nombreCiudadano: capitalizar(dto.nombreCiudadano ?? ''),
         cedula: dto.cedula ?? '',   // cedula es NOT NULL — '' para anónimos/parciales
         ...extra,
         radicado,

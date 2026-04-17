@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EitherAuthGuard } from '../auth/guards/either-auth.guard';
 import { SkipJwt } from '../auth/decorators/skip-jwt.decorator';
@@ -29,6 +30,7 @@ export class MensajesController {
 
   @Post(':denunciaId')
   @SkipJwt()
+  @SkipThrottle({ burst: true, sustained: true })
   @UseGuards(EitherAuthGuard)
   @ApiOperation({ summary: 'Agregar mensaje a una denuncia' })
   create(

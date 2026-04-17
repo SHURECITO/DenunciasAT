@@ -43,8 +43,9 @@ export class WebhookController {
     const remoteJid = data.key.remoteJid as string | undefined;
     if (!remoteJid) return { ok: true };
 
-    // Extraer número limpio (sin sufijo JID: @s.whatsapp.net, @lid, @g.us, etc.)
-    const numero = remoteJid.replace(/@.*$/, '');
+    // Extraer número limpio: tomar solo lo que está antes del @ y quitar cualquier carácter no numérico
+    // Necesario porque @lid JIDs pueden contener letras/guiones en la parte del número
+    const numero = remoteJid.split('@')[0].replace(/\D/g, '');
 
     const messageType = data.messageType ?? 'conversation';
     const contenido =

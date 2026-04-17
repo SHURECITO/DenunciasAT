@@ -168,7 +168,17 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 
 **Sesión 13 (2026-04-16) — Fixes chatbot FSM:** Estados FINALIZADO/corrupto→reset, validaciones nombre/cédula, paso ESPERANDO_EVIDENCIA, guardarParcial(), documentoPendiente, badge incompleta en frontend.
 
-**Sesión 14 (2026-04-16) — Chatbot IA conversacional:** Reemplazada FSM rígida por Gemini conversacional. Modelo → `gemini-2.0-flash`. Nuevo estado Redis con `historial[]` + `datosConfirmados`. Gemini maneja validaciones, extracción de datos, detección de anonimato y direcciones. `POST /denuncias/parcial` (upsert). Campos nuevos en Denuncia: `barrio`, `comuna`, `descripcionResumen`, `esAnonimo`. `generarResumen()` y `generarHechos()` en GeminiService.
+**Sesión 14 (2026-04-16) — Chatbot IA conversacional:** Reemplazada FSM rígida por Gemini conversacional. Modelo → `gemini-2.5-flash-lite` (fallback `gemini-3.1-flash-lite-preview` en 429). Nuevo estado Redis con `historial[]` + `datosConfirmados`. `POST /denuncias/parcial` (upsert). Campos nuevos en Denuncia: `barrio`, `comuna`, `descripcionResumen`, `esAnonimo`. `generarResumen()` y `generarHechos()` en GeminiService.
+
+**Sesión 15 (2026-04-17) — Fixes críticos chatbot:**
+- **BUG 1 esAnonimo:** `esAnonimo === true` solo cuando Gemini lo setea explícitamente (usuario escribió literalmente "anonimo"). Capitalización del nombre con `capitalizarNombre()` en chatbot y `capitalizar()` en denuncias.service.
+- **BUG 2 429 historial:** `@SkipThrottle({ burst: true, sustained: true })` en `POST /mensajes/:id`. `Promise.allSettled` para guardar historial en paralelo sin bloquear.
+- **BUG 3 teléfono largo:** `remoteJid.split('@')[0].replace(/\D/g, '')` en webhook.controller.ts — limpia JIDs tipo `@lid`.
+- **BUG 4 merge datos:** Deep merge con deduplicación de arrays. Prompt Gemini mejorado con `DATOS PENDIENTES` explícitos y acción requerida cuando todos están completos.
+- **Fix etapa finalizado:** Solo `radicarDenuncia()` setea `etapa='finalizado'`. Si Gemini devuelve `etapaSiguiente:'finalizado'` sin `listaParaRadicar`, se setea `'confirmando'` para evitar reset prematuro.
+- **Fix saludo con nombre:** Solo interceptar como saludo puro si el mensaje es ÚNICAMENTE la palabra de saludo (regex con `$`). "Hola soy Juan" pasa a Gemini.
+- **Fix radicado sin resumen:** `listaParaRadicar:true` solo actúa si `etapa === 'confirmando'`. Si no, deja pasar el resumen de Gemini y setea `'confirmando'`.
+- **Confirmación server-side:** Detección independiente del LLM; si usuario confirma con datos completos y hay resumen previo, fuerza radicado.
 
 ---
 
