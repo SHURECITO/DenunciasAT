@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import DenunciaEstadoBadge from '@/components/DenunciaEstadoBadge';
@@ -40,6 +40,27 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
   const [chatOpen, setChatOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Polling: mientras documentoPendiente && !documentoGeneradoOk, refresca cada 8 s
+  useEffect(() => {
+    if (denuncia.documentoPendiente && !denuncia.documentoGeneradoOk) {
+      pollingRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/denuncias/${denuncia.id}`);
+          if (!res.ok) return;
+          const updated: Denuncia = await res.json();
+          setDenuncia(updated);
+          if (!updated.documentoPendiente || updated.documentoGeneradoOk) {
+            clearInterval(pollingRef.current!);
+          }
+        } catch {
+          // ignorar errores de red en el polling
+        }
+      }, 8000);
+    }
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [denuncia.id, denuncia.documentoPendiente, denuncia.documentoGeneradoOk]);
 
   const siguienteEstado = ESTADOS_SIGUIENTE[denuncia.estado];
 
@@ -115,8 +136,13 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
             </span>
           )}
           {denuncia.documentoPendiente && !denuncia.documentoGeneradoOk && (
-            <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
-              ⏳ Documento pendiente
+            <span className="animate-pulse rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
+              ⏳ Generando documento...
+            </span>
+          )}
+          {denuncia.documentoGeneradoOk && (
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+              ✅ Documento listo
             </span>
           )}
         </div>
@@ -238,6 +264,17 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
               </button>
               <span className="text-sm text-gray-700">Documento revisado</span>
             </div>
+
+            {/* Descargar documento */}
+            {denuncia.documentoGeneradoOk && (
+              <a
+                href={`/api/denuncias/${denuncia.id}/documento`}
+                download
+                className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+              >
+                📄 Descargar documento .docx
+              </a>
+            )}
 
             {/* Avanzar estado */}
             {siguienteEstado && (

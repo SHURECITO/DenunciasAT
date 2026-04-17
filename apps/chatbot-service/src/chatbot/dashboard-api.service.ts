@@ -88,4 +88,13 @@ export class DashboardApiService {
       { headers: this.headers },
     );
   }
+
+  async triggerDocumentacion(denunciaId: number): Promise<void> {
+    const documentServiceUrl = this.config.get<string>('DOCUMENT_SERVICE_URL', 'http://document-service:3004');
+    await axios.post(
+      `${documentServiceUrl}/generar/${denunciaId}`,
+      {},
+      { headers: this.headers },
+    );
+  }
 }

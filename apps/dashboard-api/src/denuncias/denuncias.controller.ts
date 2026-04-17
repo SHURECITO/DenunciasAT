@@ -2,11 +2,14 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
+  HttpException,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -15,6 +18,9 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
+import { Response } from 'express';
+import axios from 'axios';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EitherAuthGuard } from '../auth/guards/either-auth.guard';
 import { SkipJwt } from '../auth/decorators/skip-jwt.decorator';
@@ -31,7 +37,10 @@ import { DenunciaEstado } from './entities/denuncia.entity';
 @UseGuards(JwtAuthGuard)
 @Controller('denuncias')
 export class DenunciasController {
-  constructor(private readonly denunciasService: DenunciasService) {}
+  constructor(
+    private readonly denunciasService: DenunciasService,
+    private readonly config: ConfigService,
+  ) {}
 
   @Post()
   @SkipJwt()
@@ -85,13 +94,17 @@ export class DenunciasController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Obtener detalle de una denuncia' })
+  @SkipJwt()
+  @UseGuards(EitherAuthGuard)
+  @ApiOperation({ summary: 'Obtener detalle de una denuncia (JWT dashboard o x-internal-key document-service)' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.denunciasService.findOne(id);
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Actualizar campos de una denuncia' })
+  @SkipJwt()
+  @UseGuards(EitherAuthGuard)
+  @ApiOperation({ summary: 'Actualizar campos de una denuncia (JWT dashboard o x-internal-key document-service)' })
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateDenunciaDto,
@@ -106,5 +119,36 @@ export class DenunciasController {
     @Body() dto: UpdateEstadoDto,
   ) {
     return this.denunciasService.updateEstado(id, dto);
+  }
+
+  @Get(':id/documento')
+  @ApiOperation({ summary: 'Descargar .docx de la denuncia (proxy a document-service)' })
+  async descargarDocumento(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ) {
+    const docServiceUrl = this.config.get<string>('DOCUMENT_SERVICE_URL', 'http://document-service:3004');
+    const internalKey = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '');
+
+    let denuncia: { radicado: string };
+    try {
+      denuncia = await this.denunciasService.findOne(id);
+    } catch {
+      throw new HttpException('Denuncia no encontrada', 404);
+    }
+
+    try {
+      const upstream = await axios.get(`${docServiceUrl}/documento/${id}`, {
+        headers: { 'x-internal-key': internalKey },
+        responseType: 'stream',
+      });
+      const filename = `${denuncia.radicado}.docx`;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      (upstream.data as NodeJS.ReadableStream).pipe(res);
+    } catch (err: unknown) {
+      const status = (err as { response?: { status: number } })?.response?.status ?? 500;
+      throw new HttpException('Documento no disponible', status);
+    }
   }
 }

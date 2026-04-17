@@ -39,7 +39,7 @@ Sistema de gestión de denuncias ciudadanas para el concejal Andrés Tobón (Med
 | evolution-api | 8080 | ✅ |
 | redis | 6379 | ✅ |
 | postgres | 5432 | ✅ |
-| document-service | 3004 | 🔜 |
+| document-service | 3004 | ✅ |
 | notification-service | 3005 | 🔜 |
 | rag-service | 3006 | 🔜 |
 
@@ -49,7 +49,8 @@ Sistema de gestión de denuncias ciudadanas para el concejal Andrés Tobón (Med
 
 - [x] Fase 1–9 — Scaffold, dashboard-api, frontend, Docker, seguridad, whatsapp/chatbot/Evolution API
 - [x] Sesión 14 — Chatbot IA conversacional (Gemini guía el flujo, sin máquina de estados rígida)
-- [ ] Entrega 4 — document-service + notification-service + rag-service
+- [x] Entrega 4 (parcial) — document-service implementado y operacional
+- [ ] Entrega 4 (resto) — notification-service + rag-service
 - [ ] Entrega final — Kubernetes
 
 ## Entidades TypeORM
@@ -145,7 +146,10 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **`passwordHash`**: `select: false` — re-fetchear tras save en usuarios
 - **QR WhatsApp**: `qrcode.updated` → Redis `evolution:qr` (TTL 90s) → `GET /qr`
 - **Vistas materializadas**: `stats_por_estado`, `stats_por_dependencia` — refresh en cada call
-- **chatbot-service Dockerfile**: copia `dist/` completo para preservar rutas de `libs/ai`
+- **chatbot-service / document-service Dockerfile**: copian `dist/` completo para preservar rutas de `libs/ai`
+- **document-service**: volumen compartido `documentos_data` entre document-service y dashboard-api (`/app/infrastructure/documentos`)
+- **`generarHechos()` firma**: acepta `nombreCiudadano: string` y `esAnonimo: boolean` (incluye al ciudadano en los hechos generados)
+- **DESTINATARIOS**: mapa en document-builder.service.ts — 20+ dependencias → `{cargo, nombreMayus, genero}`
 - **Evolution API key**: UUID válido obligatorio. Reset: `docker volume rm denunciasat_evolution_data`
 - **Parche @lid**: automático al startup en whatsapp-service
 
@@ -162,23 +166,19 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 
 ## Historial de sesiones (comprimido)
 
-**Sesiones 1–9 (2026-04-14/15):** Scaffold NestJS monorepo, dashboard-api (auth JWT, CRUD, SEQUENCE), frontend Next.js, Docker multi-stage, DockerHub, dashboard completo, hardening seguridad, whatsapp-service + chatbot-service + Evolution API, Gemini (normativa colombiana, systemInstruction).
+**Sesiones 1–15 (2026-04-14/17) — resumen comprimido:** Scaffold monorepo NestJS, dashboard-api (JWT, CRUD, SEQUENCE), frontend Next.js, Docker multi-stage, Evolution API (UUID, parche @lid), chatbot IA conversacional (Gemini, Redis, historial, deep merge, server-side confirmation). Fixes: esAnonimo explícito, throttle 429, teléfono @lid, etapa finalizado, saludo regex, radicado sin resumen.
 
-**Sesiones 10–12 (2026-04-15/16) — Fixes Evolution API:** UUID obligatorio, CONFIG_SESSION_PHONE_VERSION, webhook por instancia, parche @lid Baileys, 400 Bad Request (@s.whatsapp.net strip suffix, @lid JID completo).
+**Sesión 16 (2026-04-16) — document-service (Entrega 4):** Implementado servicio completo de generación de `.docx` oficial. `apps/document-service/` con `document.service.ts`, `document-builder.service.ts` (plantilla A4, DESTINATARIOS map), `dashboard-api.service.ts` (callback PATCH). Gemini genera sección HECHOS (`generarHechos()` actualizado con `nombreCiudadano`+`esAnonimo`). Integración: chatbot dispara `POST /generar/:id` fire-and-forget tras radicar; dashboard-api proxea `GET /denuncias/:id/documento` → document-service. Frontend: badge animado ⏳ con polling 8s, botón descarga `.docx` cuando `documentoGeneradoOk`. Volumen `documentos_data` compartido. `DOCUMENT_SERVICE_URL` en env de dashboard-api y chatbot-service.
 
-**Sesión 13 (2026-04-16) — Fixes chatbot FSM:** Estados FINALIZADO/corrupto→reset, validaciones nombre/cédula, paso ESPERANDO_EVIDENCIA, guardarParcial(), documentoPendiente, badge incompleta en frontend.
-
-**Sesión 14 (2026-04-16) — Chatbot IA conversacional:** Reemplazada FSM rígida por Gemini conversacional. Modelo → `gemini-2.5-flash-lite` (fallback `gemini-3.1-flash-lite-preview` en 429). Nuevo estado Redis con `historial[]` + `datosConfirmados`. `POST /denuncias/parcial` (upsert). Campos nuevos en Denuncia: `barrio`, `comuna`, `descripcionResumen`, `esAnonimo`. `generarResumen()` y `generarHechos()` en GeminiService.
-
-**Sesión 15 (2026-04-17) — Fixes críticos chatbot:**
-- **BUG 1 esAnonimo:** `esAnonimo === true` solo cuando Gemini lo setea explícitamente (usuario escribió literalmente "anonimo"). Capitalización del nombre con `capitalizarNombre()` en chatbot y `capitalizar()` en denuncias.service.
-- **BUG 2 429 historial:** `@SkipThrottle({ burst: true, sustained: true })` en `POST /mensajes/:id`. `Promise.allSettled` para guardar historial en paralelo sin bloquear.
-- **BUG 3 teléfono largo:** `remoteJid.split('@')[0].replace(/\D/g, '')` en webhook.controller.ts — limpia JIDs tipo `@lid`.
-- **BUG 4 merge datos:** Deep merge con deduplicación de arrays. Prompt Gemini mejorado con `DATOS PENDIENTES` explícitos y acción requerida cuando todos están completos.
-- **Fix etapa finalizado:** Solo `radicarDenuncia()` setea `etapa='finalizado'`. Si Gemini devuelve `etapaSiguiente:'finalizado'` sin `listaParaRadicar`, se setea `'confirmando'` para evitar reset prematuro.
-- **Fix saludo con nombre:** Solo interceptar como saludo puro si el mensaje es ÚNICAMENTE la palabra de saludo (regex con `$`). "Hola soy Juan" pasa a Gemini.
-- **Fix radicado sin resumen:** `listaParaRadicar:true` solo actúa si `etapa === 'confirmando'`. Si no, deja pasar el resumen de Gemini y setea `'confirmando'`.
-- **Confirmación server-side:** Detección independiente del LLM; si usuario confirma con datos completos y hay resumen previo, fuerza radicado.
+**Sesión 17 (2026-04-17) — Pruebas E2E y corrección de bugs:**
+- **BUG DenunciaData.documentoUrl:** campo faltaba en interfaz → `document.service.ts` no compilaba
+- **BUG GET /denuncias/:id sin EitherAuthGuard:** document-service recibía 401 al obtener la denuncia — añadido `@SkipJwt() + @UseGuards(EitherAuthGuard)`
+- **BUG document-service sin puerto:** docker-compose no exponía 3004:3004 → añadido
+- **BUG Gemini cuota daily (20 req free tier):** document-service caía por 429 de Gemini → `generarHechos()` ahora tiene fallback con plantilla básica basada en Const. Art. 23
+- **BUG cerrarCasoEspecial cédula/descripción vacías:** `cedula: ''` fallaba `@Length(6,12)` → placeholder `'ESPECIAL'`; `descripcion: ''` fallaba `@IsNotEmpty` → usa último mensaje del historial
+- **BUG cedula vacía en radicarDenuncia:** `cedula: d.cedula ?? ''` enviaba string vacío → ahora `undefined` si no tiene 6+ chars
+- **Health endpoints:** añadidos `GET /health` en chatbot-service, whatsapp-service y document-service
+- **Notas modelo Gemini:** free tier limita a 20 req/día por modelo. En producción usar cuenta con billing habilitado
 
 ---
 

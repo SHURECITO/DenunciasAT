@@ -287,19 +287,42 @@ Problema: ${(datos.descripcion ?? '').substring(0, 300)} | Entidad: ${datos.depe
   // Generación de sección HECHOS (Entrega 4 — document-service)
   // ---------------------------------------------------------------------------
   async generarHechos(datos: {
+    nombreCiudadano: string;
+    esAnonimo: boolean;
     direccion: string;
     barrio: string;
     comuna: string;
     descripcion: string;
     dependencia: string;
   }): Promise<string> {
+    const ciudadano = datos.esAnonimo ? 'un ciudadano en condición de anonimato' : `el ciudadano ${datos.nombreCiudadano}`;
     const prompt = `Redacta sección HECHOS para oficio del concejal Andrés Tobón a ${datos.dependencia}.
+Presentado por: ${ciudadano}.
 Ubicación: ${datos.direccion}, barrio ${datos.barrio}, comuna ${datos.comuna}.
 Situación: ${datos.descripcion}
 Máx 150 palabras. 2-3 párrafos formales. Cita UNA norma colombiana real. Solo texto plano.`;
 
-    const r = await this.modelJustificacion.generateContent(prompt);
-    return r.response.text().trim();
+    try {
+      const r = await this.modelJustificacion.generateContent(prompt);
+      return r.response.text().trim();
+    } catch (err) {
+      // Fallback: si la IA no está disponible (cuota, red), construir hechos básicos
+      this.logger.warn(`generarHechos falló (${(err as Error).message?.substring(0, 60)}) — usando fallback`);
+      return this.hechosFallback(datos, ciudadano);
+    }
+  }
+
+  private hechosFallback(datos: {
+    direccion: string; barrio: string; comuna: string; descripcion: string; dependencia: string;
+  }, ciudadano: string): string {
+    const loc = [datos.barrio, datos.comuna].filter(Boolean).join(', ');
+    // Capitalizar la primera letra del ciudadano para iniciar el párrafo correctamente
+    const inicio = ciudadano.charAt(0).toUpperCase() + ciudadano.slice(1);
+    return `${inicio} presentó ante el despacho del concejal Andrés Tobón una denuncia relacionada con la siguiente situación en la dirección ${datos.direccion}${loc ? `, ${loc}` : ''}, del municipio de Medellín.
+
+${datos.descripcion}
+
+De conformidad con lo establecido en el artículo 23 de la Constitución Política de Colombia, toda persona tiene derecho a presentar peticiones respetuosas a las autoridades por motivos de interés general o particular, y a obtener pronta resolución. En ese sentido, se pone en conocimiento de ${datos.dependencia} la situación descrita para que proceda conforme a sus competencias.`;
   }
 
   // ---------------------------------------------------------------------------

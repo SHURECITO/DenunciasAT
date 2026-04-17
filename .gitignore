@@ -38,3 +38,6 @@ coverage/
 
 # Claude Code
 .claude/
+
+# Documentos generados (volumen Docker en producción)
+infrastructure/documentos/

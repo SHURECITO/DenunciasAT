@@ -234,9 +234,10 @@ export class ChatbotService {
       });
       d.descripcionResumen = resumen;
 
+      const cedulaRadicado = esAnonimo ? 'ANONIMO' : (d.cedula?.trim() || undefined);
       const { id, radicado } = await this.dashboardApi.crearDenuncia({
         nombreCiudadano: nombreFinal,
-        cedula: esAnonimo ? 'ANONIMO' : (d.cedula ?? ''),
+        cedula: cedulaRadicado,
         telefono: d.telefono,
         ubicacion: d.direccion ?? `${d.barrio ?? ''} - ${d.comuna ?? ''}`.trim(),
         descripcion: d.descripcion ?? '',
@@ -250,6 +251,11 @@ export class ChatbotService {
       });
 
       d.etapa = 'finalizado';
+
+      // Disparar generación de documento de forma asíncrona (fire-and-forget)
+      this.dashboardApi.triggerDocumentacion(id).catch((err: unknown) => {
+        this.logger.warn(`[${numero}] No se pudo disparar document-service: ${(err as Error).message}`);
+      });
 
       // Guardar historial de la conversación (BUG 2: Promise.allSettled para no bloquear ni propagar errores)
       Promise.allSettled(
@@ -291,13 +297,20 @@ export class ChatbotService {
     const esAnonimo = d.esAnonimo === true;
     const nombreFinal = esAnonimo ? 'Anónimo' : capitalizarNombre(d.nombre ?? 'Sin nombre');
 
+    // Si la descripción está vacía, usar el último mensaje del usuario del historial
+    const ultimoMsgUsuario = [...estado.historial].reverse().find((m) => m.rol === 'user')?.contenido ?? '';
+    const descripcionFinal = d.descripcion?.trim() || ultimoMsgUsuario || 'Caso especial confidencial';
+
+    // Si cédula no fue recopilada, usar placeholder que pase la validación (min 6 chars)
+    const cedulaFinal = esAnonimo ? 'ANONIMO' : (d.cedula?.length >= 6 ? d.cedula : 'ESPECIAL');
+
     try {
       await this.dashboardApi.crearDenuncia({
         nombreCiudadano: nombreFinal,
-        cedula: esAnonimo ? 'ANONIMO' : (d.cedula ?? ''),
+        cedula: cedulaFinal,
         telefono: d.telefono,
-        ubicacion: d.direccion ?? `${d.barrio ?? ''} - ${d.comuna ?? ''}`.trim(),
-        descripcion: d.descripcion ?? '',
+        ubicacion: (d.direccion ?? `${d.barrio ?? ''} - ${d.comuna ?? ''}`.trim()) || 'Sin ubicación',
+        descripcion: descripcionFinal,
         dependenciaAsignada: d.dependencia ?? 'Secretaría de Seguridad y Convivencia',
         esEspecial: true,
         barrio: d.barrio,

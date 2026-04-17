@@ -21,4 +21,15 @@ export class UpdateDenunciaDto {
   @IsBoolean()
   @IsOptional()
   documentoPendiente?: boolean;
+
+  // Campos actualizados por document-service
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  documentoGeneradoOk?: boolean;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  documentoUrl?: string;
 }

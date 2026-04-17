@@ -20,6 +20,7 @@ export interface Denuncia {
   origenManual: boolean;
   documentoRevisado: boolean;
   documentoGeneradoOk: boolean;
+  documentoUrl: string | null;
   documentoPendiente: boolean;
   incompleta: boolean;
   barrio: string | null;
