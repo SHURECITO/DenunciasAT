@@ -148,8 +148,12 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **Vistas materializadas**: `stats_por_estado`, `stats_por_dependencia` — refresh en cada call
 - **chatbot-service / document-service Dockerfile**: copian `dist/` completo para preservar rutas de `libs/ai`
 - **document-service**: volumen compartido `documentos_data` entre document-service y dashboard-api (`/app/infrastructure/documentos`)
-- **`generarHechos()` firma**: acepta `nombreCiudadano: string` y `esAnonimo: boolean` (incluye al ciudadano en los hechos generados)
-- **DESTINATARIOS**: mapa en document-builder.service.ts — 20+ dependencias → `{cargo, nombreMayus, genero}`
+- **document-service arquitectura**: adm-zip + Plantilla.docx (en `infrastructure/templates/`) → inyecta body XML preservando header/footer del membrete
+- **dependencias.json**: `infrastructure/config/dependencias.json` — 20+ entidades → `{titulo, nombre, cargo, entidad}`
+- **ANDRÉS FELIPE TOBÓN VILLADA**: nombre completo correcto del concejal (no "TOBÓN VILLA")
+- **generarHechos()**: 3 párrafos, sin nombre del ciudadano, cita normativa específica
+- **generarAsunto()**: método nuevo, verbo infinitivo en mayúsculas, máx 12 palabras
+- **solicitudAdicional / imagenesEvidencia**: campos nullable en entidad Denuncia; chatbot los captura y pasa al radicar
 - **Evolution API key**: UUID válido obligatorio. Reset: `docker volume rm denunciasat_evolution_data`
 - **Parche @lid**: automático al startup en whatsapp-service
 
@@ -168,25 +172,19 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 
 **Sesiones 1–15 (2026-04-14/17) — resumen comprimido:** Scaffold monorepo NestJS, dashboard-api (JWT, CRUD, SEQUENCE), frontend Next.js, Docker multi-stage, Evolution API (UUID, parche @lid), chatbot IA conversacional (Gemini, Redis, historial, deep merge, server-side confirmation). Fixes: esAnonimo explícito, throttle 429, teléfono @lid, etapa finalizado, saludo regex, radicado sin resumen.
 
-**Sesión 16 (2026-04-16) — document-service (Entrega 4):** Implementado servicio completo de generación de `.docx` oficial. `apps/document-service/` con `document.service.ts`, `document-builder.service.ts` (plantilla A4, DESTINATARIOS map), `dashboard-api.service.ts` (callback PATCH). Gemini genera sección HECHOS (`generarHechos()` actualizado con `nombreCiudadano`+`esAnonimo`). Integración: chatbot dispara `POST /generar/:id` fire-and-forget tras radicar; dashboard-api proxea `GET /denuncias/:id/documento` → document-service. Frontend: badge animado ⏳ con polling 8s, botón descarga `.docx` cuando `documentoGeneradoOk`. Volumen `documentos_data` compartido. `DOCUMENT_SERVICE_URL` en env de dashboard-api y chatbot-service.
+**Sesiones 16–18 (2026-04-16/17) — document-service + UI:** document-service implementado (docx, Gemini HECHOS, callback PATCH). 7 bugs E2E corregidos: EitherAuthGuard en GET :id, puerto 3004, fallback Gemini 429, cédula vacía, caso especial. UI detalle: 3 estados derivados (tieneDocumento/generando/errorDocumento), polling 8s, retry button, columna Doc. en lista. POST /denuncias/:id/generar en dashboard-api.
 
-**Sesión 17 (2026-04-17) — Pruebas E2E y corrección de bugs:**
-- **BUG DenunciaData.documentoUrl:** campo faltaba en interfaz → `document.service.ts` no compilaba
-- **BUG GET /denuncias/:id sin EitherAuthGuard:** document-service recibía 401 al obtener la denuncia — añadido `@SkipJwt() + @UseGuards(EitherAuthGuard)`
-- **BUG document-service sin puerto:** docker-compose no exponía 3004:3004 → añadido
-- **BUG Gemini cuota daily (20 req free tier):** document-service caía por 429 de Gemini → `generarHechos()` ahora tiene fallback con plantilla básica basada en Const. Art. 23
-- **BUG cerrarCasoEspecial cédula/descripción vacías:** `cedula: ''` fallaba `@Length(6,12)` → placeholder `'ESPECIAL'`; `descripcion: ''` fallaba `@IsNotEmpty` → usa último mensaje del historial
-- **BUG cedula vacía en radicarDenuncia:** `cedula: d.cedula ?? ''` enviaba string vacío → ahora `undefined` si no tiene 6+ chars
-- **Health endpoints:** añadidos `GET /health` en chatbot-service, whatsapp-service y document-service
-- **Notas modelo Gemini:** free tier limita a 20 req/día por modelo. En producción usar cuenta con billing habilitado
-
-**Sesión 18 (2026-04-17) — Fix UI documento:**
-- **Diagnóstico:** API devolvía `documentoGeneradoOk: true` correctamente; frontend tenía el botón en el source pero el container estaba desactualizado
-- **DenunciaDetalle.tsx:** reescrita sección documento con 3 estados derivados (`tieneDocumento`, `generando`, `errorDocumento`); spinner animado para generando, botón azul para listo, badge rojo + botón "Reintentar" para error
-- **Polling:** limpiado a depender de `generando` (flag derivado, no campo raw)
-- **`POST /api/denuncias/[id]/generar-documento/route.ts`:** nuevo route handler Next.js para retry
-- **`POST /denuncias/:id/generar`:** nuevo endpoint dashboard-api — marca `documentoPendiente:true`, dispara document-service fire-and-forget, devuelve denuncia actualizada
-- **Lista denuncias:** columna Doc. con 📄/⏳/— y tooltip
+**Sesión 19 (2026-04-17) — Refactorización arquitectural document-service + chatbot:**
+- **CAMBIO ARQUITECTURAL**: document-builder reescrito con adm-zip + Plantilla.docx como base ZIP; preserva header/footer con membrete real; body XML inyectado programáticamente
+- **Plantilla**: `infrastructure/templates/Plantilla.docx` (copia de membrete.docx con header/imágenes)
+- **dependencias.json**: `infrastructure/config/dependencias.json` — 20+ entidades Medellín con titulo/nombre/cargo/entidad
+- **Múltiples destinatarios**: dependencias separadas por coma → bloque por destinatario en el mismo doc
+- **GeminiService**: nuevo `SYSTEM_PROMPT_LEGAL` (abogado litigante colombiano); `generarHechos()` actualizado (3 párrafos, sin nombre ciudadano, normativa específica); `generarAsunto()` nuevo (verbo infinitivo mayúsculas, máx 12 palabras)
+- **Imágenes en documento**: descarga desde URL, dimensiones leídas desde headers JPEG/PNG (pure JS, sin sharp), inyección como inline drawing OOXML
+- **Chatbot**: paso `esperando_solicitud` agregado al flujo (informa solicitudes → pregunta adicional → guarda en `solicitudAdicional`)
+- **Entidad Denuncia**: `solicitudAdicional` y `imagenesEvidencia` (nullable text) — se pasan al radicar
+- **Dockerfile document-service**: copia Plantilla.docx y dependencias.json al stage production
+- **Nombre correcto**: ANDRÉS FELIPE TOBÓN VILLADA (corregido de "TOBÓN VILLA")
 
 ---
 
