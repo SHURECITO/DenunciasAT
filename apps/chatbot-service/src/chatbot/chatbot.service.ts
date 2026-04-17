@@ -106,6 +106,33 @@ export class ChatbotService {
       return MSG_PERDIDO;
     }
 
+    // Detección server-side de confirmación final (independiente del LLM)
+    // Si los datos mínimos están presentes y el usuario confirma, forzar radicado
+    const esConfirmacion = /^(s[ií]|ok|yes|confirmo|correcto|dale|listo|exacto|as[ií] es|claro|afirmativo|1)\b/i.test(mensajeNorm);
+    const datosMinimos = !!(
+      estado.datosConfirmados.nombre &&
+      estado.datosConfirmados.descripcion &&
+      (estado.datosConfirmados.direccion || estado.datosConfirmados.barrio)
+    );
+    // El historial debe tener al menos un resumen reciente del asistente (paso 8)
+    const ultimaRespuestaAsistente = [...estado.historial].reverse().find((m) => m.rol === 'assistant')?.contenido ?? '';
+    const hayResumenPrevio = /resumen|radicad|confirma|correcto/i.test(ultimaRespuestaAsistente);
+
+    if (esConfirmacion && datosMinimos && hayResumenPrevio) {
+      // Forzar radicado sin pasar por LLM para este turno
+      estado.historial.push(
+        { rol: 'user', contenido: mensajeEfectivo, timestamp: new Date().toISOString() },
+      );
+      const respuestaRadicado = await this.radicarDenuncia(estado, numero);
+      estado.historial.push(
+        { rol: 'assistant', contenido: respuestaRadicado, timestamp: new Date().toISOString() },
+      );
+      await this.conversacion.setEstado(numero, estado);
+      const delay = Math.min(2000 + respuestaRadicado.length * 40, 8000);
+      await new Promise((r) => setTimeout(r, delay));
+      return respuestaRadicado;
+    }
+
     // Llamar a Gemini con el historial previo + datos actuales + mensaje del usuario
     // El historial aún no incluye el mensaje actual (se agrega después junto con la respuesta)
     const resultado = await this.gemini.procesarMensajeChatbot(
