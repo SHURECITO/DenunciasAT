@@ -1,133 +1,34 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { mkdirSync } from 'fs';
-import { dirname, join } from 'path';
-import {
-  AlignmentType,
-  Document,
-  HeadingLevel,
-  Packer,
-  Paragraph,
-  TextRun,
-  convertInchesToTwip,
-} from 'docx';
+import { readFileSync, mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
+import { dirname, join } from 'path';
+import axios from 'axios';
 import type { DenunciaData } from './dashboard-api.service';
 
-// ─── Mapeo dependencia → destinatario ───────────────────────────────────────
-const DESTINATARIOS: Record<string, { cargo: string; nombreMayus: string; genero: 'M' | 'F' }> = {
-  'Secretaría de Infraestructura Física': {
-    cargo: 'Secretario de Infraestructura Física',
-    nombreMayus: 'SECRETARIO(A) DE INFRAESTRUCTURA FÍSICA',
-    genero: 'M',
-  },
-  'Secretaría de Movilidad': {
-    cargo: 'Secretario de Movilidad',
-    nombreMayus: 'SECRETARIO(A) DE MOVILIDAD',
-    genero: 'M',
-  },
-  'Secretaría de Medio Ambiente': {
-    cargo: 'Secretaria de Medio Ambiente',
-    nombreMayus: 'SECRETARIA DE MEDIO AMBIENTE',
-    genero: 'F',
-  },
-  'Secretaría de Seguridad y Convivencia': {
-    cargo: 'Secretario de Seguridad y Convivencia',
-    nombreMayus: 'SECRETARIO(A) DE SEGURIDAD Y CONVIVENCIA',
-    genero: 'M',
-  },
-  'Secretaría de Salud': {
-    cargo: 'Secretaria de Salud',
-    nombreMayus: 'SECRETARIA DE SALUD',
-    genero: 'F',
-  },
-  'Secretaría de Educación': {
-    cargo: 'Secretaria de Educación',
-    nombreMayus: 'SECRETARIA DE EDUCACIÓN',
-    genero: 'F',
-  },
-  'Secretaría de Gestión y Control Territorial': {
-    cargo: 'Secretario de Gestión y Control Territorial',
-    nombreMayus: 'SECRETARIO(A) DE GESTIÓN Y CONTROL TERRITORIAL',
-    genero: 'M',
-  },
-  'Secretaría de las Mujeres': {
-    cargo: 'Secretaria de las Mujeres',
-    nombreMayus: 'SECRETARIA DE LAS MUJERES',
-    genero: 'F',
-  },
-  'Secretaría de Inclusión Social, Familia y DDHH': {
-    cargo: 'Secretaria de Inclusión Social, Familia y DDHH',
-    nombreMayus: 'SECRETARIA DE INCLUSIÓN SOCIAL, FAMILIA Y DDHH',
-    genero: 'F',
-  },
-  'Secretaría de Participación Ciudadana': {
-    cargo: 'Secretario de Participación Ciudadana',
-    nombreMayus: 'SECRETARIO(A) DE PARTICIPACIÓN CIUDADANA',
-    genero: 'M',
-  },
-  'Secretaría de Desarrollo Económico': {
-    cargo: 'Secretario de Desarrollo Económico',
-    nombreMayus: 'SECRETARIO(A) DE DESARROLLO ECONÓMICO',
-    genero: 'M',
-  },
-  'Secretaría de la Juventud': {
-    cargo: 'Secretario de la Juventud',
-    nombreMayus: 'SECRETARIO(A) DE LA JUVENTUD',
-    genero: 'M',
-  },
-  'Secretaría de Cultura Ciudadana': {
-    cargo: 'Secretario de Cultura Ciudadana',
-    nombreMayus: 'SECRETARIO(A) DE CULTURA CIUDADANA',
-    genero: 'M',
-  },
-  'Secretaría de Paz y Derechos Humanos': {
-    cargo: 'Secretario de Paz y Derechos Humanos',
-    nombreMayus: 'SECRETARIO(A) DE PAZ Y DERECHOS HUMANOS',
-    genero: 'M',
-  },
-  'Secretaría de Gestión Humana y Servicio a la Ciudadanía': {
-    cargo: 'Secretaria de Gestión Humana',
-    nombreMayus: 'SECRETARIA DE GESTIÓN HUMANA Y SERVICIO A LA CIUDADANÍA',
-    genero: 'F',
-  },
-  EPM: {
-    cargo: 'Gerente General',
-    nombreMayus: 'GERENTE GENERAL DE EPM',
-    genero: 'M',
-  },
-  Emvarias: {
-    cargo: 'Gerente General',
-    nombreMayus: 'GERENTE GENERAL DE EMVARIAS',
-    genero: 'M',
-  },
-  'Metro de Medellín': {
-    cargo: 'Gerente General',
-    nombreMayus: 'GERENTE GENERAL DEL METRO DE MEDELLÍN',
-    genero: 'M',
-  },
-  INDER: {
-    cargo: 'Director General',
-    nombreMayus: 'DIRECTOR DEL INSTITUTO DE DEPORTES Y RECREACIÓN',
-    genero: 'M',
-  },
-  EDU: {
-    cargo: 'Gerente General',
-    nombreMayus: 'GERENTE DE LA EMPRESA DE DESARROLLO URBANO',
-    genero: 'M',
-  },
-  ISVIMED: {
-    cargo: 'Gerente General',
-    nombreMayus: 'GERENTE GENERAL DE ISVIMED',
-    genero: 'M',
-  },
-  DAGRD: {
-    cargo: 'Director',
-    nombreMayus: 'DIRECTOR DEL DAGRD',
-    genero: 'M',
-  },
-};
+import AdmZip = require('adm-zip');
 
-// ─── Helpers de formato ──────────────────────────────────────────────────────
+// ─── Rutas ────────────────────────────────────────────────────────────────────
+const TEMPLATE_PATH = join(process.cwd(), 'infrastructure', 'templates', 'Plantilla.docx');
+const DEPS_PATH     = join(process.cwd(), 'infrastructure', 'config', 'dependencias.json');
+
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+interface Destinatario {
+  titulo: string;   // "Doctor" | "Doctora"
+  nombre: string;   // "SECRETARIO DE INFRAESTRUCTURA FÍSICA"
+  cargo:  string;   // "Secretario de Infraestructura Física"
+  entidad: string;  // "Secretaría de Infraestructura Física"
+}
+
+export interface BuildInput {
+  denuncia:          DenunciaData;
+  hechos:            string;
+  asunto:            string;
+  solicitudAdicional?: string;
+  imagenes:          string[];
+  rutaDestino:       string;
+}
+
+// ─── Meses en español ────────────────────────────────────────────────────────
 const MESES = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
@@ -138,189 +39,320 @@ function formatFecha(isoDate: string): string {
   return `Medellín, ${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
 }
 
-// Convierte cm a DXA (twips) — 1 cm = 567 DXA
-const cm = (v: number) => Math.round(v * 567);
-
-// Párrafo de texto simple con opciones
-function p(
-  texto: string,
-  opts: {
-    bold?: boolean;
-    italic?: boolean;
-    size?: number;
-    align?: (typeof AlignmentType)[keyof typeof AlignmentType];
-    spacingAfter?: number;
-    spacingBefore?: number;
-  } = {},
-): Paragraph {
-  return new Paragraph({
-    alignment: opts.align ?? AlignmentType.LEFT,
-    spacing: {
-      after: opts.spacingAfter ?? 0,
-      before: opts.spacingBefore ?? 0,
-      line: 276, // ≈ 1.15 interlineado
-    },
-    children: [
-      new TextRun({
-        text: texto,
-        bold: opts.bold ?? false,
-        italics: opts.italic ?? false,
-        font: 'Arial',
-        size: (opts.size ?? 11) * 2, // half-points
-      }),
-    ],
-  });
+// ─── Escape XML ───────────────────────────────────────────────────────────────
+function xe(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-export interface BuildInput {
-  denuncia: DenunciaData;
-  hechos: string;
-  rutaDestino: string;
+// ─── Font y tamaño base ───────────────────────────────────────────────────────
+const FONT = 'Calibri';
+const SZ   = 24; // 12pt en half-points
+
+// ─── Propiedades de párrafo ───────────────────────────────────────────────────
+type Align = 'left' | 'right' | 'center' | 'justified';
+const JC_MAP: Record<Align, string> = {
+  left:      'left',
+  right:     'right',
+  center:    'center',
+  justified: 'both',
+};
+
+interface ParaOpts {
+  bold?:         boolean;
+  italic?:       boolean;
+  align?:        Align;
+  spacingAfter?: number;
+  size?:         number;
 }
 
+/** Genera un párrafo OOXML simple con un solo run de texto */
+function p(text: string, opts: ParaOpts = {}): string {
+  const { bold = false, italic = false, align = 'left', spacingAfter = 120, size = SZ } = opts;
+  const jc   = JC_MAP[align];
+  const bTag = bold   ? '<w:b/><w:bCs/>' : '';
+  const iTag = italic ? '<w:i/><w:iCs/>' : '';
+  const rpr  = `<w:rPr>${bTag}${iTag}<w:rFonts w:ascii="${FONT}" w:hAnsi="${FONT}"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr>`;
+  const ppr  = `<w:pPr><w:spacing w:after="${spacingAfter}" w:line="240" w:lineRule="auto"/><w:jc w:val="${jc}"/></w:pPr>`;
+  if (!text) {
+    return `<w:p>${ppr}</w:p>`;
+  }
+  return `<w:p>${ppr}<w:r>${rpr}<w:t xml:space="preserve">${xe(text)}</w:t></w:r></w:p>`;
+}
+
+/** Párrafo de ASUNTO: "ASUNTO: " en negrita + texto normal */
+function asuntoP(asunto: string): string {
+  const ppr  = `<w:pPr><w:spacing w:after="240" w:line="240" w:lineRule="auto"/></w:pPr>`;
+  const rprB = `<w:rPr><w:b/><w:bCs/><w:rFonts w:ascii="${FONT}" w:hAnsi="${FONT}"/><w:sz w:val="${SZ}"/><w:szCs w:val="${SZ}"/></w:rPr>`;
+  const rprN = `<w:rPr><w:rFonts w:ascii="${FONT}" w:hAnsi="${FONT}"/><w:sz w:val="${SZ}"/><w:szCs w:val="${SZ}"/></w:rPr>`;
+  return `<w:p>${ppr}<w:r>${rprB}<w:t xml:space="preserve">ASUNTO: </w:t></w:r><w:r>${rprN}<w:t xml:space="preserve">${xe(asunto)}</w:t></w:r></w:p>`;
+}
+
+// ─── Imágenes ─────────────────────────────────────────────────────────────────
+const MAX_WIDTH_EMU = 5400000; // ≈ 5.6 pulgadas
+
+/** Descarga imagen desde URL, devuelve Buffer o null si falla */
+async function downloadImage(url: string): Promise<Buffer | null> {
+  try {
+    const res = await axios.get<ArrayBuffer>(url, {
+      responseType: 'arraybuffer',
+      timeout: 10000,
+    });
+    return Buffer.from(res.data);
+  } catch {
+    return null;
+  }
+}
+
+/** Determina la extensión de la imagen por la URL */
+function imageExt(url: string): 'png' | 'jpg' {
+  return url.toLowerCase().includes('.png') ? 'png' : 'jpg';
+}
+
+/** Lee dimensiones de JPEG o PNG desde los bytes del header */
+function imageDims(buf: Buffer, ext: string): { cx: number; cy: number } {
+  try {
+    if (ext === 'png' && buf.length >= 24) {
+      const sig = buf.slice(0, 8).toString('hex');
+      if (sig === '89504e470d0a1a0a') {
+        const w = buf.readUInt32BE(16);
+        const h = buf.readUInt32BE(20);
+        if (w > 0 && h > 0) {
+          const cx = Math.min(w * 9525, MAX_WIDTH_EMU);
+          return { cx, cy: Math.round(cx * h / w) };
+        }
+      }
+    }
+    if (ext !== 'png' && buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+      let i = 2;
+      while (i + 4 < buf.length) {
+        if (buf[i] !== 0xff) break;
+        const marker = buf[i + 1];
+        const segLen = buf.readUInt16BE(i + 2);
+        if ([0xc0, 0xc1, 0xc2].includes(marker) && i + 9 < buf.length) {
+          const h = buf.readUInt16BE(i + 5);
+          const w = buf.readUInt16BE(i + 7);
+          if (w > 0 && h > 0) {
+            const cx = Math.min(w * 9525, MAX_WIDTH_EMU);
+            return { cx, cy: Math.round(cx * h / w) };
+          }
+        }
+        i += 2 + segLen;
+      }
+    }
+  } catch { /* fall through */ }
+  // Fallback: proporción 4:3
+  return { cx: MAX_WIDTH_EMU, cy: Math.round(MAX_WIDTH_EMU * 3 / 4) };
+}
+
+/** Genera el XML de un párrafo con imagen inline */
+function imageParaXml(relId: string, num: number, dims: { cx: number; cy: number }): string {
+  return `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="120"/></w:pPr><w:r><w:drawing>` +
+    `<wp:inline distT="0" distB="0" distL="0" distR="0" ` +
+    `xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">` +
+    `<wp:extent cx="${dims.cx}" cy="${dims.cy}"/>` +
+    `<wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+    `<wp:docPr id="${num}" name="Evidencia ${num}"/>` +
+    `<wp:cNvGraphicFramePr>` +
+    `<a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/>` +
+    `</wp:cNvGraphicFramePr>` +
+    `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+    `<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+    `<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+    `<pic:nvPicPr>` +
+    `<pic:cNvPr id="${num}" name="evidencia_${num}.jpg"/>` +
+    `<pic:cNvPicPr/>` +
+    `</pic:nvPicPr>` +
+    `<pic:blipFill>` +
+    `<a:blip r:embed="${relId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>` +
+    `<a:stretch><a:fillRect/></a:stretch>` +
+    `</pic:blipFill>` +
+    `<pic:spPr>` +
+    `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${dims.cx}" cy="${dims.cy}"/></a:xfrm>` +
+    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>` +
+    `</pic:spPr>` +
+    `</pic:pic></a:graphicData></a:graphic>` +
+    `</wp:inline></w:drawing></w:r></w:p>`;
+}
+
+// ─── Resolución de destinatario ───────────────────────────────────────────────
+let _depsCache: Record<string, Destinatario> | null = null;
+
+function loadDeps(): Record<string, Destinatario> {
+  if (_depsCache) return _depsCache;
+  try {
+    _depsCache = JSON.parse(readFileSync(DEPS_PATH, 'utf8')) as Record<string, Destinatario>;
+  } catch {
+    _depsCache = {};
+  }
+  return _depsCache;
+}
+
+function resolveDestinatario(dependencia: string): Destinatario {
+  const deps = loadDeps();
+  if (deps[dependencia]) return deps[dependencia];
+  // Fallback: construir desde el nombre
+  const titulo = dependencia.toLowerCase().includes('secretar') &&
+    /a\s+de\s+/i.test(dependencia) ? 'Doctora' : 'Doctor';
+  return {
+    titulo,
+    nombre:  dependencia.toUpperCase(),
+    cargo:   'Director/a',
+    entidad: dependencia,
+  };
+}
+
+// ─── Servicio principal ───────────────────────────────────────────────────────
 @Injectable()
 export class DocumentBuilderService {
   private readonly logger = new Logger(DocumentBuilderService.name);
 
   async construir(input: BuildInput): Promise<void> {
-    const { denuncia, hechos, rutaDestino } = input;
+    const { denuncia, hechos, asunto, solicitudAdicional, imagenes, rutaDestino } = input;
     mkdirSync(dirname(rutaDestino), { recursive: true });
 
-    const dependencia = denuncia.dependenciaAsignada ?? 'la entidad competente';
+    // Cargar plantilla como ZIP
+    const zip = new AdmZip(TEMPLATE_PATH);
 
-    // Determinar destinatario
-    // La dependenciaAsignada puede ser "EPM, Emvarias" — usar la primera
-    const depPrimaria = dependencia.split(',')[0].trim();
-    const dest = DESTINATARIOS[depPrimaria] ?? {
-      cargo: 'Director/a',
-      nombreMayus: depPrimaria.toUpperCase(),
-      genero: 'M' as const,
-    };
-    const tratamiento = dest.genero === 'F' ? 'Doctora,' : 'Doctor,';
+    // Extraer el opening tag y el sectPr del document.xml original
+    const originalDocXml = zip.readAsText('word/document.xml');
+    const openTagMatch   = originalDocXml.match(/^<w:document[^>]*(?:>|\s*\/>)/);
+    const openTag        = openTagMatch?.[0] ?? '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">';
+    const sectPrMatch    = originalDocXml.match(/<w:sectPr[\s\S]*?<\/w:sectPr>/);
+    const sectPr         = sectPrMatch?.[0] ?? '';
 
-    const fechaStr = formatFecha(denuncia.fechaCreacion);
-    const resumen = (denuncia.descripcionResumen ?? denuncia.descripcion.substring(0, 120)).toUpperCase();
+    // Resolver dependencias y destinatarios
+    const depStr  = denuncia.dependenciaAsignada ?? 'la entidad competente';
+    const depList = depStr.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+    const dest0   = resolveDestinatario(depList[0] ?? depStr);
 
-    // ── Secciones ────────────────────────────────────────────────────────────
-    const secciones: Paragraph[] = [];
+    // ── Construir el cuerpo ───────────────────────────────────────────────────
+    const body: string[] = [];
 
-    // Radicado (derecha)
-    secciones.push(p(denuncia.radicado, { align: AlignmentType.RIGHT, spacingAfter: 200 }));
+    // Radicado alineado a la derecha
+    body.push(p(denuncia.radicado, { align: 'right', spacingAfter: 240 }));
 
-    // Ciudad y fecha
-    secciones.push(p(fechaStr, { spacingAfter: 400 }));
+    // Fecha
+    body.push(p(formatFecha(denuncia.fechaCreacion), { spacingAfter: 480 }));
 
-    // Destinatario
-    secciones.push(p(tratamiento));
-    secciones.push(p(dest.nombreMayus, { bold: true }));
-    secciones.push(p(dest.cargo));
-    secciones.push(p(dependencia));
-    secciones.push(p('Ciudad', { spacingAfter: 400 }));
-
-    // Asunto
-    secciones.push(
-      new Paragraph({
-        alignment: AlignmentType.LEFT,
-        spacing: { after: 400, line: 276 },
-        children: [
-          new TextRun({ text: 'ASUNTO: ', bold: true, font: 'Arial', size: 22 }),
-          new TextRun({ text: resumen, font: 'Arial', size: 22 }),
-        ],
-      }),
-    );
-
-    // Saludo de apertura
-    secciones.push(
-      p(
-        `Respetado/a doctor/a, en mi calidad de concejal de la ciudad de Medellín, me dirijo a su despacho con el fin de que se garantice una solución a la siguiente problemática:`,
-        { align: AlignmentType.JUSTIFIED, spacingAfter: 300 },
-      ),
-    );
-
-    // Título HECHOS
-    secciones.push(p('HECHOS', { bold: true, align: AlignmentType.CENTER, spacingAfter: 200 }));
-
-    // Párrafos de hechos generados por Gemini
-    const parrafosHechos = hechos.split(/\n\n+/).filter((t) => t.trim());
-    for (const pHechos of parrafosHechos) {
-      secciones.push(p(pHechos.trim(), { align: AlignmentType.JUSTIFIED, spacingAfter: 200 }));
+    // Un bloque por cada destinatario
+    for (const dep of depList) {
+      const dest = resolveDestinatario(dep);
+      body.push(p(`${dest.titulo},`));
+      body.push(p(dest.nombre, { bold: true }));
+      body.push(p(dest.cargo));
+      body.push(p(dest.entidad));
+      body.push(p('Ciudad', { spacingAfter: 480 }));
     }
 
-    // Título SOLICITUD
-    secciones.push(p('SOLICITUD', { bold: true, align: AlignmentType.CENTER, spacingAfter: 200 }));
+    // ASUNTO
+    body.push(asuntoP(asunto));
+    body.push(p('', { spacingAfter: 240 }));
 
-    // Solicitudes numeradas
+    // Saludo
+    const saludo = `Respetado/a ${dest0.titulo.toLowerCase().replace(',', '')}:`;
+    body.push(p(saludo, { spacingAfter: 240 }));
+
+    // Apertura
+    body.push(p(
+      'En mi calidad de concejal de la ciudad de Medellín, y en ejercicio de mis funciones constitucionales y legales, respetuosamente me dirijo a su despacho con el fin de que sea atendida la siguiente situación de interés público:',
+      { align: 'justified', spacingAfter: 360 },
+    ));
+
+    // ── HECHOS ────────────────────────────────────────────────────────────────
+    body.push(p('HECHOS', { bold: true, align: 'center', spacingAfter: 240 }));
+
+    for (const par of hechos.split(/\n\n+/).filter((t) => t.trim())) {
+      body.push(p(par.trim(), { align: 'justified', spacingAfter: 240 }));
+    }
+
+    // ── Imágenes de evidencia ─────────────────────────────────────────────────
+    const imageRels: string[] = [];
+    let imgCount = 0;
+
+    for (const imgUrl of imagenes) {
+      imgCount++;
+      try {
+        const imgBuf = await downloadImage(imgUrl);
+        if (!imgBuf) {
+          this.logger.warn(`No se pudo descargar imagen ${imgCount}: ${imgUrl.substring(0, 80)}`);
+          continue;
+        }
+        const ext      = imageExt(imgUrl);
+        const fileName = `evidencia_${imgCount}.${ext}`;
+        const relId    = `rIdEv${imgCount}`;
+        const dims     = imageDims(imgBuf, ext);
+
+        zip.addFile(`word/media/${fileName}`, imgBuf);
+        imageRels.push(
+          `<Relationship Id="${relId}" ` +
+          `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" ` +
+          `Target="media/${fileName}"/>`,
+        );
+
+        body.push(imageParaXml(relId, imgCount, dims));
+        body.push(p(`Evidencia fotográfica ${imgCount} aportada al despacho del concejal`, {
+          align: 'center', italic: true, size: 20, spacingAfter: 240,
+        }));
+      } catch (err) {
+        this.logger.warn(`Error incluyendo imagen ${imgCount}: ${(err as Error).message}`);
+      }
+    }
+
+    // ── SOLICITUD ─────────────────────────────────────────────────────────────
+    body.push(p('SOLICITUD', { bold: true, align: 'center', spacingAfter: 240 }));
+
     const solicitudes = [
-      `1. Se realice una visita en el lugar ya mencionado con el fin de verificar la situación crítica reportada por el ciudadano.`,
-      `2. Se me informe sobre las acciones a implementar por parte de ${depPrimaria} para dar solución efectiva a la problemática planteada.`,
-      `3. Se garantice una respuesta oportuna conforme a los términos establecidos en el artículo 30 de la Ley 1755 de 2015, que establece un término máximo de diez (10) días para responder solicitudes entre autoridades.`,
+      `1. Que se realice una visita en el lugar ya mencionado con el fin de verificar la situación reportada.`,
+      `2. Que se informe sobre las acciones a implementar por parte de ${depList[0] ?? depStr} para dar solución efectiva a la problemática planteada.`,
+      `3. Que se garantice una respuesta oportuna conforme a los términos establecidos en el artículo 30 de la Ley 1755 de 2015, que establece un término máximo de diez (10) días para responder solicitudes entre autoridades.`,
     ];
+    if (solicitudAdicional?.trim()) {
+      solicitudes.push(`4. ${solicitudAdicional.trim()}`);
+    }
     for (const sol of solicitudes) {
-      secciones.push(p(sol, { align: AlignmentType.JUSTIFIED, spacingAfter: 160 }));
+      body.push(p(sol, { align: 'justified', spacingAfter: 180 }));
     }
 
-    // Espacio extra tras solicitudes
-    secciones.push(p('', { spacingAfter: 140 }));
+    // ── Cierre legal ──────────────────────────────────────────────────────────
+    body.push(p('', { spacingAfter: 120 }));
+    body.push(p(
+      'Agradezco de antemano su pronta respuesta a esta solicitud, la cual realizo en ejercicio de mis funciones como Concejal. Es importante resaltar que la información solicitada es de acceso público, ya que no está sujeta a reserva sumarial. Asimismo, conforme al artículo 32, numeral 2, de la Ley 136 de 1994, los Concejos Municipales tienen la facultad de requerir informes escritos a los funcionarios municipales sobre asuntos relacionados con la marcha del Municipio.',
+      { align: 'justified', spacingAfter: 240 },
+    ));
+    body.push(p(
+      'De igual manera, de acuerdo con lo establecido en el artículo 30 de la Ley 1755 de 2015: "Cuando una autoridad formule una solicitud de información o de documentos a otra, esta deberá dar respuesta en un término no mayor a diez (10) días".',
+      { align: 'justified', spacingAfter: 480 },
+    ));
+    body.push(p(
+      'Notificación: Recibo la notificación y correspondencia en las instalaciones del Concejo de Medellín, o por medio magnético a mi correo electrónico: atobon@concejodemedellin.gov.co',
+      { align: 'justified', spacingAfter: 720 },
+    ));
 
-    // Cierre legal — párrafo 1
-    secciones.push(
-      p(
-        'Agradezco de antemano su pronta respuesta a esta solicitud, la cual realizo en ejercicio de mis funciones como concejal. Es importante resaltar que la información solicitada es de acceso público, ya que no está sujeta a reserva sumarial. Asimismo, conforme al artículo 32, numeral 2, de la Ley 136 de 1994, los Concejos Municipales tienen la facultad de requerir informes escritos a los funcionarios municipales sobre asuntos relacionados con la marcha del Municipio.',
-        { align: AlignmentType.JUSTIFIED, spacingAfter: 200 },
-      ),
-    );
+    // ── Firma ─────────────────────────────────────────────────────────────────
+    body.push(p('Atentamente,', { align: 'center', spacingAfter: 960 }));
+    body.push(p('ANDRÉS FELIPE TOBÓN VILLADA', { bold: true, align: 'center', spacingAfter: 60 }));
+    body.push(p('Concejal de Medellín', { align: 'center', spacingAfter: 240 }));
 
-    // Cierre legal — párrafo 2
-    secciones.push(
-      p(
-        'De igual manera, de acuerdo con lo establecido en el artículo 30 de la Ley 1755 de 2015: "Cuando una autoridad formule una solicitud de información o de documentos a otra, esta deberá dar respuesta en un término no mayor a diez (10) días".',
-        { align: AlignmentType.JUSTIFIED, spacingAfter: 400 },
-      ),
-    );
+    // ── Reconstruir document.xml ──────────────────────────────────────────────
+    const newDocXml =
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
+      `${openTag}<w:body>${body.join('')}${sectPr}</w:body></w:document>`;
 
-    // Notificación
-    secciones.push(
-      p(
-        'Notificación: Recibo la notificación y correspondencia en las instalaciones del Concejo de Medellín, o por medio magnético a mi correo electrónico: atobon@concejodemedellin.gov.co',
-        { align: AlignmentType.JUSTIFIED, spacingAfter: 600 },
-      ),
-    );
+    zip.updateFile('word/document.xml', Buffer.from(newDocXml, 'utf8'));
 
-    // Firma
-    secciones.push(p('Atentamente,', { align: AlignmentType.CENTER, spacingAfter: 800 }));
-    secciones.push(p('ANDRÉS TOBÓN VILLA', { bold: true, align: AlignmentType.CENTER }));
-    secciones.push(p('Concejal de Medellín', { align: AlignmentType.CENTER, spacingAfter: 200 }));
-    secciones.push(p('Radicó: Equipo DenunciasAT', { align: AlignmentType.CENTER, size: 10, spacingAfter: 400 }));
+    // ── Actualizar relaciones si hay imágenes ─────────────────────────────────
+    if (imageRels.length > 0) {
+      const relsXml    = zip.readAsText('word/_rels/document.xml.rels');
+      const newRelsXml = relsXml.replace('</Relationships>', imageRels.join('') + '</Relationships>');
+      zip.updateFile('word/_rels/document.xml.rels', Buffer.from(newRelsXml, 'utf8'));
+    }
 
-    // ── Documento ────────────────────────────────────────────────────────────
-    const doc = new Document({
-      styles: {
-        default: {
-          document: {
-            run: { font: 'Arial', size: 22 },
-            paragraph: { spacing: { line: 276 } },
-          },
-        },
-      },
-      sections: [
-        {
-          properties: {
-            page: {
-              size: { width: 11906, height: 16838 }, // A4 en DXA
-              margin: {
-                top: cm(2.5),
-                bottom: cm(2.5),
-                left: cm(2.5),
-                right: cm(2.5),
-              },
-            },
-          },
-          children: secciones,
-        },
-      ],
-    });
-
-    const buffer = await Packer.toBuffer(doc);
-    await writeFile(rutaDestino, buffer);
+    // ── Escribir archivo de salida ────────────────────────────────────────────
+    await writeFile(rutaDestino, zip.toBuffer());
+    this.logger.log(`Documento construido: ${rutaDestino}`);
   }
 }

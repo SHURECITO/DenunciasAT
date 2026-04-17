@@ -73,4 +73,14 @@ export class CreateDenunciaDto {
   @IsBoolean()
   @IsOptional()
   incompleta?: boolean;
+
+  @ApiPropertyOptional({ example: 'Que informen el presupuesto asignado' })
+  @IsString()
+  @IsOptional()
+  solicitudAdicional?: string;
+
+  @ApiPropertyOptional({ example: '["https://..."]' })
+  @IsString()
+  @IsOptional()
+  imagenesEvidencia?: string;
 }

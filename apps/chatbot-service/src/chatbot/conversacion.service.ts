@@ -23,7 +23,8 @@ export interface DatosConfirmados {
   esEspecial?: boolean;
   imagenes?: string[];
   pdfs?: string[];
-  etapa: 'recopilando' | 'confirmando' | 'finalizado' | 'especial_cerrado';
+  solicitudAdicional?: string;
+  etapa: 'recopilando' | 'esperando_solicitud' | 'confirmando' | 'finalizado' | 'especial_cerrado';
 }
 
 export interface EstadoConversacionIA {

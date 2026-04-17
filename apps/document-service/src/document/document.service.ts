@@ -31,34 +31,56 @@ export class DocumentService {
 
     // Denuncias especiales no generan documento
     if (denuncia.esEspecial) {
-      this.logger.log(`Denuncia #${denunciaId} es especial — omitiendo generación de documento`);
+      this.logger.log(`Denuncia #${denunciaId} es especial — omitiendo generación`);
       return;
     }
 
     try {
-      // Generar sección HECHOS con Gemini (única llamada a IA)
-      const hechos = await this.gemini.generarHechos({
-        nombreCiudadano: denuncia.nombreCiudadano,
-        esAnonimo: denuncia.esAnonimo,
-        barrio: denuncia.barrio ?? '',
-        comuna: denuncia.comuna ?? '',
-        direccion: denuncia.ubicacion,
-        descripcion: denuncia.descripcion,
-        dependencia: denuncia.dependenciaAsignada ?? 'la entidad competente',
-      });
+      const dependencia = denuncia.dependenciaAsignada ?? 'la entidad competente';
+      const resumen     = denuncia.descripcionResumen ?? denuncia.descripcion.substring(0, 200);
 
-      // Construir el .docx
+      // Generar HECHOS y ASUNTO en paralelo (ambos usan Gemini con el prompt jurídico)
+      const [hechos, asunto] = await Promise.all([
+        this.gemini.generarHechos({
+          nombreCiudadano: denuncia.nombreCiudadano,
+          esAnonimo:       denuncia.esAnonimo,
+          barrio:          denuncia.barrio ?? '',
+          comuna:          denuncia.comuna ?? '',
+          direccion:       denuncia.ubicacion,
+          descripcion:     denuncia.descripcion,
+          dependencia,
+        }),
+        this.gemini.generarAsunto({
+          descripcionResumen: resumen,
+          dependencia,
+        }),
+      ]);
+
+      // Deserializar imágenes de evidencia (almacenadas como JSON string)
+      let imagenes: string[] = [];
+      if (denuncia.imagenesEvidencia) {
+        try {
+          imagenes = JSON.parse(denuncia.imagenesEvidencia) as string[];
+        } catch {
+          this.logger.warn(`imagenesEvidencia no es JSON válido para denuncia #${denunciaId}`);
+        }
+      }
+
+      // Construir el .docx usando la plantilla base
       const rutaArchivo = join(DOCS_DIR, `${denuncia.radicado}.docx`);
       await this.builder.construir({
         denuncia,
         hechos,
+        asunto,
+        solicitudAdicional: denuncia.solicitudAdicional ?? undefined,
+        imagenes,
         rutaDestino: rutaArchivo,
       });
 
       // Guardar ruta en cache y notificar a dashboard-api
       this.rutasGeneradas.set(denunciaId, rutaArchivo);
       await this.dashboardApi.notificarDocumentoOk(denunciaId, `${denuncia.radicado}.docx`);
-      this.logger.log(`Documento generado: ${rutaArchivo}`);
+      this.logger.log(`Documento generado exitosamente: ${rutaArchivo}`);
     } catch (err) {
       this.logger.error(`Error generando documento para denuncia #${denunciaId}:`, err);
       await this.dashboardApi.notificarDocumentoError(denunciaId);
@@ -66,11 +88,9 @@ export class DocumentService {
   }
 
   async getRutaDocumento(denunciaId: number): Promise<string | null> {
-    // Comprobar cache en memoria primero
     if (this.rutasGeneradas.has(denunciaId)) {
       return this.rutasGeneradas.get(denunciaId)!;
     }
-    // Intentar reconstruir ruta desde la denuncia (tras reinicio del servicio)
     try {
       const denuncia = await this.dashboardApi.getDenuncia(denunciaId);
       if (denuncia.documentoUrl) {

@@ -89,6 +89,14 @@ export class Denuncia {
   @Column({ default: false })
   esAnonimo: boolean;
 
+  // Solicitud específica adicional capturada por el chatbot antes de radicar
+  @Column({ nullable: true, type: 'text' })
+  solicitudAdicional: string;
+
+  // URLs de imágenes de evidencia (JSON array, capturadas por el chatbot)
+  @Column({ nullable: true, type: 'text' })
+  imagenesEvidencia: string;
+
   @CreateDateColumn()
   fechaCreacion: Date;
 

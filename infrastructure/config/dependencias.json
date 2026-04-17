@@ -1,0 +1,164 @@
+{
+  "Secretaría de Infraestructura Física": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE INFRAESTRUCTURA FÍSICA",
+    "cargo": "Secretario de Infraestructura Física",
+    "entidad": "Secretaría de Infraestructura Física"
+  },
+  "Secretaría de Movilidad": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE MOVILIDAD",
+    "cargo": "Secretario de Movilidad",
+    "entidad": "Secretaría de Movilidad"
+  },
+  "Secretaría de Medio Ambiente": {
+    "titulo": "Doctora",
+    "nombre": "SECRETARIA DE MEDIO AMBIENTE",
+    "cargo": "Secretaria de Medio Ambiente",
+    "entidad": "Secretaría de Medio Ambiente"
+  },
+  "Secretaría de Seguridad y Convivencia": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE SEGURIDAD Y CONVIVENCIA",
+    "cargo": "Secretario de Seguridad y Convivencia",
+    "entidad": "Secretaría de Seguridad y Convivencia"
+  },
+  "Secretaría de Salud": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE SALUD",
+    "cargo": "Secretario de Salud",
+    "entidad": "Secretaría de Salud"
+  },
+  "Secretaría de Educación": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE EDUCACIÓN",
+    "cargo": "Secretario de Educación",
+    "entidad": "Secretaría de Educación"
+  },
+  "Secretaría de Inclusión Social": {
+    "titulo": "Doctora",
+    "nombre": "SECRETARIA DE INCLUSIÓN SOCIAL",
+    "cargo": "Secretaria de Inclusión Social",
+    "entidad": "Secretaría de Inclusión Social"
+  },
+  "Secretaría de Inclusión Social, Familia y DDHH": {
+    "titulo": "Doctora",
+    "nombre": "SECRETARIA DE INCLUSIÓN SOCIAL, FAMILIA Y DDHH",
+    "cargo": "Secretaria de Inclusión Social, Familia y DDHH",
+    "entidad": "Secretaría de Inclusión Social, Familia y DDHH"
+  },
+  "Secretaría de Desarrollo Económico": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE DESARROLLO ECONÓMICO",
+    "cargo": "Secretario de Desarrollo Económico",
+    "entidad": "Secretaría de Desarrollo Económico"
+  },
+  "Secretaría de Gobierno": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE GOBIERNO",
+    "cargo": "Secretario de Gobierno",
+    "entidad": "Secretaría de Gobierno"
+  },
+  "Secretaría de Hacienda": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE HACIENDA",
+    "cargo": "Secretario de Hacienda",
+    "entidad": "Secretaría de Hacienda"
+  },
+  "Secretaría de Gestión y Control Territorial": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE GESTIÓN Y CONTROL TERRITORIAL",
+    "cargo": "Secretario de Gestión y Control Territorial",
+    "entidad": "Secretaría de Gestión y Control Territorial"
+  },
+  "Secretaría de Participación Ciudadana": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE PARTICIPACIÓN CIUDADANA",
+    "cargo": "Secretario de Participación Ciudadana",
+    "entidad": "Secretaría de Participación Ciudadana"
+  },
+  "Secretaría de las Mujeres": {
+    "titulo": "Doctora",
+    "nombre": "SECRETARIA DE LAS MUJERES",
+    "cargo": "Secretaria de las Mujeres",
+    "entidad": "Secretaría de las Mujeres"
+  },
+  "Secretaría de la Juventud": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE LA JUVENTUD",
+    "cargo": "Secretario de la Juventud",
+    "entidad": "Secretaría de la Juventud"
+  },
+  "Secretaría de Cultura Ciudadana": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE CULTURA CIUDADANA",
+    "cargo": "Secretario de Cultura Ciudadana",
+    "entidad": "Secretaría de Cultura Ciudadana"
+  },
+  "Secretaría de Paz y Derechos Humanos": {
+    "titulo": "Doctor",
+    "nombre": "SECRETARIO DE PAZ Y DERECHOS HUMANOS",
+    "cargo": "Secretario de Paz y Derechos Humanos",
+    "entidad": "Secretaría de Paz y Derechos Humanos"
+  },
+  "Secretaría de Gestión Humana y Servicio a la Ciudadanía": {
+    "titulo": "Doctora",
+    "nombre": "SECRETARIA DE GESTIÓN HUMANA Y SERVICIO A LA CIUDADANÍA",
+    "cargo": "Secretaria de Gestión Humana y Servicio a la Ciudadanía",
+    "entidad": "Secretaría de Gestión Humana y Servicio a la Ciudadanía"
+  },
+  "EPM": {
+    "titulo": "Doctor",
+    "nombre": "GERENTE GENERAL DE EPM",
+    "cargo": "Gerente General",
+    "entidad": "Empresas Públicas de Medellín E.S.P."
+  },
+  "Metro de Medellín": {
+    "titulo": "Doctor",
+    "nombre": "GERENTE GENERAL DEL METRO DE MEDELLÍN",
+    "cargo": "Gerente General",
+    "entidad": "Metro de Medellín"
+  },
+  "INDER": {
+    "titulo": "Doctor",
+    "nombre": "DIRECTOR GENERAL DEL INDER",
+    "cargo": "Director General",
+    "entidad": "Instituto de Deportes y Recreación de Medellín"
+  },
+  "EDU": {
+    "titulo": "Doctor",
+    "nombre": "GERENTE GENERAL DE LA EDU",
+    "cargo": "Gerente General",
+    "entidad": "Empresa de Desarrollo Urbano"
+  },
+  "ISVIMED": {
+    "titulo": "Doctor",
+    "nombre": "GERENTE GENERAL DEL ISVIMED",
+    "cargo": "Gerente General",
+    "entidad": "Instituto Social de Vivienda y Hábitat de Medellín"
+  },
+  "Metroparques": {
+    "titulo": "Doctor",
+    "nombre": "DIRECTOR GENERAL DE METROPARQUES",
+    "cargo": "Director General",
+    "entidad": "Unidad de Parques y Espacios Naturales de Medellín"
+  },
+  "Metrosalud": {
+    "titulo": "Doctor",
+    "nombre": "GERENTE GENERAL DE METROSALUD",
+    "cargo": "Gerente General",
+    "entidad": "Empresa Social del Estado Metrosalud"
+  },
+  "DAGRD": {
+    "titulo": "Doctor",
+    "nombre": "DIRECTOR DEL DAGRD",
+    "cargo": "Director General",
+    "entidad": "Departamento Administrativo de Gestión del Riesgo de Desastres"
+  },
+  "Emvarias": {
+    "titulo": "Doctor",
+    "nombre": "GERENTE GENERAL DE EMVARIAS",
+    "cargo": "Gerente General",
+    "entidad": "Empresas Varias de Medellín"
+  }
+}

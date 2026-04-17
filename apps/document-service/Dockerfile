@@ -19,6 +19,9 @@ ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 # Copiar dist completo para preservar rutas de libs/ai compilado
 COPY --from=build /app/dist ./dist
+# Plantilla base del documento y mapa de dependencias
+COPY infrastructure/templates/Plantilla.docx ./infrastructure/templates/Plantilla.docx
+COPY infrastructure/config/dependencias.json ./infrastructure/config/dependencias.json
 # Directorio de documentos generados (montado como volumen en producción)
 RUN mkdir -p /app/infrastructure/documentos
 CMD ["node", "dist/apps/document-service/src/main"]

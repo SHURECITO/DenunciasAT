@@ -15,6 +15,8 @@ interface CreateDenunciaPayload {
   comuna?: string;
   descripcionResumen?: string;
   esAnonimo?: boolean;
+  solicitudAdicional?: string;
+  imagenesEvidencia?: string;
 }
 
 interface UpsertParcialPayload {

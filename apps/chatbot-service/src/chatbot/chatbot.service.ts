@@ -235,6 +235,11 @@ export class ChatbotService {
       d.descripcionResumen = resumen;
 
       const cedulaRadicado = esAnonimo ? 'ANONIMO' : (d.cedula?.trim() || undefined);
+      // Serializar imágenes de evidencia como JSON para almacenarlas en la entidad
+      const imagenesJson = (d.imagenes?.length ?? 0) > 0
+        ? JSON.stringify(d.imagenes)
+        : undefined;
+
       const { id, radicado } = await this.dashboardApi.crearDenuncia({
         nombreCiudadano: nombreFinal,
         cedula: cedulaRadicado,
@@ -248,6 +253,8 @@ export class ChatbotService {
         descripcionResumen: d.descripcionResumen,
         esAnonimo,
         documentoPendiente: true,
+        solicitudAdicional: d.solicitudAdicional?.trim() || undefined,
+        imagenesEvidencia: imagenesJson,
       });
 
       d.etapa = 'finalizado';

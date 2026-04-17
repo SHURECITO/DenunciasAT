@@ -3,8 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 
 // ---------------------------------------------------------------------------
-// Estructura del Distrito de Medellín (fuente: Guía Técnica 2026)
-// Usada en clasificación y redacción legal
+// Contexto Medellín — usado para clasificación de denuncias
 // ---------------------------------------------------------------------------
 const CONTEXTO_MEDELLIN = `Estructura Medellín 2026 para clasificar denuncias:
 
@@ -35,7 +34,51 @@ CASOS ESPECIALES (esEspecial:true): corrupción pública, extorsión, vacunas, g
 NUNCA inventes normas. Normativa base: Const. 1991 Art.23, Ley 1437/2011 CPACA, Ley 136/1994.`;
 
 // ---------------------------------------------------------------------------
-// System prompt del chatbot — corto y directo
+// System prompt jurídico experto — usado para generarHechos y generarAsunto
+// ---------------------------------------------------------------------------
+const SYSTEM_PROMPT_LEGAL = `Eres un Asistente Jurídico Colombiano experto al servicio del concejal de Medellín Andrés Felipe Tobón Villada, especializado en:
+- Derecho Constitucional Colombiano
+- Derecho Administrativo Colombiano
+- Derecho Público Colombiano
+- Contratación Estatal
+- Jurisprudencia de altas cortes colombianas
+
+Tu conocimiento se basa en:
+- Constitución Política de Colombia de 1991
+- Ley 80 de 1993 (Estatuto de Contratación)
+- Ley 1437 de 2011 (CPACA)
+- Ley 1474 de 2011 (Estatuto Anticorrupción)
+- Ley 136 de 1994 (Municipios)
+- Ley 1755 de 2015 (Derecho de Petición)
+- Acuerdo 79 de 2003 (Código de Convivencia Medellín)
+- Jurisprudencia Corte Constitucional, Consejo de Estado y Corte Suprema de Justicia
+
+REGLAS DE REDACCIÓN DE HECHOS EN OFICIOS:
+1. NUNCA menciones el nombre del ciudadano denunciante
+2. Redacta como si el concejal conoció la situación directamente en ejercicio de sus funciones
+3. Ejemplo INCORRECTO: "El ciudadano Juan reportó..."
+4. Ejemplo CORRECTO: "Este despacho ha conocido de una situación que afecta a la comunidad del sector..." o "En ejercicio de las funciones constitucionales de este despacho, se ha podido establecer que..."
+5. Identifica el problema jurídico concreto
+6. Describe hechos de forma objetiva y cronológica
+7. Cita normativa específica y aplicable
+8. Fundamenta la competencia de la entidad destinataria
+9. Concluye con urgencia o necesidad de intervención
+
+ESTILO:
+- Lenguaje técnico-jurídico formal
+- Preciso, sin rodeos
+- Enfoque práctico de abogado litigante
+- NUNCA inventes normas ni jurisprudencia
+- Solo artículos que conozcas con certeza
+- Sin frases genéricas como "según la ley"
+
+RESTRICCIONES ABSOLUTAS:
+- Solo normativa colombiana vigente
+- Nunca mencionar nombre del denunciante en el documento
+- Si hay ambigüedad normativa, usa el argumento más sólido disponible`;
+
+// ---------------------------------------------------------------------------
+// System prompt del chatbot conversacional
 // ---------------------------------------------------------------------------
 const SYSTEM_PROMPT_CHATBOT = `Eres el asistente de WhatsApp del concejal Andrés Tobón (Medellín). Registras denuncias ciudadanas.
 
@@ -50,6 +93,12 @@ PASO 4: direccion → pide dirección con tipo de vía + número ("Calle 44 #52-
 PASO 5: confirmar → pregunta si la dirección es correcta. Si dice sí → direccionConfirmada:true.
 PASO 6: descripcion → si < 20 palabras, pide más detalle.
 PASO 7: evidencia → pregunta por fotos/PDFs una sola vez (es opcional).
+PASO 7.5: solicitud_adicional → Una vez el usuario respondió sobre evidencia (envió media o dijo no):
+  Informa brevemente (máx 3 líneas) qué se va a pedir a [dependencia]:
+  "Voy a solicitar a [dependencia] que: 1) visiten el lugar y verifiquen la situación, 2) informen las acciones correctivas a implementar, 3) respondan en los términos legales (10 días). ¿Quieres agregar algo específico adicional? Responde *no* si está bien así 🙏"
+  etapaSiguiente:"esperando_solicitud"
+  Si el usuario da texto adicional → datosExtraidos:{solicitudAdicional:"texto del usuario"}; etapaSiguiente:"confirmando"
+  Si responde no/listo/dale/continuar/ok → etapaSiguiente:"confirmando" (sin solicitudAdicional)
 PASO 8: resumen y confirmación → muestra resumen compacto y pide confirmación final.
 Si confirma (sí/si/ok/1/yes/confirmo) → listaParaRadicar:true, etapaSiguiente:"finalizado".
 
@@ -65,7 +114,6 @@ RESPONDE ÚNICAMENTE CON JSON VÁLIDO (sin texto extra):
 {"respuesta":"...","datosExtraidos":{},"etapaSiguiente":"recopilando","listaParaRadicar":false}`;
 
 // Modelos confirmados disponibles con la API key (verificado 2026-04-16)
-// gemini-2.5-flash-lite: estable, sin -preview, responde correctamente en free tier
 const MODEL_CHATBOT          = 'gemini-2.5-flash-lite';
 const MODEL_CHATBOT_FALLBACK = 'gemini-3.1-flash-lite-preview';
 const MODEL_LEGAL            = 'gemini-2.5-flash-lite';
@@ -75,7 +123,7 @@ const BASE_CONFIG = { topP: 0.8, topK: 40, maxOutputTokens: 512 };
 export interface RespuestaChatbot {
   respuesta: string;
   datosExtraidos: Record<string, unknown>;
-  etapaSiguiente: 'recopilando' | 'confirmando' | 'finalizado' | 'especial_cerrado';
+  etapaSiguiente: 'recopilando' | 'esperando_solicitud' | 'confirmando' | 'finalizado' | 'especial_cerrado';
   listaParaRadicar: boolean;
 }
 
@@ -86,6 +134,7 @@ export class GeminiService {
 
   private readonly modelClasificacion: GenerativeModel;
   private readonly modelJustificacion: GenerativeModel;
+  private readonly modelLegal: GenerativeModel;
   private readonly modelChatbot: GenerativeModel;
   private readonly modelChatbotFallback: GenerativeModel;
 
@@ -103,6 +152,13 @@ export class GeminiService {
       model: MODEL_LEGAL,
       systemInstruction: CONTEXTO_MEDELLIN,
       generationConfig: { ...BASE_CONFIG, temperature: 0.3 },
+    });
+
+    // Modelo jurídico experto para hechos y asunto
+    this.modelLegal = this.genAI.getGenerativeModel({
+      model: MODEL_LEGAL,
+      systemInstruction: SYSTEM_PROMPT_LEGAL,
+      generationConfig: { ...BASE_CONFIG, temperature: 0.2, maxOutputTokens: 600 },
     });
 
     this.modelChatbot = this.genAI.getGenerativeModel({
@@ -180,7 +236,6 @@ Clasifica. SOLO JSON: {"esEspecial":bool,"dependencia":"nombre exacto","justific
     datosConfirmados: Record<string, unknown>,
     mensaje: string,
   ): Promise<RespuestaChatbot> {
-    // Solo los últimos 10 turnos y solo campos con valor para reducir tokens
     const hist = historial
       .slice(-10)
       .map((m) => `${m.rol === 'user' ? 'U' : 'A'}: ${m.contenido}`)
@@ -190,7 +245,6 @@ Clasifica. SOLO JSON: {"esEspecial":bool,"dependencia":"nombre exacto","justific
       Object.entries(datosConfirmados).filter(([, v]) => v !== undefined && v !== null && v !== '' && v !== false),
     );
 
-    // Calcular campos pendientes para guiar al modelo
     const pendientes = [
       !(datos['nombre'] || datos['esAnonimo']) ? '- Nombre completo' : null,
       !(datos['esAnonimo'] === true || datos['cedula']) ? '- Cédula' : null,
@@ -284,7 +338,7 @@ Problema: ${(datos.descripcion ?? '').substring(0, 300)} | Entidad: ${datos.depe
   }
 
   // ---------------------------------------------------------------------------
-  // Generación de sección HECHOS (Entrega 4 — document-service)
+  // Generación de sección HECHOS — prompt jurídico experto (Entrega 4)
   // ---------------------------------------------------------------------------
   async generarHechos(datos: {
     nombreCiudadano: string;
@@ -295,38 +349,93 @@ Problema: ${(datos.descripcion ?? '').substring(0, 300)} | Entidad: ${datos.depe
     descripcion: string;
     dependencia: string;
   }): Promise<string> {
-    const ciudadano = datos.esAnonimo ? 'un ciudadano en condición de anonimato' : `el ciudadano ${datos.nombreCiudadano}`;
-    const prompt = `Redacta sección HECHOS para oficio del concejal Andrés Tobón a ${datos.dependencia}.
-Presentado por: ${ciudadano}.
-Ubicación: ${datos.direccion}, barrio ${datos.barrio}, comuna ${datos.comuna}.
-Situación: ${datos.descripcion}
-Máx 150 palabras. 2-3 párrafos formales. Cita UNA norma colombiana real. Solo texto plano.`;
+    const loc = [datos.barrio, datos.comuna].filter(Boolean).join(', ');
+    const locStr = loc ? `, barrio ${datos.barrio}${datos.comuna ? `, ${datos.comuna}` : ''}` : '';
+
+    const prompt = `Redacta la sección HECHOS para un oficio oficial del concejal Andrés Felipe Tobón Villada dirigido a ${datos.dependencia}.
+
+SITUACIÓN A GESTIONAR:
+- Ubicación: ${datos.direccion}${locStr} de Medellín
+- Descripción: ${datos.descripcion}
+
+ESTRUCTURA OBLIGATORIA (3 párrafos separados por línea en blanco):
+
+PÁRRAFO 1 — DESCRIPCIÓN DE LOS HECHOS:
+Inicia con "Este despacho ha podido establecer que" o similar. Describe objetivamente la situación, su ubicación y el tiempo que lleva sin atención si se menciona. NO incluyas el nombre del ciudadano.
+
+PÁRRAFO 2 — FUNDAMENTO NORMATIVO Y COMPETENCIA:
+Cita la norma colombiana más específica aplicable. Explica por qué es competencia de ${datos.dependencia} atender esta situación. Usa la estructura: "Conforme a [norma], corresponde a ${datos.dependencia}..."
+
+PÁRRAFO 3 — IMPACTO Y URGENCIA:
+Describe el perjuicio o riesgo que genera la inacción para la comunidad. Menciona el deber de respuesta en los términos del artículo 30 de la Ley 1755 de 2015.
+
+RESTRICCIONES:
+- Máximo 220 palabras totales
+- Solo texto plano, sin markdown ni títulos
+- Párrafos separados por salto de línea doble
+- Tono formal jurídico
+- NUNCA el nombre del denunciante`;
 
     try {
-      const r = await this.modelJustificacion.generateContent(prompt);
+      const r = await this.modelLegal.generateContent(prompt);
       return r.response.text().trim();
     } catch (err) {
-      // Fallback: si la IA no está disponible (cuota, red), construir hechos básicos
       this.logger.warn(`generarHechos falló (${(err as Error).message?.substring(0, 60)}) — usando fallback`);
-      return this.hechosFallback(datos, ciudadano);
+      return this.hechosFallback(datos);
     }
   }
 
   private hechosFallback(datos: {
     direccion: string; barrio: string; comuna: string; descripcion: string; dependencia: string;
-  }, ciudadano: string): string {
+  }): string {
     const loc = [datos.barrio, datos.comuna].filter(Boolean).join(', ');
-    // Capitalizar la primera letra del ciudadano para iniciar el párrafo correctamente
-    const inicio = ciudadano.charAt(0).toUpperCase() + ciudadano.slice(1);
-    return `${inicio} presentó ante el despacho del concejal Andrés Tobón una denuncia relacionada con la siguiente situación en la dirección ${datos.direccion}${loc ? `, ${loc}` : ''}, del municipio de Medellín.
+    return `Este despacho ha podido establecer que en la dirección ${datos.direccion}${loc ? `, ${loc}` : ''}, del municipio de Medellín, se presenta la siguiente situación que requiere atención urgente por parte de las autoridades competentes.
 
 ${datos.descripcion}
 
-De conformidad con lo establecido en el artículo 23 de la Constitución Política de Colombia, toda persona tiene derecho a presentar peticiones respetuosas a las autoridades por motivos de interés general o particular, y a obtener pronta resolución. En ese sentido, se pone en conocimiento de ${datos.dependencia} la situación descrita para que proceda conforme a sus competencias.`;
+De conformidad con lo establecido en el artículo 23 de la Constitución Política de Colombia, toda persona tiene derecho a presentar peticiones respetuosas a las autoridades por motivos de interés general o particular, y a obtener pronta resolución. En ese sentido, en virtud de lo dispuesto por el artículo 30 de la Ley 1755 de 2015, se pone en conocimiento de ${datos.dependencia} la situación descrita para que proceda conforme a sus competencias en un término no mayor a diez (10) días.`;
   }
 
   // ---------------------------------------------------------------------------
-  // Justificación legal completa (Entrega 4 — document-service)
+  // Generación del ASUNTO del oficio — prompt jurídico experto (Entrega 4)
+  // ---------------------------------------------------------------------------
+  async generarAsunto(datos: {
+    descripcionResumen: string;
+    dependencia: string;
+  }): Promise<string> {
+    const prompt = `Genera el ASUNTO para un oficio formal del concejal de Medellín a ${datos.dependencia}.
+
+Situación: ${datos.descripcionResumen}
+Dependencia: ${datos.dependencia}
+
+Requisitos:
+- Máximo 12 palabras
+- Inicia con verbo en infinitivo en MAYÚSCULAS: SOLICITAR, REQUERIR, GESTIONAR, INTERVENIR, VERIFICAR, ATENDER
+- Describe la acción Y el objeto claramente
+- Ejemplo bueno: "REQUERIR INTERVENCIÓN INMEDIATA POR DETERIORO DE VÍA PÚBLICA EN LAURELES"
+- Ejemplo malo: "DAÑO EN TUBO DE AGUA"
+- Todo en MAYÚSCULAS
+- Sin punto final
+
+Responde SOLO con el texto del asunto, sin explicaciones.`;
+
+    try {
+      const r = await this.genAI.getGenerativeModel({
+        model: MODEL_LEGAL,
+        systemInstruction: SYSTEM_PROMPT_LEGAL,
+        generationConfig: { temperature: 0.1, maxOutputTokens: 60 },
+      }).generateContent(prompt);
+      const text = r.response.text().trim().toUpperCase().replace(/\.$/, '');
+      return text || `SOLICITAR ATENCIÓN URGENTE POR ${datos.descripcionResumen.substring(0, 60).toUpperCase()}`;
+    } catch (err) {
+      this.logger.warn(`generarAsunto falló: ${(err as Error).message?.substring(0, 60)}`);
+      const dep = datos.dependencia.split(' ').slice(0, 3).join(' ').toUpperCase();
+      return `SOLICITAR INTERVENCIÓN DE ${dep}`;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Justificación legal completa (legacy — Entrega 4)
   // ---------------------------------------------------------------------------
   async generarJustificacionLegal(datos: {
     nombre: string;

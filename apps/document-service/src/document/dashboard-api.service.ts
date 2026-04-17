@@ -18,6 +18,8 @@ export interface DenunciaData {
   esEspecial: boolean;
   documentoUrl: string | null;
   fechaCreacion: string;
+  solicitudAdicional: string | null;
+  imagenesEvidencia: string | null;
 }
 
 @Injectable()
