@@ -180,6 +180,14 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **Health endpoints:** añadidos `GET /health` en chatbot-service, whatsapp-service y document-service
 - **Notas modelo Gemini:** free tier limita a 20 req/día por modelo. En producción usar cuenta con billing habilitado
 
+**Sesión 18 (2026-04-17) — Fix UI documento:**
+- **Diagnóstico:** API devolvía `documentoGeneradoOk: true` correctamente; frontend tenía el botón en el source pero el container estaba desactualizado
+- **DenunciaDetalle.tsx:** reescrita sección documento con 3 estados derivados (`tieneDocumento`, `generando`, `errorDocumento`); spinner animado para generando, botón azul para listo, badge rojo + botón "Reintentar" para error
+- **Polling:** limpiado a depender de `generando` (flag derivado, no campo raw)
+- **`POST /api/denuncias/[id]/generar-documento/route.ts`:** nuevo route handler Next.js para retry
+- **`POST /denuncias/:id/generar`:** nuevo endpoint dashboard-api — marca `documentoPendiente:true`, dispara document-service fire-and-forget, devuelve denuncia actualizada
+- **Lista denuncias:** columna Doc. con 📄/⏳/— y tooltip
+
 ---
 
 > Al terminar cada sesión: marcar fases, comprimir historial si supera 200 líneas.
