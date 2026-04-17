@@ -86,6 +86,7 @@ export default async function DashboardPage({
                     <th className="px-6 py-3 text-left">Ciudadano</th>
                     <th className="px-6 py-3 text-left">Dependencia</th>
                     <th className="px-6 py-3 text-left">Estado</th>
+                    <th className="px-6 py-3 text-left">Doc.</th>
                     <th className="px-6 py-3 text-left">Fecha</th>
                   </tr>
                 </thead>
@@ -113,6 +114,17 @@ export default async function DashboardPage({
                       </td>
                       <td className="px-6 py-3">
                         <DenunciaEstadoBadge estado={d.estado} />
+                      </td>
+                      <td className="px-6 py-3 text-center text-base" title={
+                        d.documentoGeneradoOk
+                          ? 'Documento listo'
+                          : d.documentoPendiente
+                          ? 'Generando...'
+                          : d.esEspecial
+                          ? 'Caso especial'
+                          : '—'
+                      }>
+                        {d.documentoGeneradoOk ? '📄' : d.documentoPendiente ? '⏳' : '—'}
                       </td>
                       <td className="px-6 py-3 text-gray-500">
                         {new Date(d.fechaCreacion).toLocaleDateString('es-CO', {

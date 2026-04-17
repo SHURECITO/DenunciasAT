@@ -121,6 +121,22 @@ export class DenunciasController {
     return this.denunciasService.updateEstado(id, dto);
   }
 
+  @Post(':id/generar')
+  @ApiOperation({ summary: 'Reintentar generación de documento (dispara document-service)' })
+  async generarDocumento(@Param('id', ParseIntPipe) id: number) {
+    const docServiceUrl = this.config.get<string>('DOCUMENT_SERVICE_URL', 'http://document-service:3004');
+    const internalKey = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '');
+
+    const updated = await this.denunciasService.marcarDocumentoPendiente(id);
+
+    // Fire-and-forget — no esperamos la respuesta del document-service
+    axios
+      .post(`${docServiceUrl}/generar/${id}`, {}, { headers: { 'x-internal-key': internalKey } })
+      .catch(() => { /* document-service actualizará el estado vía PATCH */ });
+
+    return updated;
+  }
+
   @Get(':id/documento')
   @ApiOperation({ summary: 'Descargar .docx de la denuncia (proxy a document-service)' })
   async descargarDocumento(

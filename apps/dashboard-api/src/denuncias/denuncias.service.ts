@@ -170,6 +170,13 @@ export class DenunciasService {
     return this.denunciasRepo.save(denuncia);
   }
 
+  async marcarDocumentoPendiente(id: number): Promise<Denuncia> {
+    const denuncia = await this.findOne(id);
+    denuncia.documentoPendiente = true;
+    denuncia.documentoGeneradoOk = false;
+    return this.denunciasRepo.save(denuncia);
+  }
+
   async findDatosUsuarioPorTelefono(telefono: string): Promise<{ nombreCiudadano: string; cedula: string; esAnonimo: boolean } | null> {
     const d = await this.denunciasRepo.findOne({
       where: { telefono, incompleta: false },

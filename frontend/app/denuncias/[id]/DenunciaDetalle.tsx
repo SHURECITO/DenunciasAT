@@ -40,11 +40,20 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
   const [chatOpen, setChatOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [reintentandoDoc, setReintentandoDoc] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const tieneDocumento = denuncia.documentoGeneradoOk === true;
+  const generando = denuncia.documentoPendiente === true && !tieneDocumento;
+  const errorDocumento =
+    !denuncia.documentoPendiente &&
+    !tieneDocumento &&
+    !denuncia.esEspecial &&
+    denuncia.estado !== 'RECIBIDA';
 
   // Polling: mientras documentoPendiente && !documentoGeneradoOk, refresca cada 8 s
   useEffect(() => {
-    if (denuncia.documentoPendiente && !denuncia.documentoGeneradoOk) {
+    if (generando) {
       pollingRef.current = setInterval(async () => {
         try {
           const res = await fetch(`/api/denuncias/${denuncia.id}`);
@@ -60,7 +69,23 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
       }, 8000);
     }
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [denuncia.id, denuncia.documentoPendiente, denuncia.documentoGeneradoOk]);
+  }, [denuncia.id, generando]);
+
+  async function reintentarDocumento() {
+    setReintentandoDoc(true);
+    try {
+      const res = await fetch(`/api/denuncias/${denuncia.id}/generar-documento`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const updated: Denuncia = await res.json();
+      setDenuncia(updated);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al reintentar generación');
+    } finally {
+      setReintentandoDoc(false);
+    }
+  }
 
   const siguienteEstado = ESTADOS_SIGUIENTE[denuncia.estado];
 
@@ -135,14 +160,19 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
               Incompleta
             </span>
           )}
-          {denuncia.documentoPendiente && !denuncia.documentoGeneradoOk && (
+          {generando && (
             <span className="animate-pulse rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
               ⏳ Generando documento...
             </span>
           )}
-          {denuncia.documentoGeneradoOk && (
+          {tieneDocumento && (
             <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
               ✅ Documento listo
+            </span>
+          )}
+          {errorDocumento && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+              ⚠️ Error generando documento
             </span>
           )}
         </div>
@@ -265,8 +295,19 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
               <span className="text-sm text-gray-700">Documento revisado</span>
             </div>
 
-            {/* Descargar documento */}
-            {denuncia.documentoGeneradoOk && (
+            {/* Documento — generando */}
+            {generando && (
+              <div className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-2.5 text-sm font-medium text-yellow-700">
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                Generando documento...
+              </div>
+            )}
+
+            {/* Documento — listo para descargar */}
+            {tieneDocumento && (
               <a
                 href={`/api/denuncias/${denuncia.id}/documento`}
                 download
@@ -274,6 +315,22 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
               >
                 📄 Descargar documento .docx
               </a>
+            )}
+
+            {/* Documento — error / reintentar */}
+            {errorDocumento && (
+              <div className="mb-3">
+                <div className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+                  No se pudo generar el documento.
+                </div>
+                <button
+                  onClick={reintentarDocumento}
+                  disabled={reintentandoDoc}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                >
+                  {reintentandoDoc ? 'Reintentando...' : '🔄 Reintentar generación'}
+                </button>
+              </div>
             )}
 
             {/* Avanzar estado */}
