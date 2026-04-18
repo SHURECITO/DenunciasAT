@@ -10,6 +10,7 @@ import { CreateIncompletaDto } from './dto/create-incompleta.dto';
 import { CreateParcialDto } from './dto/create-parcial.dto';
 import { UpdateDenunciaDto } from './dto/update-denuncia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
+import { EditarDenunciaDto } from './dto/editar-denuncia.dto';
 import { Denuncia, DenunciaEstado } from './entities/denuncia.entity';
 
 const capitalizar = (str: string): string =>
@@ -197,5 +198,87 @@ export class DenunciasService {
       where: { telefono, incompleta: true },
       order: { fechaCreacion: 'DESC' },
     });
+  }
+
+  async getDependencias(): Promise<any[]> {
+    const fs = require('fs');
+    const path = require('path');
+    const p = path.join(process.cwd(), 'infrastructure', 'config', 'dependencias.json');
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    
+    const result = [];
+    for (const [key, val] of Object.entries(data)) {
+      if (key.startsWith('_')) continue;
+      const typedVal: any = val;
+      result.push({
+        nombre: key,
+        cargoTitular: typedVal.cargoTitular,
+        nivel: typedVal.nivel,
+        tipo: typedVal.tipo,
+      });
+    }
+    return result;
+  }
+
+  async editarDenuncia(id: number, dto: EditarDenunciaDto, usuario: any): Promise<Denuncia> {
+    const denuncia = await this.findOne(id);
+    
+    const cambios: any = {};
+    if (dto.dependenciasAsignadas) {
+      cambios.dependenciaAsignada = {
+        anterior: denuncia.dependenciaAsignada,
+        nuevo: dto.dependenciasAsignadas.join(', ')
+      };
+      denuncia.dependenciaAsignada = dto.dependenciasAsignadas.join(', ');
+      
+      const depsNuevas = dto.dependenciasAsignadas;
+      const respuestasAntiguas = denuncia.respuestasPorDependencia || [];
+      const nuevasRespuestas = depsNuevas.map(dep => {
+        const existente = respuestasAntiguas.find(r => r.dependencia === dep);
+        return existente || {
+          dependencia: dep,
+          respondio: false,
+          fechaRespuesta: null,
+          observacion: null
+        };
+      });
+      denuncia.respuestasPorDependencia = nuevasRespuestas;
+    }
+    
+    if (dto.descripcion !== undefined) {
+      cambios.descripcion = { anterior: denuncia.descripcion, nuevo: dto.descripcion };
+      denuncia.descripcion = dto.descripcion;
+    }
+    if (dto.ubicacion !== undefined) {
+      cambios.ubicacion = { anterior: denuncia.ubicacion, nuevo: dto.ubicacion };
+      denuncia.ubicacion = dto.ubicacion;
+    }
+    if (dto.barrio !== undefined) {
+      cambios.barrio = { anterior: denuncia.barrio, nuevo: dto.barrio };
+      denuncia.barrio = dto.barrio;
+    }
+    if (dto.comuna !== undefined) {
+      cambios.comuna = { anterior: denuncia.comuna, nuevo: dto.comuna };
+      denuncia.comuna = dto.comuna;
+    }
+    if (dto.solicitudAdicional !== undefined) {
+      cambios.solicitudAdicional = { anterior: denuncia.solicitudAdicional, nuevo: dto.solicitudAdicional };
+      denuncia.solicitudAdicional = dto.solicitudAdicional;
+    }
+    
+    const historial = denuncia.historialCambios || [];
+    historial.push({
+      usuario: usuario?.email || usuario?.nombre || 'Usuario',
+      timestamp: new Date().toISOString(),
+      cambios
+    });
+    denuncia.historialCambios = historial;
+    
+    if (dto.regenerarDocumento) {
+      denuncia.documentoGeneradoOk = false;
+      denuncia.documentoPendiente = true;
+    }
+    
+    return this.denunciasRepo.save(denuncia);
   }
 }

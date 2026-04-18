@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import DenunciaEstadoBadge from '@/components/DenunciaEstadoBadge';
 import ChatPanel from '@/components/ChatPanel';
+import ModalEditarDenuncia from '@/components/ModalEditarDenuncia';
 import { type Denuncia, type DenunciaEstado, type Mensaje, type RespuestaDependencia } from '@/lib/api';
 
 const ESTADOS_SIGUIENTE: Record<DenunciaEstado, DenunciaEstado | null> = {
@@ -40,6 +41,7 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
   const [chatOpen, setChatOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showModalEditar, setShowModalEditar] = useState(false);
   const [reintentandoDoc, setReintentandoDoc] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -370,9 +372,28 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
 
             {/* Dependencia */}
             <div className="mb-4">
-              <dt className="text-xs text-gray-400">Dependencia asignada</dt>
-              <dd className="mt-0.5 text-sm text-gray-700">
-                {denuncia.dependenciaAsignada ?? (
+              <div className="flex items-center justify-between">
+                <dt className="text-xs text-gray-400">Dependencia(s) asignada(s)</dt>
+                {(denuncia.estado === 'RECIBIDA' || denuncia.estado === 'EN_GESTION') && (
+                  <button 
+                    onClick={() => setShowModalEditar(true)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                  >
+                    ✏️ Editar denuncia
+                  </button>
+                )}
+              </div>
+              <dd className="mt-1.5 flex flex-wrap gap-2 text-sm text-gray-700">
+                {denuncia.dependenciaAsignada ? (
+                  denuncia.dependenciaAsignada.split(/[,;]/).filter(Boolean).map(d => d.trim()).map((dep, idx) => (
+                    <span 
+                      key={idx} 
+                      className="inline-flex items-center bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-md text-xs font-medium text-gray-800"
+                    >
+                      {dep}
+                    </span>
+                  ))
+                ) : (
                   <span className="italic text-gray-400">Sin asignar</span>
                 )}
               </dd>
@@ -473,6 +494,17 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
           </section>
         </div>
       </div>
+      
+      {showModalEditar && (
+        <ModalEditarDenuncia
+          denuncia={denuncia}
+          onClose={() => setShowModalEditar(false)}
+          onSaved={(updated) => {
+            setDenuncia(updated);
+            setShowModalEditar(false);
+          }}
+        />
+      )}
     </>
   );
 }

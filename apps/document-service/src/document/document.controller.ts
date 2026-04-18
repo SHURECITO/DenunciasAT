@@ -9,6 +9,7 @@ import {
   Res,
   UnauthorizedException,
   Headers,
+  Body,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
@@ -54,6 +55,27 @@ export class DocumentController {
     // No bloquear la respuesta — la generación puede tardar varios segundos
     this.documentService.generarDocumento(denunciaId).catch(() => {/* errores ya logueados */});
     return { mensaje: 'Generando documento', denunciaId };
+  }
+
+  @Post('generar-desde-descripcion')
+  async generarDesdeDescripcion(
+    @Body() dto: {
+      denunciaId: number;
+      descripcion: string;
+      ubicacion: string;
+      barrio: string;
+      esEspecial: boolean;
+      generarDocumento: boolean;
+    },
+    @Headers('x-internal-key') key: string,
+  ) {
+    this.checkAuth(key);
+    
+    if (!dto.generarDocumento || dto.esEspecial) {
+      return { dependenciaDetectada: null, documentoGenerado: false };
+    }
+    
+    return this.documentService.generarDesdeDescripcion(dto);
   }
 
   /** Descarga el .docx generado desde MinIO */

@@ -107,6 +107,14 @@ export class Denuncia {
     observacion: string | null;
   }>;
 
+  // Historial de cambios realizados en la denuncia (ej. edición manual)
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  historialCambios: Array<{
+    usuario: string; // ej. email o nombre del usuario del dashboard
+    timestamp: string;
+    cambios: any;
+  }>;
+
   @CreateDateColumn()
   fechaCreacion: Date;
 

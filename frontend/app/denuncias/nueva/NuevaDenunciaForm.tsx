@@ -2,15 +2,18 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface FormState {
   nombreCiudadano: string;
   cedula: string;
   telefono: string;
   ubicacion: string;
+  barrio: string;
+  comuna: string;
   descripcion: string;
-  dependenciaAsignada: string;
   esEspecial: boolean;
+  generarDocumento: boolean;
 }
 
 const EMPTY: FormState = {
@@ -18,23 +21,36 @@ const EMPTY: FormState = {
   cedula: '',
   telefono: '',
   ubicacion: '',
+  barrio: '',
+  comuna: '',
   descripcion: '',
-  dependenciaAsignada: '',
   esEspecial: false,
+  generarDocumento: true,
 };
 
 export default function NuevaDenunciaForm() {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [radicado, setRadicado] = useState('');
+  const [denunciaGenerando, setDenunciaGenerando] = useState<{ id: number, radicado: string } | null>(null);
+  
+  const router = useRouter();
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     const { name, value, type } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
-    }));
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setForm((prev) => {
+        const next = { ...prev, [name]: checked };
+        // Reglas de negocio para esEspecial
+        if (name === 'esEspecial') {
+          next.generarDocumento = !checked;
+        }
+        return next;
+      });
+    } else {
+      setForm((prev) => ({ ...prev, [name]: value }));
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -46,8 +62,14 @@ export default function NuevaDenunciaForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...form,
-          dependenciaAsignada: form.dependenciaAsignada || undefined,
+          nombreCiudadano: form.nombreCiudadano,
+          cedula: form.cedula,
+          telefono: form.telefono,
+          ubicacion: form.ubicacion,
+          barrio: form.barrio,
+          comuna: form.comuna,
+          descripcion: form.descripcion,
+          esEspecial: form.esEspecial,
         }),
       });
       if (!res.ok) {
@@ -55,15 +77,36 @@ export default function NuevaDenunciaForm() {
         throw new Error(body.message ?? `Error ${res.status}`);
       }
       const data = await res.json();
-      setRadicado(data.radicado);
+      
+      if (form.generarDocumento) {
+        setDenunciaGenerando({ id: data.id, radicado: data.radicado });
+        
+        // Disparar IA de forma asíncrona
+        fetch('/api/generar-desde-descripcion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            denunciaId: data.id,
+            descripcion: form.descripcion,
+            ubicacion: form.ubicacion,
+            barrio: form.barrio,
+            esEspecial: form.esEspecial,
+            generarDocumento: form.generarDocumento
+          })
+        }).catch(console.error);
+        
+      } else {
+        alert(`Denuncia creada: ${data.radicado}`);
+        router.push('/');
+      }
+      
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al crear la denuncia');
-    } finally {
       setLoading(false);
     }
   }
 
-  if (radicado) {
+  if (denunciaGenerando) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
@@ -72,22 +115,17 @@ export default function NuevaDenunciaForm() {
               <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
             </svg>
           </div>
-          <h2 className="mb-1 text-lg font-semibold text-gray-900">Denuncia registrada</h2>
-          <p className="mb-4 text-sm text-gray-500">El número de radicado asignado es:</p>
-          <p className="mb-6 font-mono text-2xl font-bold tracking-wide text-blue-700">{radicado}</p>
+          <h2 className="mb-1 text-lg font-semibold text-gray-900">Denuncia {denunciaGenerando.radicado} creada ✅</h2>
+          <p className="mb-6 text-sm text-gray-500">
+            La IA está analizando la descripción para identificar la dependencia competente y generar el documento oficial...
+          </p>
           <div className="flex flex-col gap-2">
             <Link
-              href="/"
+              href={`/denuncias/${denunciaGenerando.id}`}
               className="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 transition-colors text-center"
             >
-              Ir al listado
+              Ver denuncia
             </Link>
-            <button
-              onClick={() => { setForm(EMPTY); setRadicado(''); }}
-              className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Registrar otra
-            </button>
           </div>
         </div>
       </div>
@@ -182,33 +220,45 @@ export default function NuevaDenunciaForm() {
             />
           </div>
 
-          {/* Dependencia */}
-          <div className="col-span-2">
-            <label className="mb-1.5 block text-sm font-medium text-gray-700">
-              Dependencia asignada
-            </label>
-            <input
-              name="dependenciaAsignada"
-              value={form.dependenciaAsignada}
-              onChange={handleChange}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="Secretaría de Movilidad (opcional)"
-            />
-          </div>
+          <div className="col-span-2 border-t border-gray-200 pt-5 mt-2 space-y-3">
+            {/* Es especial */}
+            <div>
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="esEspecial"
+                  name="esEspecial"
+                  checked={form.esEspecial}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-900">
+                  ¿Es denuncia especial?
+                </span>
+              </label>
+              {form.esEspecial && (
+                <p className="mt-1 text-xs text-gray-500 ml-7">
+                  Las denuncias especiales normalmente no generan documento oficial. ¿Deseas generar uno igualmente?
+                </p>
+              )}
+            </div>
 
-          {/* Es especial */}
-          <div className="col-span-2 flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="esEspecial"
-              name="esEspecial"
-              checked={form.esEspecial}
-              onChange={handleChange}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <label htmlFor="esEspecial" className="text-sm text-gray-700">
-              Marcar como denuncia especial
-            </label>
+            {/* Generar documento oficial */}
+            <div>
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="generarDocumento"
+                  name="generarDocumento"
+                  checked={form.generarDocumento}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-900">
+                  {form.esEspecial ? "Generar documento de todas formas" : "Generar documento oficial (recomendado)"}
+                </span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -224,7 +274,7 @@ export default function NuevaDenunciaForm() {
             disabled={loading}
             className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Registrando…' : 'Registrar denuncia'}
+            {loading ? 'Procesando…' : 'Crear denuncia'}
           </button>
         </div>
       </div>

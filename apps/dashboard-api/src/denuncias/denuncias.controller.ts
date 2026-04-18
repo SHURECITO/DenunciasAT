@@ -11,6 +11,7 @@ import {
   Query,
   Res,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -31,6 +32,7 @@ import { CreateIncompletaDto } from './dto/create-incompleta.dto';
 import { CreateParcialDto } from './dto/create-parcial.dto';
 import { UpdateDenunciaDto } from './dto/update-denuncia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
+import { EditarDenunciaDto } from './dto/editar-denuncia.dto';
 import { DenunciaEstado } from './entities/denuncia.entity';
 
 @ApiTags('denuncias')
@@ -78,6 +80,12 @@ export class DenunciasController {
     return this.denunciasService.upsertParcial(dto);
   }
 
+  @Get('dependencias')
+  @ApiOperation({ summary: 'Listar dependencias disponibles' })
+  getDependencias() {
+    return this.denunciasService.getDependencias();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Listar denuncias con filtro opcional por estado' })
   @ApiQuery({ name: 'estado', enum: DenunciaEstado, required: false })
@@ -113,6 +121,27 @@ export class DenunciasController {
   @ApiOperation({ summary: 'Obtener detalle de una denuncia (JWT dashboard o x-internal-key document-service)' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.denunciasService.findOne(id);
+  }
+
+  @Patch(':id/editar')
+  @ApiOperation({ summary: 'Editar denuncia manual y regenerar documento' })
+  async editar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: EditarDenunciaDto,
+    @Req() req: any,
+  ) {
+    const updated = await this.denunciasService.editarDenuncia(id, dto, req.user);
+    
+    if (dto.regenerarDocumento) {
+      const docServiceUrl = this.config.get<string>('DOCUMENT_SERVICE_URL', 'http://document-service:3004');
+      const internalKey = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '');
+      
+      axios
+        .post(`${docServiceUrl}/generar/${id}`, {}, { headers: { 'x-internal-key': internalKey } })
+        .catch(() => { /* error silencioso */ });
+    }
+    
+    return updated;
   }
 
   @Patch(':id')

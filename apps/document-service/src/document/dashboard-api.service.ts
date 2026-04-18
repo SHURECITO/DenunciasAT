@@ -44,6 +44,10 @@ export class DashboardApiService {
     return res.data;
   }
 
+  async updateDenuncia(id: number, data: Partial<DenunciaData>): Promise<void> {
+    await axios.patch(`${this.baseUrl}/denuncias/${id}`, data, { headers: this.headers });
+  }
+
   async notificarDocumentoOk(id: number, documentoUrl: string): Promise<void> {
     await axios.patch(
       `${this.baseUrl}/denuncias/${id}`,

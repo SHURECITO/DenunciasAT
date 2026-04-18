@@ -64,6 +64,7 @@ estado (enum), dependenciaAsignada (indexed), esEspecial, esAnonimo,
 origenManual, documentoRevisado, documentoUrl, documentoGeneradoOk,
 documentoGeneradoEn, documentoPendiente, incompleta,
 respuestasPorDependencia (jsonb, default '[]'),
+historialCambios (jsonb, default '[]'),
 fechaCreacion, fechaActualizacion
 ```
 - `cedula`: string vacía para parciales, 'ANONIMO' para denuncias anónimas
@@ -190,6 +191,11 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 **Sesiones 1–23 (2026-04-14/18) — comprimido:** Scaffold monorepo NestJS, dashboard-api (JWT, CRUD, SEQUENCE), frontend Next.js, Docker multi-stage, Evolution API (UUID, parche @lid), chatbot IA conversacional (Gemini, Redis, historial, deep merge, confirmación server-side, normalización `nombreCompleto`→`nombre`), document-service con adm-zip + Plantilla.docx + dependencias.json (20+ entidades), MinIO completo (`@app/storage`, whatsapp-service sube media inmediato, document-service sube .docx, dashboard-api descarga buffer directo, `DocumentLifecycleService` cron 3am limpia 5d post-CON_RESPUESTA). Fixes document-service sesión 22: namespaces preservados (regex `/<w:document[^>]*>/`), firma Mercurio con placeholders + tabla 4320×1440 DXA, `getImageDimensions`/`calcularDimensionesImagen` robustos, validación pre-upload (ZIP + xmlns:r + FIRMA_* + header/footerReference + sin nombre ciudadano). Sesión 23: reset completo (TRUNCATE + sequences + FLUSHDB + buckets), diagnóstico UTF-8 (no-bug, los `◆` venían del shell cp1252 de Windows), E2E limpio verificado.
 
 **Sesión 24 (2026-04-18) — 7 bugs + 4 mejoras IA/UX:** (detalles en "Patrones técnicos") mutex Redis WhatsApp, upsert parcial (no duplica), `@lid`>13dig, Content-Types imgs + docPr 100+, sin pie de foto, chat sort ASC, stats unnest CSV. IA: `clasificarDenunciaEstructurada` (multi-dep selectivo temp 0.15), sub-bloques SOLICITUD por dep, `filtrarSolicitudAdicional`. UX: `respuestasPorDependencia` JSONB + tabla "marcar respondida".
+
+**Sesión 25 (2026-04-18) — Actualización de UI/Backend para mejor gestión manual:** 
+- JSON de dependencias actualizado con información oficial (Total: 47 dependencias).
+- **Backend**: Añadido campo `historialCambios` (JSONB) en la entidad `Denuncia`. Nuevos endpoints `GET /dependencias`, `PATCH /denuncias/:id/editar`, `POST /generar-desde-descripcion`.
+- **Frontend**: Nuevo modal para editar denuncia (modificar dependencias y regenerar documento vía webhook manual). Refactorización del formulario de creación manual (`NuevaDenunciaForm`), que ahora delega la clasificación de la dependencia a la IA de manera automática si el usuario marca "Generar documento oficial".
 
 ---
 

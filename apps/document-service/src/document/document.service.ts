@@ -138,6 +138,54 @@ export class DocumentService {
     }
   }
 
+  async generarDesdeDescripcion(dto: {
+    denunciaId: number;
+    descripcion: string;
+    ubicacion: string;
+    barrio: string;
+    esEspecial: boolean;
+    generarDocumento: boolean;
+  }): Promise<{ dependenciaDetectada: string | null; documentoGenerado: boolean }> {
+    let dependenciaDetectada = 'Alcaldía de Medellín';
+    
+    if (dto.generarDocumento) {
+      try {
+        const clasif = await this.gemini.clasificarDenunciaEstructurada(
+          dto.descripcion,
+          dto.ubicacion,
+          dto.barrio || undefined
+        );
+        if (clasif && clasif.dependencias.length > 0) {
+          dependenciaDetectada = clasif.dependencias.map(d => d.nombre).join(', ');
+        } else {
+          dependenciaDetectada = await this.gemini.clasificarDenuncia(dto.descripcion, dto.ubicacion, dto.barrio || undefined);
+        }
+      } catch (err) {
+        this.logger.error('Error clasificando dependencia', err);
+        try {
+          dependenciaDetectada = await this.gemini.clasificarDenuncia(dto.descripcion, dto.ubicacion, dto.barrio || undefined);
+        } catch (e) {}
+      }
+      
+      try {
+        await this.dashboardApi.updateDenuncia(dto.denunciaId, { 
+          dependenciaAsignada: dependenciaDetectada,
+          documentoGeneradoOk: false,
+          documentoPendiente: true
+        });
+      } catch (e) {
+        this.logger.warn(`No se pudo actualizar dependencia para denuncia ${dto.denunciaId}`);
+      }
+      
+      this.generarDocumento(dto.denunciaId).catch(() => {});
+    }
+
+    return {
+      dependenciaDetectada,
+      documentoGenerado: dto.generarDocumento
+    };
+  }
+
   /**
    * Valida el .docx antes de subirlo a MinIO:
    * - ZIP válido con word/document.xml
