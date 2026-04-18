@@ -155,19 +155,16 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **dependencias.json**: `infrastructure/config/dependencias.json` — 20+ entidades → `{titulo, nombre, cargo, entidad}`
 - **Firma Mercurio**: el .docx NO lleva el nombre del concejal hardcodeado; usa placeholders `FIRMA_NOMBRE`/`FIRMA_CARGO` (Arial 11, izquierda) + tabla de 4320×1440 DXA con borde inferior para el espacio de firma + `Radicó: ` (Arial 9 cursiva #666666). Mercurio reemplaza los placeholders al firmar.
 - **MinIO**: `http://minio:9000` (interno), consola `http://localhost:9001`. Buckets: `denunciasat-evidencias`/`denunciasat-documentos`. `minio-init` los crea al arrancar. Sin `documentos_data` volume.
-- **imagenesEvidencia URLs**: whatsapp-service sube a MinIO inmediatamente (URL Evolution API expira). Formato: `http://minio:9000/bucket/{numero}/{ts}-{uuid}.jpg`. document-builder detecta `minio` en hostname → usa MinioService.
+- **imagenesEvidencia**: whatsapp-service sube a MinIO inmediato (URL Evolution expira). Formato `http://minio:9000/bucket/{numero}/{ts}-{uuid}.jpg`. document-builder detecta `minio` en hostname → MinioService.
 - **document-service flujo MinIO**: genera .docx temporal → uploadBuffer → elimina local → PATCH documentoUrl = `${radicado}.docx`
 - **dashboard-api .docx**: descarga buffer de MinIO directamente (no proxy). DocumentLifecycleService cron `0 3 * * *` limpia .docx 5 días post-CON_RESPUESTA.
 - **libs/storage**: `@app/storage` → `MinioService` (6 métodos, backoff 1s/2s/4s)
-- **generarHechos()**: 3 párrafos, sin nombre del ciudadano, cita normativa específica
-- **generarAsunto()**: método nuevo, verbo infinitivo en mayúsculas, máx 12 palabras
-- **document-builder — namespaces**: el opening tag `<w:document …>` se copia EXACTO de la plantilla (regex `/<w:document[^>]*>/`). Si solo se pone `xmlns:w`, Word muestra reparación y elimina membrete.
-- **document-builder — sectPr**: se extrae de la plantilla (rId10=header, rId11=footer). No hardcodear IDs.
-- **document-builder — imágenes**: `getImageDimensions()` (JPEG SOF + PNG IHDR, default 3000×2000 si no detecta) + `calcularDimensionesImagen()` (MAX 5029200×3657600 EMU, MIN 1828800 EMU, 9525 EMU/px). Extensión detectada por magic bytes, no URL.
-- **document-service validación**: antes de subir a MinIO valida ZIP + `xmlns:r` + `FIRMA_NOMBRE`/`FIRMA_CARGO` + `headerReference`/`footerReference` + nombre del ciudadano ausente en HECHOS. Si falla: `documentoGeneradoOk:false` sin subir.
+- **Gemini legal**: `generarHechos()` (3 párr., sin nombre ciudadano, cita normativa) + `generarAsunto()` (verbo infinitivo mayúsculas, máx 12 palabras)
+- **document-builder — namespaces/sectPr**: opening tag `<w:document>` y `sectPr` se copian EXACTO de la plantilla (regex `/<w:document[^>]*>/`, rId10=header/rId11=footer). Hardcodear solo `xmlns:w` rompe el membrete.
+- **document-builder — imágenes**: `getImageDimensions()` (JPEG SOF + PNG IHDR, default 3000×2000 si falla) + `calcularDimensionesImagen()` (MAX 5029200×3657600 EMU, MIN 1828800 EMU, 9525 EMU/px). Extensión por magic bytes.
+- **document-service validación**: antes de subir a MinIO valida ZIP + `xmlns:r` + `FIRMA_NOMBRE`/`FIRMA_CARGO` + `headerReference`/`footerReference` + ausencia del nombre del ciudadano en HECHOS. Si falla: `documentoGeneradoOk:false` sin subir.
 - **solicitudAdicional / imagenesEvidencia**: campos nullable en entidad Denuncia; chatbot los captura y pasa al radicar
-- **Evolution API key**: UUID válido obligatorio. Reset: `docker volume rm denunciasat_evolution_data`
-- **Parche @lid**: automático al startup en whatsapp-service
+- **Evolution**: API key UUID obligatorio (reset: `docker volume rm denunciasat_evolution_data`); parche @lid automático al startup en whatsapp-service
 
 ## Infraestructura operacional
 
@@ -182,7 +179,13 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 
 ## Historial de sesiones (comprimido)
 
-**Sesiones 1–20 (2026-04-14/18) — comprimido:** Scaffold monorepo NestJS, dashboard-api (JWT, CRUD, SEQUENCE), frontend Next.js, Docker multi-stage, Evolution API (UUID, parche @lid), chatbot IA conversacional (Gemini, Redis, historial, deep merge, confirmación server-side), document-service con adm-zip + Plantilla.docx + dependencias.json (20+ entidades, múltiples destinatarios), SYSTEM_PROMPT_LEGAL, generarHechos/generarAsunto, imágenes OOXML inline con portrait handling, solicitudAdicional + imagenesEvidencia. MinIO completo (`@app/storage`, `minio-init`, whatsapp-service sube media inmediato, document-service sube .docx tras generación, dashboard-api descarga buffer directo, `DocumentLifecycleService` cron 3am limpia .docx 5d post-CON_RESPUESTA). UI detalle: polling 8s, retry button, columna Doc.
+**Sesiones 1–21 (2026-04-14/18) — comprimido:** Scaffold monorepo NestJS, dashboard-api (JWT, CRUD, SEQUENCE), frontend Next.js, Docker multi-stage, Evolution API (UUID, parche @lid), chatbot IA conversacional (Gemini, Redis, historial, deep merge, confirmación server-side, normalización `nombreCompleto`→`nombre`), document-service con adm-zip + Plantilla.docx + dependencias.json (20+ entidades, múltiples destinatarios), SYSTEM_PROMPT_LEGAL, generarHechos/generarAsunto, imágenes OOXML inline con portrait handling, solicitudAdicional + imagenesEvidencia. MinIO completo (`@app/storage`, `minio-init`, whatsapp-service sube media inmediato, document-service sube .docx tras generación, dashboard-api descarga buffer directo, `DocumentLifecycleService` cron 3am limpia .docx 5d post-CON_RESPUESTA). UI detalle: polling 8s, retry button, columna Doc. Auditoría E2E destructiva sesión 21: estados avanzan/rechazan correctamente, usuarios/stats/mensajes OK, robusto ante MinIO down, Redis restart, emojis, concurrencia; Gemini 429/503 intermitente en picos (no-bug).
+
+**Sesión 23 (2026-04-18) — Reset completo y diagnóstico UTF-8:**
+- **UTF-8 no es bug del sistema**: PostgreSQL server/client_encoding UTF8, API `application/json; charset=utf-8`, bytes UTF-8 válidos (118 pares en 20 KB), Next.js auto-añade `<meta charset>`. Los `◆`/`�` que se ven en terminal son del shell cp1252 de Windows, no de los datos. En el navegador los datos se renderizan correctos. Una sola fila vieja (DAT-2026-04-16 ID 34) tenía `�` por un bug ya corregido en sesiones anteriores; se eliminó con el TRUNCATE de esta sesión.
+- **Reset total**: `TRUNCATE denuncias, mensajes`; `radicado_seq`, `denuncias_id_seq`, `mensajes_id_seq` reseteadas a 1 (próximo radicado = DAT-000001). Redis `FLUSHDB` (DBSIZE=0). MinIO buckets `denunciasat-evidencias` y `denunciasat-documentos` recreados vacíos (removidos DAT-000004/013/022.docx y test_img.jpg).
+- **Limpieza de archivos**: eliminados `prueba_flujo_normal.docx` y `dist/` (build temporal). Docker image prune: 28 KB liberados. Reportados para decisión del usuario (NO eliminados): `Plantilla.docx` en raíz (duplicado de 53 KB vs. 213 KB autoritativo en `infrastructure/templates/`), `denunciantes.xlsx`, `evolution-swagger.json` (91 B, casi vacío), `ev-repo/` (clon de Evolution API), `infrastructure/templates/membrete.docx`. Volumen huérfano `denunciasat_documentos_data` sigue listado pero ya no se monta (MinIO reemplazó al filesystem).
+- **E2E limpio verificado**: chatbot con `573011111111` responde "Hola, bienvenido al asistente del concejal Andrés Tobón. ¿Cuál es tu nombre completo, por favor?" — 100 bytes UTF-8 válidos con tildes y ¿.
 
 **Sesión 22 (2026-04-18) — Fixes críticos document-service:**
 - **Namespaces completos**: regex `^<w:document…` fallaba (doc empieza con `<?xml…`); corregido a `/<w:document[^>]*>/`. Ahora el opening tag preserva los 35 namespaces (xmlns:w, r, wp, a, etc.) de la plantilla → Word ya no muestra reparación ni elimina membrete.
@@ -191,15 +194,6 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **Validación pre-upload**: antes de subir a MinIO se verifica ZIP, `xmlns:r`, placeholders FIRMA_*, `headerReference`/`footerReference`, ausencia del nombre del ciudadano en HECHOS. Si falla: notifica error sin subir.
 - **sectPr rIds reales**: la nota del ticket decía rId9/rId10, pero la plantilla tiene rId10 (header) / rId11 (footer). El código ya extrae el sectPr directo de la plantilla, así que los IDs siempre están sincronizados.
 - **E2E verificado**: DAT-000022 regenerado con evidencia MinIO embebida (264 KB, xmlns:r OK, 35 namespaces, tabla firma, Arial, #666666, sin nombre ciudadano en HECHOS).
-
-**Sesión 21 (2026-04-18) — Auditoría E2E destructiva:**
-- Verificada infra (10 servicios, 2 buckets MinIO, Redis, PostgreSQL, healthchecks 4 puertos OK)
-- Auditado código: chatbot (deep merge, server-side confirm, telefono limpio, parciales), document-builder (Plantilla.docx + adm-zip, dependencias.json, sin nombre ciudadano, multi-destinatario, MinIO), webhook (remoteJid limpio, fallback MinIO, 200-always)
-- Pruebas E2E: flujo normal completo radicó DAT-000022 con .docx 214KB en MinIO; documento valida ASUNTO infinitivo, 3 párrafos HECHOS sin nombre ciudadano, 4 puntos SOLICITUD, ANDRÉS FELIPE TOBÓN VILLADA, evidencia fotográfica embebida
-- Estados: rechaza RADICADA sin documentoRevisado, rechaza retroceder; usuarios: bloquea auto-toggle; estadísticas Excel/PDF generados; mensajes endpoint OK; especiales filtrado correcto
-- Estrés: reinicio sin pérdida de Redis state; mensajes vacíos/emoji/2000 chars manejados; concurrencia con estados independientes; MinIO down → chatbot sigue, webhook fallback a URL original
-- **Bug corregido**: Gemini ocasionalmente devuelve `nombreCompleto` en lugar de `nombre` causando "listaParaRadicar=true pero faltan: nombre". Fix en `chatbot.service.ts` línea 146-156: normaliza `nombreCompleto`→`nombre` antes del merge
-- Hallazgo no-bug: Gemini API saturado (429+503) en horas pico; el fallback gemini-3.1-flash-lite-preview también cae intermitente. No es un bug del código.
 
 ---
 
