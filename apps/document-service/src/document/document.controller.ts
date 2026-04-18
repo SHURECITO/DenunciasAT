@@ -12,8 +12,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
-import { existsSync } from 'fs';
-import { join } from 'path';
+import { MinioService } from '@app/storage';
 import { DocumentService } from './document.service';
 
 @Controller('health')
@@ -27,14 +26,15 @@ export class HealthController {
 @Controller()
 export class DocumentController {
   private readonly internalKey: string;
-  private readonly docsDir: string;
+  private readonly bucketDocumentos: string;
 
   constructor(
     private readonly documentService: DocumentService,
+    private readonly minio: MinioService,
     private readonly config: ConfigService,
   ) {
-    this.internalKey = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '');
-    this.docsDir = join(process.cwd(), 'infrastructure', 'documentos');
+    this.internalKey      = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '');
+    this.bucketDocumentos = this.config.get<string>('MINIO_BUCKET_DOCUMENTOS', 'denunciasat-documentos');
   }
 
   private checkAuth(key: string | undefined) {
@@ -56,7 +56,7 @@ export class DocumentController {
     return { mensaje: 'Generando documento', denunciaId };
   }
 
-  /** Descarga el .docx generado */
+  /** Descarga el .docx generado desde MinIO */
   @Get('documento/:denunciaId')
   async descargar(
     @Param('denunciaId', ParseIntPipe) denunciaId: number,
@@ -64,15 +64,20 @@ export class DocumentController {
     @Res() res: Response,
   ) {
     this.checkAuth(key);
-    const ruta = await this.documentService.getRutaDocumento(denunciaId);
-    if (!ruta || !existsSync(ruta)) {
+    const objectName = await this.documentService.getRutaDocumento(denunciaId);
+    if (!objectName) {
       throw new NotFoundException('Documento no generado todavía');
     }
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    );
-    res.setHeader('Content-Disposition', `attachment; filename="${ruta.split(/[\\/]/).pop()}"`);
-    res.sendFile(ruta);
+    try {
+      const buffer = await this.minio.downloadBuffer(this.bucketDocumentos, objectName);
+      res.set({
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Disposition': `attachment; filename="${objectName}"`,
+        'Content-Length': buffer.length,
+      });
+      res.send(buffer);
+    } catch {
+      throw new NotFoundException('Documento no disponible en almacenamiento');
+    }
   }
 }

@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { StorageModule } from '@app/storage';
 import { WebhookController } from './webhook.controller';
 import { HealthController, QrController } from './qr.controller';
 import { EvolutionService } from './evolution.service';
 import { ChatbotClientService } from './chatbot-client.service';
 
 @Module({
+  imports: [StorageModule],
   controllers: [WebhookController, QrController, HealthController],
   providers: [
     EvolutionService,

@@ -17,5 +17,6 @@ FROM node:20-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/dist/apps/whatsapp-service ./dist
-CMD ["node", "dist/src/main"]
+# Copiar dist completo para preservar rutas de libs/storage compilado
+COPY --from=build /app/dist ./dist
+CMD ["node", "dist/apps/whatsapp-service/src/main"]

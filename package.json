@@ -26,6 +26,7 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/schedule": "^6.1.3",
     "@nestjs/swagger": "^11.2.7",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.1",
@@ -39,6 +40,7 @@
     "exceljs": "^4.4.0",
     "helmet": "^8.1.0",
     "ioredis": "^5.10.1",
+    "minio": "^8.0.7",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pdfkit": "^0.18.0",
@@ -105,7 +107,9 @@
       "@app/messaging/(.*)": "<rootDir>/libs/messaging/src/$1",
       "@app/messaging": "<rootDir>/libs/messaging/src",
       "@app/ai/(.*)": "<rootDir>/libs/ai/src/$1",
-      "@app/ai": "<rootDir>/libs/ai/src"
+      "@app/ai": "<rootDir>/libs/ai/src",
+      "@app/storage/(.*)": "<rootDir>/libs/storage/src/$1",
+      "@app/storage": "<rootDir>/libs/storage/src"
     }
   }
 }

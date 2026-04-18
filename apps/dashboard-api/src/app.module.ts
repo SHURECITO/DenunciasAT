@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseModule } from '@app/database';
 import { validate } from './config/env.validation';
 import { AuthModule } from './auth/auth.module';
@@ -15,6 +16,7 @@ import { AppController } from './app.controller';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate }),
+    ScheduleModule.forRoot(),
     // Rate limiting global: máximo 5 peticiones por segundo por IP
     ThrottlerModule.forRoot([
       { name: 'burst', ttl: 1000, limit: 5 },

@@ -1,10 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
+import { readFile, unlink } from 'fs/promises';
+import { ConfigService } from '@nestjs/config';
 import { GeminiService } from '@app/ai';
+import { MinioService } from '@app/storage';
 import { DashboardApiService } from './dashboard-api.service';
 import { DocumentBuilderService } from './document-builder.service';
 
 const DOCS_DIR = join(process.cwd(), 'infrastructure', 'documentos');
+const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 @Injectable()
 export class DocumentService {
@@ -12,11 +16,17 @@ export class DocumentService {
   // Map denunciaId → ruta del archivo ya generado (cache en memoria)
   private readonly rutasGeneradas = new Map<number, string>();
 
+  private readonly bucketDocumentos: string;
+
   constructor(
     private readonly dashboardApi: DashboardApiService,
     private readonly builder: DocumentBuilderService,
     private readonly gemini: GeminiService,
-  ) {}
+    private readonly minio: MinioService,
+    private readonly config: ConfigService,
+  ) {
+    this.bucketDocumentos = this.config.get<string>('MINIO_BUCKET_DOCUMENTOS', 'denunciasat-documentos');
+  }
 
   async generarDocumento(denunciaId: number): Promise<void> {
     this.logger.log(`Iniciando generación de documento para denuncia #${denunciaId}`);
@@ -66,8 +76,9 @@ export class DocumentService {
         }
       }
 
-      // Construir el .docx usando la plantilla base
-      const rutaArchivo = join(DOCS_DIR, `${denuncia.radicado}.docx`);
+      // Construir el .docx en disco temporal
+      const rutaArchivo  = join(DOCS_DIR, `${denuncia.radicado}.docx`);
+      const objectName   = `${denuncia.radicado}.docx`;
       await this.builder.construir({
         denuncia,
         hechos,
@@ -77,10 +88,17 @@ export class DocumentService {
         rutaDestino: rutaArchivo,
       });
 
-      // Guardar ruta en cache y notificar a dashboard-api
-      this.rutasGeneradas.set(denunciaId, rutaArchivo);
-      await this.dashboardApi.notificarDocumentoOk(denunciaId, `${denuncia.radicado}.docx`);
-      this.logger.log(`Documento generado exitosamente: ${rutaArchivo}`);
+      // Subir .docx a MinIO y eliminar archivo temporal local
+      const docxBuffer = await readFile(rutaArchivo);
+      await this.minio.uploadBuffer(this.bucketDocumentos, objectName, docxBuffer, DOCX_CONTENT_TYPE);
+      await unlink(rutaArchivo).catch((err) =>
+        this.logger.warn(`No se pudo eliminar archivo temporal ${rutaArchivo}: ${(err as Error).message}`),
+      );
+
+      // Notificar a dashboard-api con el object name (bucket implícito en la config)
+      this.rutasGeneradas.set(denunciaId, objectName);
+      await this.dashboardApi.notificarDocumentoOk(denunciaId, objectName);
+      this.logger.log(`Documento generado y subido a MinIO: ${this.bucketDocumentos}/${objectName}`);
     } catch (err) {
       this.logger.error(`Error generando documento para denuncia #${denunciaId}:`, err);
       await this.dashboardApi.notificarDocumentoError(denunciaId);

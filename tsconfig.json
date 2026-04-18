@@ -25,7 +25,9 @@
       "@app/messaging": ["libs/messaging/src"],
       "@app/messaging/*": ["libs/messaging/src/*"],
       "@app/ai": ["libs/ai/src"],
-      "@app/ai/*": ["libs/ai/src/*"]
+      "@app/ai/*": ["libs/ai/src/*"],
+      "@app/storage": ["libs/storage/src"],
+      "@app/storage/*": ["libs/storage/src/*"]
     }
   }
 }

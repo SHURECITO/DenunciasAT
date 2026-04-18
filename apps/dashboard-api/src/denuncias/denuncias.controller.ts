@@ -21,6 +21,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import axios from 'axios';
+import { MinioService } from '@app/storage';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EitherAuthGuard } from '../auth/guards/either-auth.guard';
 import { SkipJwt } from '../auth/decorators/skip-jwt.decorator';
@@ -37,10 +38,15 @@ import { DenunciaEstado } from './entities/denuncia.entity';
 @UseGuards(JwtAuthGuard)
 @Controller('denuncias')
 export class DenunciasController {
+  private readonly bucketDocumentos: string;
+
   constructor(
     private readonly denunciasService: DenunciasService,
     private readonly config: ConfigService,
-  ) {}
+    private readonly minio: MinioService,
+  ) {
+    this.bucketDocumentos = this.config.get<string>('MINIO_BUCKET_DOCUMENTOS', 'denunciasat-documentos');
+  }
 
   @Post()
   @SkipJwt()
@@ -138,33 +144,35 @@ export class DenunciasController {
   }
 
   @Get(':id/documento')
-  @ApiOperation({ summary: 'Descargar .docx de la denuncia (proxy a document-service)' })
+  @ApiOperation({ summary: 'Descargar .docx de la denuncia desde MinIO' })
   async descargarDocumento(
     @Param('id', ParseIntPipe) id: number,
     @Res() res: Response,
   ) {
-    const docServiceUrl = this.config.get<string>('DOCUMENT_SERVICE_URL', 'http://document-service:3004');
-    const internalKey = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '');
-
-    let denuncia: { radicado: string };
+    let denuncia: { radicado: string; documentoUrl: string | null };
     try {
       denuncia = await this.denunciasService.findOne(id);
     } catch {
       throw new HttpException('Denuncia no encontrada', 404);
     }
 
+    if (!denuncia.documentoUrl) {
+      throw new HttpException('Documento no disponible', 404);
+    }
+
+    // documentoUrl contiene solo el object name dentro del bucket (ej. "DAT-000001.docx")
+    const objectName = denuncia.documentoUrl;
     try {
-      const upstream = await axios.get(`${docServiceUrl}/documento/${id}`, {
-        headers: { 'x-internal-key': internalKey },
-        responseType: 'stream',
-      });
+      const buffer = await this.minio.downloadBuffer(this.bucketDocumentos, objectName);
       const filename = `${denuncia.radicado}.docx`;
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      (upstream.data as NodeJS.ReadableStream).pipe(res);
-    } catch (err: unknown) {
-      const status = (err as { response?: { status: number } })?.response?.status ?? 500;
-      throw new HttpException('Documento no disponible', status);
+      res.set({
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': buffer.length,
+      });
+      res.send(buffer);
+    } catch {
+      throw new HttpException('Documento no disponible', 503);
     }
   }
 }

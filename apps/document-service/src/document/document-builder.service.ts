@@ -3,6 +3,7 @@ import { readFileSync, mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import axios from 'axios';
+import { MinioService } from '@app/storage';
 import type { DenunciaData } from './dashboard-api.service';
 
 import AdmZip = require('adm-zip');
@@ -92,16 +93,39 @@ function asuntoP(asunto: string): string {
 }
 
 // ─── Imágenes ─────────────────────────────────────────────────────────────────
-const MAX_WIDTH_EMU = 5400000; // ≈ 5.6 pulgadas
+const MAX_WIDTH_EMU  = 5486400; // ≈ 6 pulgadas
+const MAX_HEIGHT_EMU = 4114800; // ≈ 4.5 pulgadas
 
-/** Descarga imagen desde URL, devuelve Buffer o null si falla */
-async function downloadImage(url: string): Promise<Buffer | null> {
+/** Descarga imagen desde URL externa (fallback para URLs no-MinIO), devuelve Buffer o null */
+async function downloadImageFromUrl(url: string): Promise<Buffer | null> {
   try {
     const res = await axios.get<ArrayBuffer>(url, {
       responseType: 'arraybuffer',
       timeout: 10000,
     });
     return Buffer.from(res.data);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parsea una URL interna de MinIO (http://minio:9000/bucket/objectName)
+ * y devuelve { bucket, objectName } o null si no es una URL de MinIO.
+ */
+function parseMinioUrl(url: string): { bucket: string; objectName: string } | null {
+  try {
+    const parsed = new URL(url);
+    // Reconocer cualquier host que contenga "minio" o sea localhost con puerto 9000
+    if (!parsed.hostname.includes('minio') && !(parsed.hostname === 'localhost' && parsed.port === '9000')) {
+      return null;
+    }
+    // pathname: /bucket/objectName... (primer segmento es el bucket)
+    const parts = parsed.pathname.slice(1).split('/');
+    if (parts.length < 2) return null;
+    const bucket     = parts[0];
+    const objectName = parts.slice(1).join('/');
+    return { bucket, objectName };
   } catch {
     return null;
   }
@@ -114,38 +138,47 @@ function imageExt(url: string): 'png' | 'jpg' {
 
 /** Lee dimensiones de JPEG o PNG desde los bytes del header */
 function imageDims(buf: Buffer, ext: string): { cx: number; cy: number } {
+  let width = 0;
+  let height = 0;
+
   try {
     if (ext === 'png' && buf.length >= 24) {
       const sig = buf.slice(0, 8).toString('hex');
       if (sig === '89504e470d0a1a0a') {
-        const w = buf.readUInt32BE(16);
-        const h = buf.readUInt32BE(20);
-        if (w > 0 && h > 0) {
-          const cx = Math.min(w * 9525, MAX_WIDTH_EMU);
-          return { cx, cy: Math.round(cx * h / w) };
-        }
+        width  = buf.readUInt32BE(16);
+        height = buf.readUInt32BE(20);
       }
-    }
-    if (ext !== 'png' && buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    } else if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
       let i = 2;
       while (i + 4 < buf.length) {
         if (buf[i] !== 0xff) break;
         const marker = buf[i + 1];
         const segLen = buf.readUInt16BE(i + 2);
         if ([0xc0, 0xc1, 0xc2].includes(marker) && i + 9 < buf.length) {
-          const h = buf.readUInt16BE(i + 5);
-          const w = buf.readUInt16BE(i + 7);
-          if (w > 0 && h > 0) {
-            const cx = Math.min(w * 9525, MAX_WIDTH_EMU);
-            return { cx, cy: Math.round(cx * h / w) };
-          }
+          height = buf.readUInt16BE(i + 5);
+          width  = buf.readUInt16BE(i + 7);
+          break;
         }
         i += 2 + segLen;
       }
     }
   } catch { /* fall through */ }
-  // Fallback: proporción 4:3
-  return { cx: MAX_WIDTH_EMU, cy: Math.round(MAX_WIDTH_EMU * 3 / 4) };
+
+  if (width <= 0 || height <= 0) {
+    // Fallback: proporción 4:3 landscape
+    return { cx: MAX_WIDTH_EMU, cy: Math.round(MAX_WIDTH_EMU * 3 / 4) };
+  }
+
+  // Escalar respetando máximos tanto de ancho como de alto (portrait handling)
+  let cx = Math.min(width * 9525, MAX_WIDTH_EMU);
+  let cy = Math.round(cx * height / width);
+
+  if (cy > MAX_HEIGHT_EMU) {
+    cy = MAX_HEIGHT_EMU;
+    cx = Math.round(cy * width / height);
+  }
+
+  return { cx, cy };
 }
 
 /** Genera el XML de un párrafo con imagen inline */
@@ -209,6 +242,22 @@ function resolveDestinatario(dependencia: string): Destinatario {
 @Injectable()
 export class DocumentBuilderService {
   private readonly logger = new Logger(DocumentBuilderService.name);
+
+  constructor(private readonly minio: MinioService) {}
+
+  /** Descarga imagen desde MinIO (si es URL interna) o desde URL externa */
+  private async fetchImageBuffer(url: string): Promise<Buffer | null> {
+    const minioRef = parseMinioUrl(url);
+    if (minioRef) {
+      try {
+        return await this.minio.downloadBuffer(minioRef.bucket, minioRef.objectName);
+      } catch (err) {
+        this.logger.warn(`No se pudo descargar imagen de MinIO (${minioRef.bucket}/${minioRef.objectName}): ${(err as Error).message}`);
+        return null;
+      }
+    }
+    return downloadImageFromUrl(url);
+  }
 
   async construir(input: BuildInput): Promise<void> {
     const { denuncia, hechos, asunto, solicitudAdicional, imagenes, rutaDestino } = input;
@@ -276,7 +325,7 @@ export class DocumentBuilderService {
     for (const imgUrl of imagenes) {
       imgCount++;
       try {
-        const imgBuf = await downloadImage(imgUrl);
+        const imgBuf = await this.fetchImageBuffer(imgUrl);
         if (!imgBuf) {
           this.logger.warn(`No se pudo descargar imagen ${imgCount}: ${imgUrl.substring(0, 80)}`);
           continue;
