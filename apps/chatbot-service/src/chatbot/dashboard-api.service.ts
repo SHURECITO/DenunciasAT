@@ -35,6 +35,29 @@ interface GuardarMensajePayload {
   direccion: 'ENTRANTE' | 'SALIENTE';
 }
 
+export interface ParcialExistente {
+  id: number;
+  radicado: string;
+  telefono: string;
+  incompleta: boolean;
+}
+
+interface CompletarDenunciaPayload {
+  nombreCiudadano?: string;
+  cedula?: string;
+  ubicacion?: string;
+  descripcion?: string;
+  barrio?: string;
+  comuna?: string;
+  descripcionResumen?: string;
+  dependenciaAsignada?: string;
+  esAnonimo?: boolean;
+  solicitudAdicional?: string;
+  imagenesEvidencia?: string;
+  documentoPendiente?: boolean;
+  incompleta?: boolean;
+}
+
 @Injectable()
 export class DashboardApiService {
   private readonly logger = new Logger(DashboardApiService.name);
@@ -81,6 +104,39 @@ export class DashboardApiService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Busca una denuncia parcial (incompleta) del mismo teléfono.
+   * Retorna null si no hay. Usado para evitar duplicar registros
+   * cuando un ciudadano ya había guardado datos parciales.
+   */
+  async buscarParcialPorTelefono(telefono: string): Promise<ParcialExistente | null> {
+    try {
+      const res = await axios.get<ParcialExistente | null>(
+        `${this.baseUrl}/denuncias/parcial/telefono/${telefono}`,
+        { headers: this.headers },
+      );
+      return res.data ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Completa una denuncia parcial: actualiza todos los campos y marca incompleta:false.
+   * El radicado ya asignado al crear la parcial se conserva.
+   */
+  async completarDenuncia(
+    id: number,
+    payload: CompletarDenunciaPayload,
+  ): Promise<{ id: number; radicado: string }> {
+    const res = await axios.patch<{ id: number; radicado: string }>(
+      `${this.baseUrl}/denuncias/${id}`,
+      { ...payload, incompleta: false },
+      { headers: this.headers },
+    );
+    return { id: res.data.id, radicado: res.data.radicado };
   }
 
   async guardarMensaje(denunciaId: number, payload: GuardarMensajePayload): Promise<void> {

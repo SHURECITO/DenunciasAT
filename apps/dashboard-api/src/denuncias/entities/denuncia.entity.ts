@@ -97,6 +97,16 @@ export class Denuncia {
   @Column({ nullable: true, type: 'text' })
   imagenesEvidencia: string;
 
+  // Seguimiento de respuestas cuando la denuncia tiene múltiples dependencias.
+  // Cada entrada: { dependencia, respondio, fechaRespuesta, observacion }
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  respuestasPorDependencia: Array<{
+    dependencia: string;
+    respondio: boolean;
+    fechaRespuesta: string | null;
+    observacion: string | null;
+  }>;
+
   @CreateDateColumn()
   fechaCreacion: Date;
 

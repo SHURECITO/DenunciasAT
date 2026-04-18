@@ -99,6 +99,14 @@ export class DenunciasController {
     return this.denunciasService.findDatosUsuarioPorTelefono(telefono);
   }
 
+  @Get('parcial/telefono/:telefono')
+  @SkipJwt()
+  @UseGuards(EitherAuthGuard)
+  @ApiOperation({ summary: 'Buscar denuncia parcial (incompleta) por teléfono — devuelve null si no existe' })
+  findParcialPorTelefono(@Param('telefono') telefono: string) {
+    return this.denunciasService.findParcialPorTelefono(telefono);
+  }
+
   @Get(':id')
   @SkipJwt()
   @UseGuards(EitherAuthGuard)

@@ -1,164 +1,601 @@
 {
-  "Secretaría de Infraestructura Física": {
+  "Secretaría de Gobierno y Gestión del Gabinete": {
     "titulo": "Doctor",
-    "nombre": "SECRETARIO DE INFRAESTRUCTURA FÍSICA",
-    "cargo": "Secretario de Infraestructura Física",
-    "entidad": "Secretaría de Infraestructura Física"
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "NICOLÁS RÍOS CORREA",
+    "cargoTitular": "Secretario de Gobierno y Gestión del Gabinete",
+    "entidadCompleta": "Secretaría de Gobierno y Gestión del Gabinete de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["orden público", "relaciones políticas", "articulación con el Concejo", "seguimiento sectores administrativos", "gabinete"],
+    "jerarquiaDecision": 1
   },
-  "Secretaría de Movilidad": {
+  "Secretaría General": {
     "titulo": "Doctor",
-    "nombre": "SECRETARIO DE MOVILIDAD",
-    "cargo": "Secretario de Movilidad",
-    "entidad": "Secretaría de Movilidad"
-  },
-  "Secretaría de Medio Ambiente": {
-    "titulo": "Doctora",
-    "nombre": "SECRETARIA DE MEDIO AMBIENTE",
-    "cargo": "Secretaria de Medio Ambiente",
-    "entidad": "Secretaría de Medio Ambiente"
-  },
-  "Secretaría de Seguridad y Convivencia": {
-    "titulo": "Doctor",
-    "nombre": "SECRETARIO DE SEGURIDAD Y CONVIVENCIA",
-    "cargo": "Secretario de Seguridad y Convivencia",
-    "entidad": "Secretaría de Seguridad y Convivencia"
-  },
-  "Secretaría de Salud": {
-    "titulo": "Doctor",
-    "nombre": "SECRETARIO DE SALUD",
-    "cargo": "Secretario de Salud",
-    "entidad": "Secretaría de Salud"
-  },
-  "Secretaría de Educación": {
-    "titulo": "Doctor",
-    "nombre": "SECRETARIO DE EDUCACIÓN",
-    "cargo": "Secretario de Educación",
-    "entidad": "Secretaría de Educación"
-  },
-  "Secretaría de Inclusión Social": {
-    "titulo": "Doctora",
-    "nombre": "SECRETARIA DE INCLUSIÓN SOCIAL",
-    "cargo": "Secretaria de Inclusión Social",
-    "entidad": "Secretaría de Inclusión Social"
-  },
-  "Secretaría de Inclusión Social, Familia y DDHH": {
-    "titulo": "Doctora",
-    "nombre": "SECRETARIA DE INCLUSIÓN SOCIAL, FAMILIA Y DDHH",
-    "cargo": "Secretaria de Inclusión Social, Familia y DDHH",
-    "entidad": "Secretaría de Inclusión Social, Familia y DDHH"
-  },
-  "Secretaría de Desarrollo Económico": {
-    "titulo": "Doctor",
-    "nombre": "SECRETARIO DE DESARROLLO ECONÓMICO",
-    "cargo": "Secretario de Desarrollo Económico",
-    "entidad": "Secretaría de Desarrollo Económico"
-  },
-  "Secretaría de Gobierno": {
-    "titulo": "Doctor",
-    "nombre": "SECRETARIO DE GOBIERNO",
-    "cargo": "Secretario de Gobierno",
-    "entidad": "Secretaría de Gobierno"
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "SEBASTIÁN GÓMEZ SÁNCHEZ",
+    "cargoTitular": "Secretario General",
+    "entidadCompleta": "Secretaría General de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["defensa jurídica", "patrimonio público", "prevención daño antijurídico", "control de legalidad", "actos administrativos"],
+    "jerarquiaDecision": 2
   },
   "Secretaría de Hacienda": {
     "titulo": "Doctor",
-    "nombre": "SECRETARIO DE HACIENDA",
-    "cargo": "Secretario de Hacienda",
-    "entidad": "Secretaría de Hacienda"
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "ORLANDO DE JESÚS URIBE VILLA",
+    "cargoTitular": "Secretario de Hacienda",
+    "entidadCompleta": "Secretaría de Hacienda de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["gestión tributaria", "impuestos", "predial", "ICA", "presupuesto distrital", "sostenibilidad financiera"],
+    "jerarquiaDecision": 2
   },
-  "Secretaría de Gestión y Control Territorial": {
+  "Secretaría de Evaluación y Control": {
     "titulo": "Doctor",
-    "nombre": "SECRETARIO DE GESTIÓN Y CONTROL TERRITORIAL",
-    "cargo": "Secretario de Gestión y Control Territorial",
-    "entidad": "Secretaría de Gestión y Control Territorial"
-  },
-  "Secretaría de Participación Ciudadana": {
-    "titulo": "Doctor",
-    "nombre": "SECRETARIO DE PARTICIPACIÓN CIUDADANA",
-    "cargo": "Secretario de Participación Ciudadana",
-    "entidad": "Secretaría de Participación Ciudadana"
-  },
-  "Secretaría de las Mujeres": {
-    "titulo": "Doctora",
-    "nombre": "SECRETARIA DE LAS MUJERES",
-    "cargo": "Secretaria de las Mujeres",
-    "entidad": "Secretaría de las Mujeres"
-  },
-  "Secretaría de la Juventud": {
-    "titulo": "Doctor",
-    "nombre": "SECRETARIO DE LA JUVENTUD",
-    "cargo": "Secretario de la Juventud",
-    "entidad": "Secretaría de la Juventud"
-  },
-  "Secretaría de Cultura Ciudadana": {
-    "titulo": "Doctor",
-    "nombre": "SECRETARIO DE CULTURA CIUDADANA",
-    "cargo": "Secretario de Cultura Ciudadana",
-    "entidad": "Secretaría de Cultura Ciudadana"
-  },
-  "Secretaría de Paz y Derechos Humanos": {
-    "titulo": "Doctor",
-    "nombre": "SECRETARIO DE PAZ Y DERECHOS HUMANOS",
-    "cargo": "Secretario de Paz y Derechos Humanos",
-    "entidad": "Secretaría de Paz y Derechos Humanos"
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "JOHN FREDY TORO GONZÁLEZ",
+    "cargoTitular": "Secretario de Evaluación y Control",
+    "entidadCompleta": "Secretaría de Evaluación y Control de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["vigilancia interna", "auditoría", "cumplimiento de metas", "control institucional", "quejas sobre servidores públicos"],
+    "jerarquiaDecision": 2
   },
   "Secretaría de Gestión Humana y Servicio a la Ciudadanía": {
     "titulo": "Doctora",
-    "nombre": "SECRETARIA DE GESTIÓN HUMANA Y SERVICIO A LA CIUDADANÍA",
-    "cargo": "Secretaria de Gestión Humana y Servicio a la Ciudadanía",
-    "entidad": "Secretaría de Gestión Humana y Servicio a la Ciudadanía"
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "CRISTINA NICHOLLS VILLA",
+    "cargoTitular": "Secretaria de Gestión Humana y Servicio a la Ciudadanía",
+    "entidadCompleta": "Secretaría de Gestión Humana y Servicio a la Ciudadanía de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["administración de personal", "carrera administrativa", "atención al ciudadano", "PQRSD", "deficiencias en trámites", "quejas sobre servidores públicos"],
+    "jerarquiaDecision": 2
   },
-  "EPM": {
-    "titulo": "Doctor",
-    "nombre": "GERENTE GENERAL DE EPM",
-    "cargo": "Gerente General",
-    "entidad": "Empresas Públicas de Medellín E.S.P."
+  "Secretaría de Comunicaciones": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "CARMEN LUCÍA HERRERA ZAPATA",
+    "cargoTitular": "Secretaria de Comunicaciones",
+    "entidadCompleta": "Secretaría de Comunicaciones de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["divulgación institucional", "imagen corporativa", "comunicación pública", "medios"],
+    "jerarquiaDecision": 4
   },
-  "Metro de Medellín": {
+  "Secretaría de Suministros y Servicios": {
     "titulo": "Doctor",
-    "nombre": "GERENTE GENERAL DEL METRO DE MEDELLÍN",
-    "cargo": "Gerente General",
-    "entidad": "Metro de Medellín"
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "ESTEBAN RAMÍREZ VÉLEZ",
+    "cargoTitular": "Secretario de Suministros y Servicios",
+    "entidadCompleta": "Secretaría de Suministros y Servicios de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["gestión contractual", "compras públicas", "abastecimiento", "mantenimiento bienes muebles", "mantenimiento inmuebles"],
+    "jerarquiaDecision": 3
   },
-  "INDER": {
+  "Secretaría de Innovación Digital": {
     "titulo": "Doctor",
-    "nombre": "DIRECTOR GENERAL DEL INDER",
-    "cargo": "Director General",
-    "entidad": "Instituto de Deportes y Recreación de Medellín"
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "SANTIAGO RESTREPO ARROYAVE",
+    "cargoTitular": "Secretario de Innovación Digital",
+    "entidadCompleta": "Secretaría de Innovación Digital de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["transformación tecnológica", "infraestructura de datos", "servicios digitales", "conectividad", "tecnología"],
+    "jerarquiaDecision": 3
   },
-  "EDU": {
-    "titulo": "Doctor",
-    "nombre": "GERENTE GENERAL DE LA EDU",
-    "cargo": "Gerente General",
-    "entidad": "Empresa de Desarrollo Urbano"
+  "Secretaría de Educación": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "CAROLINA FRANCO GIRALDO",
+    "cargoTitular": "Secretaria de Educación",
+    "entidadCompleta": "Secretaría de Educación de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["cobertura educativa", "alimentación escolar", "PAE", "infraestructura colegios", "calidad docente", "educación pública"],
+    "jerarquiaDecision": 2
   },
-  "ISVIMED": {
-    "titulo": "Doctor",
-    "nombre": "GERENTE GENERAL DEL ISVIMED",
-    "cargo": "Gerente General",
-    "entidad": "Instituto Social de Vivienda y Hábitat de Medellín"
+  "Secretaría de Salud": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "NATALIA LÓPEZ DELGADO",
+    "cargoTitular": "Secretaria de Salud",
+    "entidadCompleta": "Secretaría de Salud de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["vigilancia epidemiológica", "red hospitalaria", "salud pública", "aseguramiento", "EPS", "IPS", "salud"],
+    "jerarquiaDecision": 2
   },
-  "Metroparques": {
-    "titulo": "Doctor",
-    "nombre": "DIRECTOR GENERAL DE METROPARQUES",
-    "cargo": "Director General",
-    "entidad": "Unidad de Parques y Espacios Naturales de Medellín"
+  "Secretaría de Inclusión Social, Familia y DDHH": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "LUZ MARÍA RAMÍREZ CORREA",
+    "cargoTitular": "Secretaria de Inclusión Social, Familia y Derechos Humanos",
+    "entidadCompleta": "Secretaría de Inclusión Social, Familia y Derechos Humanos de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["población vulnerable", "habitantes de calle", "seguridad alimentaria", "protección a la familia", "derechos humanos", "inclusión social"],
+    "jerarquiaDecision": 2
   },
-  "Metrosalud": {
+  "Secretaría de las Mujeres": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "VALERIA MOLINA GÓMEZ",
+    "cargoTitular": "Secretaria de las Mujeres",
+    "entidadCompleta": "Secretaría de las Mujeres de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["violencias de género", "autonomía económica mujeres", "equidad de género", "violencia doméstica", "violencia contra la mujer"],
+    "jerarquiaDecision": 2
+  },
+  "Secretaría de la Juventud": {
     "titulo": "Doctor",
-    "nombre": "GERENTE GENERAL DE METROSALUD",
-    "cargo": "Gerente General",
-    "entidad": "Empresa Social del Estado Metrosalud"
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "RICARDO JARAMILLO VÉLEZ",
+    "cargoTitular": "Secretario de la Juventud",
+    "entidadCompleta": "Secretaría de la Juventud de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["política juvenil", "salud mental juvenil", "empleo jóvenes", "educación jóvenes", "juventud"],
+    "jerarquiaDecision": 3
+  },
+  "Secretaría de Paz y Derechos Humanos": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "CARLOS ALBERTO ARCILA VALENCIA",
+    "cargoTitular": "Secretario de Paz y Derechos Humanos",
+    "entidadCompleta": "Secretaría de Paz y Derechos Humanos de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["víctimas del conflicto", "defensa DDHH", "justicia restaurativa", "paz", "no violencia", "derechos humanos"],
+    "jerarquiaDecision": 2
+  },
+  "Secretaría de Cultura Ciudadana": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "SANTIAGO SILVA JARAMILLO",
+    "cargoTitular": "Secretario de Cultura Ciudadana",
+    "entidadCompleta": "Secretaría de Cultura Ciudadana de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["eventos culturales", "bibliotecas públicas", "arte", "comportamiento ciudadano", "cultura"],
+    "jerarquiaDecision": 4
+  },
+  "Secretaría de Participación Ciudadana": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "CAMILO CANO MONTOYA",
+    "cargoTitular": "Secretario de Participación Ciudadana",
+    "entidadCompleta": "Secretaría de Participación Ciudadana de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["presupuesto participativo", "juntas de acción comunal", "JAC", "formación democrática", "participación"],
+    "jerarquiaDecision": 3
+  },
+  "Secretaría de Seguridad y Convivencia": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "MANUEL VILLA MEJÍA",
+    "cargoTitular": "Secretario de Seguridad y Convivencia",
+    "entidadCompleta": "Secretaría de Seguridad y Convivencia de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["seguridad", "crimen", "policía", "cámaras SISC", "comisarías", "inspecciones", "orden público", "delitos", "amenazas", "extorsión", "grupos armados"],
+    "jerarquiaDecision": 1
+  },
+  "Secretaría de Movilidad": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "PABLO FERNEY RUIZ GARZÓN",
+    "cargoTitular": "Secretario de Movilidad",
+    "entidadCompleta": "Secretaría de Movilidad de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["tránsito", "semaforización", "fotomultas", "pico y placa", "transporte público", "movilidad", "semáforos", "señalización vial"],
+    "jerarquiaDecision": 1
+  },
+  "Secretaría de Gestión y Control Territorial": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "JUAN MANUEL VELÁSQUEZ CORREA",
+    "cargoTitular": "Secretario de Gestión y Control Territorial",
+    "entidadCompleta": "Secretaría de Gestión y Control Territorial de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["control urbanístico", "construcciones ilegales", "estratificación", "espacio público", "licencias de construcción", "invasión espacio público"],
+    "jerarquiaDecision": 1
+  },
+  "Secretaría de Infraestructura Física": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "JAIME ANDRÉS NARANJO MEDINA",
+    "cargoTitular": "Secretario de Infraestructura Física",
+    "entidadCompleta": "Secretaría de Infraestructura Física de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["malla vial", "huecos", "puentes", "parques", "obra pública", "infraestructura", "andenes", "vías", "mantenimiento vial"],
+    "jerarquiaDecision": 1
+  },
+  "Secretaría de Medio Ambiente": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "MARCELA RUIZ SALDARRIAGA",
+    "cargoTitular": "Secretaria de Medio Ambiente",
+    "entidadCompleta": "Secretaría de Medio Ambiente de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["contaminación", "cuencas", "bienestar animal", "cerros tutelares", "medio ambiente", "ruido", "árboles", "quebradas", "animales"],
+    "jerarquiaDecision": 1
+  },
+  "Secretaría de Desarrollo Económico": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "MARÍA FERNANDA GALEANO ROJO",
+    "cargoTitular": "Secretaria de Desarrollo Económico",
+    "entidadCompleta": "Secretaría de Desarrollo Económico de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["empleo", "fortalecimiento empresarial", "agroindustria", "corregimientos", "economía", "C4IR"],
+    "jerarquiaDecision": 3
+  },
+  "Secretaría de Turismo y Entretenimiento": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "ANA MARÍA LÓPEZ ACOSTA",
+    "cargoTitular": "Secretaria de Turismo y Entretenimiento",
+    "entidadCompleta": "Secretaría de Turismo y Entretenimiento de Medellín",
+    "nivel": "central",
+    "tipo": "secretaria",
+    "areasTematicas": ["turismo", "eventos", "formalización turística", "seguridad del turista", "marca ciudad"],
+    "jerarquiaDecision": 4
+  },
+  "Departamento Administrativo de Planeación": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "LUZ ÁNGELA GONZÁLEZ GÓMEZ",
+    "cargoTitular": "Directora del Departamento Administrativo de Planeación",
+    "entidadCompleta": "Departamento Administrativo de Planeación de Medellín (DAP)",
+    "nivel": "central",
+    "tipo": "departamento",
+    "areasTematicas": ["plan de ordenamiento territorial", "POT", "licencias globales", "planificación", "desarrollo urbano", "planeación"],
+    "jerarquiaDecision": 3
   },
   "DAGRD": {
     "titulo": "Doctor",
-    "nombre": "DIRECTOR DEL DAGRD",
-    "cargo": "Director General",
-    "entidad": "Departamento Administrativo de Gestión del Riesgo de Desastres"
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "CARLOS ANDRÉS QUINTERO MONSALVE",
+    "cargoTitular": "Director del Departamento Administrativo de Gestión del Riesgo de Desastres",
+    "entidadCompleta": "Departamento Administrativo de Gestión del Riesgo de Desastres de Medellín (DAGRD)",
+    "nivel": "central",
+    "tipo": "departamento",
+    "areasTematicas": ["emergencias", "bomberos", "desastres", "gestión del riesgo", "inundaciones", "deslizamientos"],
+    "jerarquiaDecision": 1
+  },
+  "Unidad Administrativa Especial Buen Comienzo": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "DIANA MARÍA CARMONA HENAO",
+    "cargoTitular": "Directora de la Unidad Administrativa Especial Buen Comienzo",
+    "entidadCompleta": "Unidad Administrativa Especial Buen Comienzo de Medellín",
+    "nivel": "central",
+    "tipo": "unidad",
+    "areasTematicas": ["primera infancia", "niños 0 a 5 años", "atención integral", "jardines infantiles"],
+    "jerarquiaDecision": 4
+  },
+  "Sapiencia": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "SALOMÓN CRUZ ZIRENE",
+    "cargoTitular": "Director de la Agencia de Educación Postsecundaria",
+    "entidadCompleta": "Agencia de Educación Postsecundaria de Medellín (Sapiencia)",
+    "nivel": "central",
+    "tipo": "unidad",
+    "areasTematicas": ["becas", "créditos condonables", "educación para el trabajo", "educación superior", "formación técnica"],
+    "jerarquiaDecision": 4
+  },
+  "EPM": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "JOHN ALBERTO MAYA SALAZAR",
+    "cargoTitular": "Gerente General de Empresas Públicas de Medellín",
+    "entidadCompleta": "Empresas Públicas de Medellín E.S.P. (EPM)",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["energía eléctrica", "agua", "gas", "saneamiento", "acueducto", "alcantarillado", "servicios públicos domiciliarios", "luz", "daños en redes"],
+    "jerarquiaDecision": 1
+  },
+  "Metro de Medellín": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "TOMÁS ANDRÉS ELEJALDE ESCOBAR",
+    "cargoTitular": "Gerente General del Metro de Medellín",
+    "entidadCompleta": "Metro de Medellín Ltda.",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["metro", "cables", "tranvía", "transporte masivo", "cultura metro", "estaciones metro"],
+    "jerarquiaDecision": 2
+  },
+  "EDU": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "EMIRO CARLOS VALDES LÓPEZ",
+    "cargoTitular": "Gerente General de la Empresa de Desarrollo Urbano",
+    "entidadCompleta": "Empresa de Desarrollo Urbano (EDU)",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["obras públicas", "gestión predial", "renovación urbana", "proyectos urbanos", "urbanismo"],
+    "jerarquiaDecision": 3
   },
   "Emvarias": {
     "titulo": "Doctor",
-    "nombre": "GERENTE GENERAL DE EMVARIAS",
-    "cargo": "Gerente General",
-    "entidad": "Empresas Varias de Medellín"
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "GUSTAVO ADOLFO CASTAÑO GALVIS",
+    "cargoTitular": "Gerente General de Emvarias",
+    "entidadCompleta": "Empresas Varias de Medellín (Emvarias)",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["aseo público", "basuras", "recolección de residuos", "relleno sanitario", "barrido de calles", "escombros"],
+    "jerarquiaDecision": 1
+  },
+  "ISVIMED": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "ÓSCAR ANDRÉS CARDONA CADAVID",
+    "cargoTitular": "Gerente General del ISVIMED",
+    "entidadCompleta": "Instituto Social de Vivienda y Hábitat de Medellín (ISVIMED)",
+    "nivel": "descentralizado",
+    "tipo": "establecimiento",
+    "areasTematicas": ["subsidios de vivienda", "mejoramiento habitacional", "reasentamientos", "vivienda social", "hábitat"],
+    "jerarquiaDecision": 3
+  },
+  "INDER": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "EDUARDO SILVA MELUK",
+    "cargoTitular": "Director del Instituto de Deportes y Recreación de Medellín",
+    "entidadCompleta": "Instituto de Deportes y Recreación de Medellín (INDER)",
+    "nivel": "descentralizado",
+    "tipo": "establecimiento",
+    "areasTematicas": ["escenarios deportivos", "recreación", "deporte barrial", "escuelas populares del deporte", "parques deportivos", "canchas", "polideportivos"],
+    "jerarquiaDecision": 3
+  },
+  "Metrosalud": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "ADRIANA VELÁSQUEZ ARANGO",
+    "cargoTitular": "Gerente General de Metrosalud",
+    "entidadCompleta": "Empresa Social del Estado Metrosalud",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["centros de salud", "primer nivel de atención", "salud barrial", "UPA", "unidades de vida articulada"],
+    "jerarquiaDecision": 2
+  },
+  "Hospital General de Medellín": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "JUAN DAVID ARTEAGA FLÓREZ",
+    "cargoTitular": "Gerente del Hospital General de Medellín",
+    "entidadCompleta": "Hospital General de Medellín Luz Castro de Gutiérrez E.S.E.",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["hospital", "alta complejidad", "urgencias", "referencia regional", "atención médica especializada"],
+    "jerarquiaDecision": 2
+  },
+  "Telemedellín": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "GISELLE VANESSA PALACIO OLAYO",
+    "cargoTitular": "Gerente de Telemedellín",
+    "entidadCompleta": "Telemedellín",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["televisión pública", "medios de comunicación", "canal local", "contenido audiovisual"],
+    "jerarquiaDecision": 6
+  },
+  "Metroplús": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "KATHERINE MANCO QUIROZ",
+    "cargoTitular": "Gerente de Metroplús",
+    "entidadCompleta": "Metroplús S.A.",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["transporte masivo", "buses", "carriles exclusivos", "BRT", "transporte público"],
+    "jerarquiaDecision": 3
+  },
+  "Terminales de Medellín": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "OVIDIO ANTONIO BUITRAGO SIERRA",
+    "cargoTitular": "Gerente de Terminales de Medellín",
+    "entidadCompleta": "Terminales de Transporte de Medellín S.A.",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["terminales de transporte", "transporte intermunicipal", "terminal norte", "terminal sur"],
+    "jerarquiaDecision": 5
+  },
+  "Ruta N": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "CAROLINA LONDOÑO PELÁEZ",
+    "cargoTitular": "Directora de Ruta N",
+    "entidadCompleta": "Corporación Ruta N Medellín",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["ciencia", "tecnología", "innovación", "inversión tecnológica", "startups", "emprendimiento tecnológico"],
+    "jerarquiaDecision": 5
+  },
+  "Plaza Mayor": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "RICARDO LEÓN GALINDO SUÁREZ",
+    "cargoTitular": "Gerente de Plaza Mayor",
+    "entidadCompleta": "Plaza Mayor Medellín Convenciones y Exposiciones S.A.",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["centro de convenciones", "eventos de ciudad", "exposiciones", "congresos"],
+    "jerarquiaDecision": 6
+  },
+  "Agencia APP": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "DANIEL FELIPE ESCOBAR VALENCIA",
+    "cargoTitular": "Director de la Agencia APP",
+    "entidadCompleta": "Agencia de Alianzas Público-Privadas de Medellín",
+    "nivel": "descentralizado",
+    "tipo": "unidad",
+    "areasTematicas": ["alianzas público-privadas", "paisaje urbano", "APP", "proyectos público-privados"],
+    "jerarquiaDecision": 6
+  },
+  "ESU": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "MATEO GONZÁLEZ BENÍTEZ",
+    "cargoTitular": "Gerente de ESU",
+    "entidadCompleta": "Empresa de Seguridad Urbana de Medellín (ESU)",
+    "nivel": "descentralizado",
+    "tipo": "empresa",
+    "areasTematicas": ["seguridad urbana", "tecnología para seguridad", "logística operativa"],
+    "jerarquiaDecision": 3
+  },
+  "Gerencia del Centro": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "JULIANA CORAL POSADA",
+    "cargoTitular": "Gerente del Centro",
+    "entidadCompleta": "Gerencia del Centro de Medellín",
+    "nivel": "central",
+    "tipo": "gerencia",
+    "areasTematicas": ["comuna 10", "La Candelaria", "El Poblado", "recuperación centro", "centro de Medellín"],
+    "jerarquiaDecision": 5
+  },
+  "Gerencia de Corregimientos": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "ANDRÉS FELIPE LÓPEZ VERGARA",
+    "cargoTitular": "Gerente de Corregimientos",
+    "entidadCompleta": "Gerencia de Corregimientos de Medellín",
+    "nivel": "central",
+    "tipo": "gerencia",
+    "areasTematicas": ["zonas rurales", "Santa Elena", "San Cristóbal", "corregimientos", "zona rural", "campo"],
+    "jerarquiaDecision": 5
+  },
+  "Gerencia Étnica": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "JOHNATAN DAVID HERNÁNDEZ SERNA",
+    "cargoTitular": "Gerente Étnico",
+    "entidadCompleta": "Gerencia Étnica de Medellín",
+    "nivel": "central",
+    "tipo": "gerencia",
+    "areasTematicas": ["comunidades afro", "indígenas", "diversidad étnica", "políticas étnicas"],
+    "jerarquiaDecision": 6
+  },
+  "Gerencia de Diversidades Sexuales": {
+    "titulo": "Doctor",
+    "tratamiento": "Respetado doctor",
+    "nombreTitular": "EDGAR YEPES LONDOÑO",
+    "cargoTitular": "Gerente de Diversidades Sexuales",
+    "entidadCompleta": "Gerencia de Diversidades Sexuales de Medellín",
+    "nivel": "central",
+    "tipo": "gerencia",
+    "areasTematicas": ["LGBTIQ+", "diversidad sexual", "derechos población LGBTIQ+"],
+    "jerarquiaDecision": 6
+  },
+  "Gerencia de Proyectos Estratégicos": {
+    "titulo": "Doctora",
+    "tratamiento": "Respetada doctora",
+    "nombreTitular": "GLORIA PATRICIA GARCÉS MEJÍA",
+    "cargoTitular": "Gerente de Proyectos Estratégicos",
+    "entidadCompleta": "Gerencia de Proyectos Estratégicos de Medellín",
+    "nivel": "central",
+    "tipo": "gerencia",
+    "areasTematicas": ["macroproyectos", "Metro de la 80", "proyectos estratégicos", "grandes obras"],
+    "jerarquiaDecision": 4
+  },
+  "_guiaFiltrado": {
+    "_descripcion": "Lógica de decisión para que la IA priorice correctamente la dependencia según el tipo de denuncia",
+    "_version": "2026",
+    "_fuente": "Guía Técnica de Estructura Orgánica y Liderazgo Administrativo — Distrito Especial de Medellín 2026",
+    "reglas": [
+      {
+        "orden": 1,
+        "condicion": "Hecho presuntamente delictivo o de orden público inmediato (crimen, amenazas, grupos armados, extorsión, combos)",
+        "dependencia": "Secretaría de Seguridad y Convivencia"
+      },
+      {
+        "orden": 2,
+        "condicion": "Queja sobre un servidor público o deficiencia en un trámite distrital",
+        "dependencias": ["Secretaría de Gestión Humana y Servicio a la Ciudadanía", "Secretaría de Evaluación y Control"]
+      },
+      {
+        "orden": 3,
+        "condicion": "Servicios públicos: energía eléctrica, agua, gas, saneamiento",
+        "dependencia": "EPM"
+      },
+      {
+        "orden": 4,
+        "condicion": "Servicios públicos: aseo, basuras, escombros, recolección de residuos",
+        "dependencia": "Emvarias"
+      },
+      {
+        "orden": 5,
+        "condicion": "Infraestructura barrial: huecos, puentes, andenes, vías deterioradas, obra pública",
+        "dependencia": "Secretaría de Infraestructura Física"
+      },
+      {
+        "orden": 6,
+        "condicion": "Violación urbanística: construcciones sin licencia, invasión espacio público",
+        "dependencia": "Secretaría de Gestión y Control Territorial"
+      },
+      {
+        "orden": 7,
+        "condicion": "Vulneración de derechos en zona rural o corregimiento",
+        "dependencias": ["Secretaría de Paz y Derechos Humanos", "Gerencia de Corregimientos"]
+      },
+      {
+        "orden": 8,
+        "condicion": "Movilidad: tránsito, semáforos, transporte público, pico y placa",
+        "dependencia": "Secretaría de Movilidad"
+      },
+      {
+        "orden": 9,
+        "condicion": "Medio ambiente: contaminación, animales, ruido, quebradas, árboles",
+        "dependencia": "Secretaría de Medio Ambiente"
+      },
+      {
+        "orden": 10,
+        "condicion": "Salud pública, EPS, IPS, red hospitalaria",
+        "dependencia": "Secretaría de Salud"
+      },
+      {
+        "orden": 11,
+        "condicion": "Educación: colegios, alimentación escolar, infraestructura educativa",
+        "dependencia": "Secretaría de Educación"
+      },
+      {
+        "orden": 12,
+        "condicion": "Escenarios deportivos, canchas, polideportivos, recreación",
+        "dependencia": "INDER"
+      },
+      {
+        "orden": 13,
+        "condicion": "Vivienda: subsidios, mejoramiento de vivienda, reasentamientos",
+        "dependencia": "ISVIMED"
+      },
+      {
+        "orden": 14,
+        "condicion": "Violencia de género, violencia contra la mujer",
+        "dependencia": "Secretaría de las Mujeres"
+      },
+      {
+        "orden": 15,
+        "condicion": "Emergencias, desastres naturales, deslizamientos, inundaciones",
+        "dependencia": "DAGRD"
+      }
+    ]
   }
 }

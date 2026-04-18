@@ -106,7 +106,11 @@ CASOS ESPECIALES: si menciona corrupción/extorsión/grupos armados/sicariato �
 
 CUANDO TENGAS LA DESCRIPCIÓN DEL PROBLEMA:
 Clasifica e incluye en datosExtraidos:
-- dependencia: nombre exacto de la secretaría/entidad competente (puede ser múltiple separado por coma si aplica a varias)
+- dependencia: nombre exacto de la secretaría/entidad competente
+  REGLA CRÍTICA: identifica la dependencia PRINCIPAL (competencia más fuerte y directa).
+  Solo añade dependencias adicionales (separadas por coma) si el caso involucra CLARAMENTE
+  competencias diferentes y complementarias (ej: basura en espacio público → "Emvarias, Secretaría de Gestión y Control Territorial").
+  La mayoría de casos tiene UNA sola dependencia.
   Guía: huecos/vías/puentes→"Secretaría de Infraestructura Física", basura/aseo→"Emvarias", agua/luz/gas→"EPM", tránsito/semáforos→"Secretaría de Movilidad", crimen/inseguridad→"Secretaría de Seguridad y Convivencia", salud/EPS→"Secretaría de Salud", colegio/PAE→"Secretaría de Educación", construcción ilegal→"Secretaría de Gestión y Control Territorial", violencia género→"Secretaría de las Mujeres", emergencias→"DAGRD"
 - esEspecial: true si menciona corrupción/extorsión/vacunas/grupos armados/sicariato
 
@@ -125,6 +129,27 @@ export interface RespuestaChatbot {
   datosExtraidos: Record<string, unknown>;
   etapaSiguiente: 'recopilando' | 'esperando_solicitud' | 'confirmando' | 'finalizado' | 'especial_cerrado';
   listaParaRadicar: boolean;
+}
+
+/** Resultado del filtrado de la solicitud adicional del ciudadano */
+export interface FiltroSolicitud {
+  incluir: boolean;
+  solicitudFormateada: string | null;
+}
+
+/** Una dependencia dentro de una clasificación estructurada */
+export interface DependenciaClasificada {
+  nombre: string;
+  justificacion: string;
+  solicitudEspecifica: string;
+}
+
+/** Clasificación estructurada multi-dependencia (mejora IA 1) */
+export interface ClasificacionEstructurada {
+  esEspecial: boolean;
+  dependencias: DependenciaClasificada[];
+  asunto: string;
+  esPrincipal: string;
 }
 
 @Injectable()
@@ -203,6 +228,107 @@ export class GeminiService {
     if (/vivienda|arrendamiento|inquilinato/.test(d))                      return 'ISVIMED';
     if (/construcci[oó]n ilegal|urbanismo|espacio p[uú]blico/.test(d))    return 'Secretaría de Gestión y Control Territorial';
     return 'Secretaría de Gobierno y Gestión del Gabinete';
+  }
+
+  /**
+   * Clasificación estructurada con selección inteligente de múltiples dependencias.
+   * Solo devuelve múltiples si el caso involucra competencias CLARAMENTE diferentes
+   * y complementarias. Temperatura baja (0.15) para máxima consistencia.
+   */
+  async clasificarDenunciaEstructurada(
+    descripcion: string,
+    ubicacion: string,
+    barrio?: string,
+  ): Promise<ClasificacionEstructurada | null> {
+    const prompt = `Analiza esta denuncia ciudadana de Medellín Colombia.
+
+Denuncia: ${descripcion.substring(0, 600)}
+Ubicación: ${ubicacion}${barrio ? `, ${barrio}` : ''}
+
+REGLA CRÍTICA: Identifica la dependencia PRINCIPAL que tiene la competencia más fuerte y directa.
+Solo adiciona dependencias secundarias si:
+1. La problemática involucra CLARAMENTE múltiples competencias (ej: basura ilegal en espacio público → Emvarias para aseo + Gestión Territorial para control del espacio).
+2. Cada dependencia adicional tiene una función DIFERENTE y específica que aportar.
+3. No repitas competencias similares.
+
+La mayoría de casos deben tener UNA sola dependencia.
+
+Responde SOLO con JSON sin markdown:
+{
+  "esEspecial": boolean,
+  "dependencias": [
+    {
+      "nombre": "Nombre exacto de la dependencia",
+      "justificacion": "Por qué esta específicamente",
+      "solicitudEspecifica": "Qué se le pide a ESTA dependencia"
+    }
+  ],
+  "asunto": "VERBO INFINITIVO + DESCRIPCIÓN CONCISA EN MAYÚSCULAS (máx 12 palabras)",
+  "esPrincipal": "Nombre de la dependencia principal"
+}`;
+
+    try {
+      const model = this.genAI.getGenerativeModel({
+        model: MODEL_LEGAL,
+        systemInstruction: CONTEXTO_MEDELLIN,
+        generationConfig: { ...BASE_CONFIG, temperature: 0.15, maxOutputTokens: 800 },
+      });
+      const result  = await model.generateContent(prompt);
+      const jsonStr = this.extraerJson(result.response.text());
+      if (!jsonStr) return null;
+      const p = JSON.parse(jsonStr) as Partial<ClasificacionEstructurada>;
+      if (!Array.isArray(p.dependencias) || p.dependencias.length === 0) return null;
+      return {
+        esEspecial:   p.esEspecial ?? false,
+        dependencias: p.dependencias,
+        asunto:       (p.asunto ?? '').toUpperCase().trim(),
+        esPrincipal:  p.esPrincipal ?? p.dependencias[0].nombre,
+      };
+    } catch (err) {
+      this.logger.warn(`clasificarDenunciaEstructurada falló: ${(err as Error).message?.substring(0, 80)}`);
+      return null;
+    }
+  }
+
+  /**
+   * Filtra una solicitud adicional del ciudadano antes de incluirla en un oficio oficial.
+   * Devuelve { incluir, solicitudFormateada } según criterio jurídico.
+   */
+  async filtrarSolicitudAdicional(solicitud: string): Promise<FiltroSolicitud> {
+    const prompt = `El ciudadano quiere agregar esta solicitud adicional a un oficio oficial del concejal de Medellín:
+"${solicitud.substring(0, 400)}"
+
+¿Es apropiado incluirla en un oficio oficial?
+Criterios para incluirla:
+- Es una solicitud formal y razonable a una entidad
+- Pide información, acción o respuesta específica
+- No es una queja informal o comentario personal
+- No es algo que ya está implícito en las solicitudes estándar
+
+Responde SOLO con JSON sin markdown:
+{
+  "incluir": boolean,
+  "solicitudFormateada": "versión formal si se incluye, null si no"
+}`;
+
+    try {
+      const model = this.genAI.getGenerativeModel({
+        model: MODEL_LEGAL,
+        systemInstruction: SYSTEM_PROMPT_LEGAL,
+        generationConfig: { ...BASE_CONFIG, temperature: 0.2, maxOutputTokens: 400 },
+      });
+      const result  = await model.generateContent(prompt);
+      const jsonStr = this.extraerJson(result.response.text());
+      if (!jsonStr) return { incluir: true, solicitudFormateada: solicitud };
+      const p = JSON.parse(jsonStr) as Partial<FiltroSolicitud>;
+      return {
+        incluir:             p.incluir ?? true,
+        solicitudFormateada: p.solicitudFormateada ?? null,
+      };
+    } catch (err) {
+      this.logger.warn(`filtrarSolicitudAdicional falló: ${(err as Error).message?.substring(0, 80)}`);
+      return { incluir: true, solicitudFormateada: solicitud };
+    }
   }
 
   async clasificarDenuncia(descripcion: string): Promise<{

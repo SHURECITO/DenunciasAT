@@ -128,14 +128,29 @@ export class EstadisticasService implements OnModuleInit {
     return this.withRunner(async (runner) => {
       const { clause, params } = this.buildWhere(desde, hasta);
 
+      // Cuando una denuncia tiene múltiples dependencias concatenadas con coma
+      // ("Sec. A, Sec. B, Emvarias"), unnest las separa y cuenta cada una por separado.
+      // Se excluyen denuncias especiales que no pasan por el flujo normal.
+      const whereExtra = clause
+        ? `${clause} AND "esEspecial" = false AND "dependenciaAsignada" IS NOT NULL`
+        : `WHERE "esEspecial" = false AND "dependenciaAsignada" IS NOT NULL`;
+
       const rows: { dependencia: string; total: number; resueltas: number }[] =
         await runner.query(
-          `SELECT
-            COALESCE("dependenciaAsignada", 'Sin asignar') AS dependencia,
+          `WITH dependencias_separadas AS (
+            SELECT
+              TRIM(unnest(string_to_array("dependenciaAsignada", ','))) AS dependencia,
+              estado
+            FROM denuncias
+            ${whereExtra}
+          )
+          SELECT
+            dependencia,
             COUNT(*)::int AS total,
             COUNT(CASE WHEN estado = 'CON_RESPUESTA' THEN 1 END)::int AS resueltas
-          FROM denuncias ${clause}
-          GROUP BY COALESCE("dependenciaAsignada", 'Sin asignar')
+          FROM dependencias_separadas
+          WHERE dependencia <> ''
+          GROUP BY dependencia
           ORDER BY total DESC`,
           params,
         );

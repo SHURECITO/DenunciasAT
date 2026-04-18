@@ -186,4 +186,16 @@ export class DenunciasService {
     if (!d) return null;
     return { nombreCiudadano: d.nombreCiudadano, cedula: d.cedula, esAnonimo: d.esAnonimo };
   }
+
+  /**
+   * Busca una denuncia parcial (incompleta:true) por teléfono.
+   * Devuelve null si no existe (no lanza 404). Usado por el chatbot para
+   * decidir si crear una nueva denuncia o completar la parcial existente.
+   */
+  async findParcialPorTelefono(telefono: string): Promise<Denuncia | null> {
+    return this.denunciasRepo.findOne({
+      where: { telefono, incompleta: true },
+      order: { fechaCreacion: 'DESC' },
+    });
+  }
 }

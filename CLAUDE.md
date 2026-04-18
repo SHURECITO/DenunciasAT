@@ -62,12 +62,15 @@ ubicacion, barrio (nullable), comuna (nullable), descripcion,
 descripcionResumen (nullable, text — generado por Gemini),
 estado (enum), dependenciaAsignada (indexed), esEspecial, esAnonimo,
 origenManual, documentoRevisado, documentoUrl, documentoGeneradoOk,
-documentoGeneradoEn, documentoPendiente, incompleta, fechaCreacion, fechaActualizacion
+documentoGeneradoEn, documentoPendiente, incompleta,
+respuestasPorDependencia (jsonb, default '[]'),
+fechaCreacion, fechaActualizacion
 ```
 - `cedula`: string vacía para parciales, 'ANONIMO' para denuncias anónimas
 - `esAnonimo`: true cuando ciudadano escribe 'anonimo' como nombre
 - `barrio`/`comuna`: capturados por chatbot IA, opcionales para manual
 - `descripcionResumen`: resumen generado por Gemini al radicar
+- `respuestasPorDependencia`: array `{dependencia, respondio, fechaRespuesta, observacion}` para multi-destinatario — UI marca respondidas una a una
 
 ### Mensaje
 ```
@@ -165,6 +168,11 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **document-service validación**: antes de subir a MinIO valida ZIP + `xmlns:r` + `FIRMA_NOMBRE`/`FIRMA_CARGO` + `headerReference`/`footerReference` + ausencia del nombre del ciudadano en HECHOS. Si falla: `documentoGeneradoOk:false` sin subir.
 - **solicitudAdicional / imagenesEvidencia**: campos nullable en entidad Denuncia; chatbot los captura y pasa al radicar
 - **Evolution**: API key UUID obligatorio (reset: `docker volume rm denunciasat_evolution_data`); parche @lid automático al startup en whatsapp-service
+- **Mutex WhatsApp (S24)**: Redis `lock:{numero}` (TTL 15s) + `queue:{numero}` (LPUSH/RPOP) — drena secuencial con delay 1500ms. Media a MinIO ANTES del lock (URL Evolution expira). `limpiarNumero()` ignora `@g.us`/`@broadcast` y trunca JID @lid >13 dígitos.
+- **Upsert parcial (S24)**: chatbot consulta `GET /denuncias/parcial/telefono/:telefono` antes de radicar; si existe parcial `incompleta:true`, hace PATCH con `incompleta:false` + datos finales. Evita duplicados.
+- **IA multi-dep selectiva (S24)**: `clasificarDenunciaEstructurada()` (temp 0.15) devuelve `[{dependencia, solicitud}]`. Solo añade secundaria si competencia es genuinamente distinta. Document-builder genera sub-bloques SOLICITUD por dependencia. `filtrarSolicitudAdicional()` remueve inapropiado antes del oficio.
+- **Content-Types imágenes (S24)**: `extensionesUsadas: Set` añade `<Default Extension>` a `[Content_Types].xml` si falta. docPr id = `100 + imgCount`. Sin pie de foto.
+- **Stats dependencias separadas (S24)**: `string_to_array + unnest` en SQL splitea CSV. UI trunca nombres a 30 chars con "…".
 
 ## Infraestructura operacional
 
@@ -179,21 +187,9 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 
 ## Historial de sesiones (comprimido)
 
-**Sesiones 1–21 (2026-04-14/18) — comprimido:** Scaffold monorepo NestJS, dashboard-api (JWT, CRUD, SEQUENCE), frontend Next.js, Docker multi-stage, Evolution API (UUID, parche @lid), chatbot IA conversacional (Gemini, Redis, historial, deep merge, confirmación server-side, normalización `nombreCompleto`→`nombre`), document-service con adm-zip + Plantilla.docx + dependencias.json (20+ entidades, múltiples destinatarios), SYSTEM_PROMPT_LEGAL, generarHechos/generarAsunto, imágenes OOXML inline con portrait handling, solicitudAdicional + imagenesEvidencia. MinIO completo (`@app/storage`, `minio-init`, whatsapp-service sube media inmediato, document-service sube .docx tras generación, dashboard-api descarga buffer directo, `DocumentLifecycleService` cron 3am limpia .docx 5d post-CON_RESPUESTA). UI detalle: polling 8s, retry button, columna Doc. Auditoría E2E destructiva sesión 21: estados avanzan/rechazan correctamente, usuarios/stats/mensajes OK, robusto ante MinIO down, Redis restart, emojis, concurrencia; Gemini 429/503 intermitente en picos (no-bug).
+**Sesiones 1–23 (2026-04-14/18) — comprimido:** Scaffold monorepo NestJS, dashboard-api (JWT, CRUD, SEQUENCE), frontend Next.js, Docker multi-stage, Evolution API (UUID, parche @lid), chatbot IA conversacional (Gemini, Redis, historial, deep merge, confirmación server-side, normalización `nombreCompleto`→`nombre`), document-service con adm-zip + Plantilla.docx + dependencias.json (20+ entidades), MinIO completo (`@app/storage`, whatsapp-service sube media inmediato, document-service sube .docx, dashboard-api descarga buffer directo, `DocumentLifecycleService` cron 3am limpia 5d post-CON_RESPUESTA). Fixes document-service sesión 22: namespaces preservados (regex `/<w:document[^>]*>/`), firma Mercurio con placeholders + tabla 4320×1440 DXA, `getImageDimensions`/`calcularDimensionesImagen` robustos, validación pre-upload (ZIP + xmlns:r + FIRMA_* + header/footerReference + sin nombre ciudadano). Sesión 23: reset completo (TRUNCATE + sequences + FLUSHDB + buckets), diagnóstico UTF-8 (no-bug, los `◆` venían del shell cp1252 de Windows), E2E limpio verificado.
 
-**Sesión 23 (2026-04-18) — Reset completo y diagnóstico UTF-8:**
-- **UTF-8 no es bug del sistema**: PostgreSQL server/client_encoding UTF8, API `application/json; charset=utf-8`, bytes UTF-8 válidos (118 pares en 20 KB), Next.js auto-añade `<meta charset>`. Los `◆`/`�` que se ven en terminal son del shell cp1252 de Windows, no de los datos. En el navegador los datos se renderizan correctos. Una sola fila vieja (DAT-2026-04-16 ID 34) tenía `�` por un bug ya corregido en sesiones anteriores; se eliminó con el TRUNCATE de esta sesión.
-- **Reset total**: `TRUNCATE denuncias, mensajes`; `radicado_seq`, `denuncias_id_seq`, `mensajes_id_seq` reseteadas a 1 (próximo radicado = DAT-000001). Redis `FLUSHDB` (DBSIZE=0). MinIO buckets `denunciasat-evidencias` y `denunciasat-documentos` recreados vacíos (removidos DAT-000004/013/022.docx y test_img.jpg).
-- **Limpieza de archivos**: eliminados `prueba_flujo_normal.docx` y `dist/` (build temporal). Docker image prune: 28 KB liberados. Reportados para decisión del usuario (NO eliminados): `Plantilla.docx` en raíz (duplicado de 53 KB vs. 213 KB autoritativo en `infrastructure/templates/`), `denunciantes.xlsx`, `evolution-swagger.json` (91 B, casi vacío), `ev-repo/` (clon de Evolution API), `infrastructure/templates/membrete.docx`. Volumen huérfano `denunciasat_documentos_data` sigue listado pero ya no se monta (MinIO reemplazó al filesystem).
-- **E2E limpio verificado**: chatbot con `573011111111` responde "Hola, bienvenido al asistente del concejal Andrés Tobón. ¿Cuál es tu nombre completo, por favor?" — 100 bytes UTF-8 válidos con tildes y ¿.
-
-**Sesión 22 (2026-04-18) — Fixes críticos document-service:**
-- **Namespaces completos**: regex `^<w:document…` fallaba (doc empieza con `<?xml…`); corregido a `/<w:document[^>]*>/`. Ahora el opening tag preserva los 35 namespaces (xmlns:w, r, wp, a, etc.) de la plantilla → Word ya no muestra reparación ni elimina membrete.
-- **Firma Mercurio**: eliminado `ANDRÉS FELIPE TOBÓN VILLADA` hardcodeado; reemplazado por tabla de firma (4320×1440 DXA, borde inferior) + placeholders `FIRMA_NOMBRE`/`FIRMA_CARGO` (Arial 11) + `Radicó: ` (Arial 9 cursiva #666666). Todo alineado izquierda.
-- **Imágenes robustas**: `getImageDimensions(buf)` (devuelve {width,height} en px) + `calcularDimensionesImagen(w,h)` (EMU con MAX 5029200×3657600, MIN 1828800 px×9525). Extensión por magic bytes (no URL). Default 3000×2000 si falla detección.
-- **Validación pre-upload**: antes de subir a MinIO se verifica ZIP, `xmlns:r`, placeholders FIRMA_*, `headerReference`/`footerReference`, ausencia del nombre del ciudadano en HECHOS. Si falla: notifica error sin subir.
-- **sectPr rIds reales**: la nota del ticket decía rId9/rId10, pero la plantilla tiene rId10 (header) / rId11 (footer). El código ya extrae el sectPr directo de la plantilla, así que los IDs siempre están sincronizados.
-- **E2E verificado**: DAT-000022 regenerado con evidencia MinIO embebida (264 KB, xmlns:r OK, 35 namespaces, tabla firma, Arial, #666666, sin nombre ciudadano en HECHOS).
+**Sesión 24 (2026-04-18) — 7 bugs + 4 mejoras IA/UX:** (detalles en "Patrones técnicos") mutex Redis WhatsApp, upsert parcial (no duplica), `@lid`>13dig, Content-Types imgs + docPr 100+, sin pie de foto, chat sort ASC, stats unnest CSV. IA: `clasificarDenunciaEstructurada` (multi-dep selectivo temp 0.15), sub-bloques SOLICITUD por dep, `filtrarSolicitudAdicional`. UX: `respuestasPorDependencia` JSONB + tabla "marcar respondida".
 
 ---
 

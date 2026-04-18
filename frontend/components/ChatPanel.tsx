@@ -16,6 +16,11 @@ const TIPO_LABEL: Record<string, string> = {
 };
 
 export default function ChatPanel({ mensajes, open, onClose }: ChatPanelProps) {
+  // Ordenar por timestamp ASC por si el backend entrega un orden inestable
+  const mensajesOrdenados = [...mensajes].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
+
   return (
     <>
       {/* Overlay */}
@@ -36,7 +41,7 @@ export default function ChatPanel({ mensajes, open, onClose }: ChatPanelProps) {
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
           <div>
             <h2 className="text-sm font-semibold text-gray-900">Conversación WhatsApp</h2>
-            <p className="text-xs text-gray-400">{mensajes.length} mensajes</p>
+            <p className="text-xs text-gray-400">{mensajesOrdenados.length} mensajes</p>
           </div>
           <button
             onClick={onClose}
@@ -50,12 +55,12 @@ export default function ChatPanel({ mensajes, open, onClose }: ChatPanelProps) {
 
         {/* Burbujas */}
         <div className="flex-1 overflow-y-auto space-y-3 px-4 py-4" style={{ background: '#e5ddd5' }}>
-          {mensajes.length === 0 ? (
+          {mensajesOrdenados.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               <p className="text-sm text-gray-500">Sin mensajes registrados</p>
             </div>
           ) : (
-            mensajes.map((m) => {
+            mensajesOrdenados.map((m) => {
               const isEntrante = m.direccion === 'ENTRANTE';
               return (
                 <div

@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { GeminiService } from '@app/ai';
 import { MinioService } from '@app/storage';
 import { DashboardApiService, DenunciaData } from './dashboard-api.service';
-import { DocumentBuilderService } from './document-builder.service';
+import { DocumentBuilderService, DependenciaSolicitud } from './document-builder.service';
 
 import AdmZip = require('adm-zip');
 
@@ -50,9 +50,30 @@ export class DocumentService {
     try {
       const dependencia = denuncia.dependenciaAsignada ?? 'la entidad competente';
       const resumen     = denuncia.descripcionResumen ?? denuncia.descripcion.substring(0, 200);
+      const depList     = dependencia.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+      const hayMultiple = depList.length > 1;
+
+      // Cuando hay múltiples dependencias, pedir a Gemini solicitudes específicas por cada una.
+      // Si el resultado trae solicitudes → las usamos para construir la sección SOLICITUD por bloques.
+      let dependenciasEstructuradas: DependenciaSolicitud[] | undefined;
+      let asuntoEstructurado: string | undefined;
+      if (hayMultiple) {
+        const clasif = await this.gemini.clasificarDenunciaEstructurada(
+          denuncia.descripcion,
+          denuncia.ubicacion,
+          denuncia.barrio ?? undefined,
+        );
+        if (clasif && clasif.dependencias.length > 1) {
+          dependenciasEstructuradas = clasif.dependencias.map((d) => ({
+            nombre:              d.nombre,
+            solicitudEspecifica: d.solicitudEspecifica,
+          }));
+          if (clasif.asunto) asuntoEstructurado = clasif.asunto;
+        }
+      }
 
       // Generar HECHOS y ASUNTO en paralelo (ambos usan Gemini con el prompt jurídico)
-      const [hechos, asunto] = await Promise.all([
+      const [hechos, asuntoGenerado] = await Promise.all([
         this.gemini.generarHechos({
           nombreCiudadano: denuncia.nombreCiudadano,
           esAnonimo:       denuncia.esAnonimo,
@@ -62,11 +83,11 @@ export class DocumentService {
           descripcion:     denuncia.descripcion,
           dependencia,
         }),
-        this.gemini.generarAsunto({
-          descripcionResumen: resumen,
-          dependencia,
-        }),
+        asuntoEstructurado
+          ? Promise.resolve(asuntoEstructurado)
+          : this.gemini.generarAsunto({ descripcionResumen: resumen, dependencia }),
       ]);
+      const asunto = asuntoGenerado;
 
       // Deserializar imágenes de evidencia (almacenadas como JSON string)
       let imagenes: string[] = [];
@@ -88,6 +109,7 @@ export class DocumentService {
         solicitudAdicional: denuncia.solicitudAdicional ?? undefined,
         imagenes,
         rutaDestino: rutaArchivo,
+        dependenciasEstructuradas,
       });
 
       // Leer buffer y validar integridad antes de subir a MinIO

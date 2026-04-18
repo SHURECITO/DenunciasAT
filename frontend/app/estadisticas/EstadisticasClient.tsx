@@ -384,14 +384,17 @@ export default function EstadisticasClient() {
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart
                       layout="vertical"
-                      data={porDep.slice(0, 8)}
+                      data={porDep.slice(0, 8).map((d) => ({
+                        ...d,
+                        dependenciaCorta: d.dependencia.length > 30 ? d.dependencia.slice(0, 30) + '…' : d.dependencia,
+                      }))}
                       margin={{ top: 0, right: 10, left: 0, bottom: 0 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
                       <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
                       <YAxis
                         type="category"
-                        dataKey="dependencia"
+                        dataKey="dependenciaCorta"
                         width={140}
                         tick={{ fontSize: 10 }}
                       />

@@ -8,6 +8,12 @@ import type { DenunciaData } from './dashboard-api.service';
 
 import AdmZip = require('adm-zip');
 
+/** Una dependencia con su solicitud específica (para oficios multi-destinatario) */
+export interface DependenciaSolicitud {
+  nombre: string;
+  solicitudEspecifica: string;
+}
+
 // ─── Rutas ────────────────────────────────────────────────────────────────────
 const TEMPLATE_PATH = join(process.cwd(), 'infrastructure', 'templates', 'Plantilla.docx');
 const DEPS_PATH     = join(process.cwd(), 'infrastructure', 'config', 'dependencias.json');
@@ -27,6 +33,9 @@ export interface BuildInput {
   solicitudAdicional?: string;
   imagenes:          string[];
   rutaDestino:       string;
+  // Solicitudes específicas por dependencia (cuando hay múltiples destinatarios).
+  // Si se provee, se usa para renderizar sub-bloques en la sección SOLICITUD.
+  dependenciasEstructuradas?: DependenciaSolicitud[];
 }
 
 // ─── Meses en español ────────────────────────────────────────────────────────
@@ -379,6 +388,11 @@ export class DocumentBuilderService {
 
     // ── Imágenes de evidencia ─────────────────────────────────────────────────
     const imageRels: string[] = [];
+    // IDs numéricos de docPr únicos. Arranco alto para no colisionar con los del
+    // membrete (typical rId/docPr bajos están reservados a header/footer/image).
+    const DOCPR_BASE = 100;
+    // Extensiones de imagen usadas en el documento — se registrarán en [Content_Types].xml
+    const extensionesUsadas = new Set<string>();
     let imgCount = 0;
 
     for (const imgUrl of imagenes) {
@@ -392,20 +406,31 @@ export class DocumentBuilderService {
         const ext      = detectImageExt(imgBuf);
         const fileName = `evidencia_${imgCount}.${ext}`;
         const relId    = `rIdEv${imgCount}`;
+        const docPrId  = DOCPR_BASE + imgCount;
         const { width, height } = getImageDimensions(imgBuf);
         const dims     = calcularDimensionesImagen(width, height);
 
         zip.addFile(`word/media/${fileName}`, imgBuf);
+        extensionesUsadas.add(ext);
         imageRels.push(
           `<Relationship Id="${relId}" ` +
           `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" ` +
           `Target="media/${fileName}"/>`,
         );
 
-        body.push(imageParaXml(relId, imgCount, ext, dims));
-        body.push(p(`Evidencia fotográfica ${imgCount} aportada al despacho del concejal`, {
-          align: 'center', italic: true, size: 20, spacingAfter: 240,
-        }));
+        this.logger.log(
+          `Imagen agregada: ${JSON.stringify({
+            objectName: fileName,
+            rId: relId,
+            docPrId,
+            cx: dims.cx,
+            cy: dims.cy,
+            bufferSize: imgBuf.length,
+            extension: ext,
+          })}`,
+        );
+
+        body.push(imageParaXml(relId, docPrId, ext, dims));
       } catch (err) {
         this.logger.warn(`Error incluyendo imagen ${imgCount}: ${(err as Error).message}`);
       }
@@ -414,16 +439,45 @@ export class DocumentBuilderService {
     // ── SOLICITUD ─────────────────────────────────────────────────────────────
     body.push(p('SOLICITUD', { bold: true, align: 'center', spacingAfter: 240 }));
 
-    const solicitudes = [
-      `1. Que se realice una visita en el lugar ya mencionado con el fin de verificar la situación reportada.`,
-      `2. Que se informe sobre las acciones a implementar por parte de ${depList[0] ?? depStr} para dar solución efectiva a la problemática planteada.`,
-      `3. Que se garantice una respuesta oportuna conforme a los términos establecidos en el artículo 30 de la Ley 1755 de 2015, que establece un término máximo de diez (10) días para responder solicitudes entre autoridades.`,
-    ];
-    if (solicitudAdicional?.trim()) {
-      solicitudes.push(`4. ${solicitudAdicional.trim()}`);
-    }
-    for (const sol of solicitudes) {
-      body.push(p(sol, { align: 'justified', spacingAfter: 180 }));
+    const { dependenciasEstructuradas } = input;
+    const hayMultipleDep = depList.length > 1;
+
+    if (hayMultipleDep && dependenciasEstructuradas && dependenciasEstructuradas.length > 1) {
+      // Sub-bloques por dependencia cuando tenemos solicitudes específicas
+      for (let i = 0; i < dependenciasEstructuradas.length; i++) {
+        const dep = dependenciasEstructuradas[i];
+        body.push(p(`A la ${dep.nombre}:`, { bold: true, align: 'justified', spacingAfter: 120 }));
+        body.push(p(`1. ${dep.solicitudEspecifica}`, { align: 'justified', spacingAfter: 120 }));
+        if (i === 0) {
+          body.push(p(
+            '2. Que se garantice respuesta oportuna conforme al artículo 30 de la Ley 1755 de 2015.',
+            { align: 'justified', spacingAfter: 240 },
+          ));
+        } else {
+          const principal = dependenciasEstructuradas[0].nombre;
+          body.push(p(
+            `2. Que se informe sobre las acciones coordinadas con ${principal} para atender la situación.`,
+            { align: 'justified', spacingAfter: 240 },
+          ));
+        }
+      }
+      if (solicitudAdicional?.trim()) {
+        body.push(p('Solicitud adicional del ciudadano:', { bold: true, align: 'justified', spacingAfter: 120 }));
+        body.push(p(solicitudAdicional.trim(), { align: 'justified', spacingAfter: 180 }));
+      }
+    } else {
+      // Flujo estándar: una sola dependencia
+      const solicitudes = [
+        `1. Que se realice una visita en el lugar ya mencionado con el fin de verificar la situación reportada.`,
+        `2. Que se informe sobre las acciones a implementar por parte de ${depList[0] ?? depStr} para dar solución efectiva a la problemática planteada.`,
+        `3. Que se garantice una respuesta oportuna conforme a los términos establecidos en el artículo 30 de la Ley 1755 de 2015, que establece un término máximo de diez (10) días para responder solicitudes entre autoridades.`,
+      ];
+      if (solicitudAdicional?.trim()) {
+        solicitudes.push(`4. ${solicitudAdicional.trim()}`);
+      }
+      for (const sol of solicitudes) {
+        body.push(p(sol, { align: 'justified', spacingAfter: 180 }));
+      }
     }
 
     // ── Cierre legal ──────────────────────────────────────────────────────────
@@ -466,6 +520,31 @@ export class DocumentBuilderService {
       const relsXml    = zip.readAsText('word/_rels/document.xml.rels');
       const newRelsXml = relsXml.replace('</Relationships>', imageRels.join('') + '</Relationships>');
       zip.updateFile('word/_rels/document.xml.rels', Buffer.from(newRelsXml, 'utf8'));
+    }
+
+    // Registrar Content-Types para extensiones de imagen usadas (evita "No se puede mostrar")
+    if (extensionesUsadas.size > 0) {
+      const ctPath = '[Content_Types].xml';
+      const ctXml  = zip.readAsText(ctPath);
+      // Map extensiones a ContentTypes MIME
+      const CT_MAP: Record<string, string> = {
+        jpeg: 'image/jpeg',
+        jpg:  'image/jpeg',
+        png:  'image/png',
+      };
+      let nuevoCtXml = ctXml;
+      for (const ext of extensionesUsadas) {
+        const contentType = CT_MAP[ext];
+        if (!contentType) continue;
+        // Si ya existe un Default para esta extensión, no duplicar
+        const yaExiste = new RegExp(`<Default\\s+Extension="${ext}"`, 'i').test(nuevoCtXml);
+        if (yaExiste) continue;
+        const tag = `<Default Extension="${ext}" ContentType="${contentType}"/>`;
+        nuevoCtXml = nuevoCtXml.replace('</Types>', `${tag}</Types>`);
+      }
+      if (nuevoCtXml !== ctXml) {
+        zip.updateFile(ctPath, Buffer.from(nuevoCtXml, 'utf8'));
+      }
     }
 
     // ── Escribir archivo de salida ────────────────────────────────────────────

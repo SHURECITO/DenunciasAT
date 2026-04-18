@@ -6,6 +6,13 @@ export type DenunciaEstado = 'RECIBIDA' | 'EN_GESTION' | 'RADICADA' | 'CON_RESPU
 export type TipoMensaje = 'TEXTO' | 'AUDIO_TRANSCRITO' | 'IMAGEN' | 'PDF';
 export type DireccionMensaje = 'ENTRANTE' | 'SALIENTE';
 
+export interface RespuestaDependencia {
+  dependencia: string;
+  respondio: boolean;
+  fechaRespuesta: string | null;
+  observacion: string | null;
+}
+
 export interface Denuncia {
   id: number;
   radicado: string;
@@ -27,6 +34,7 @@ export interface Denuncia {
   comuna: string | null;
   descripcionResumen: string | null;
   esAnonimo: boolean;
+  respuestasPorDependencia: RespuestaDependencia[];
   fechaCreacion: string;
   fechaActualizacion: string;
 }

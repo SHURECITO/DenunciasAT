@@ -245,22 +245,49 @@ export class ChatbotService {
         ? JSON.stringify(d.imagenes)
         : undefined;
 
-      const { id, radicado } = await this.dashboardApi.crearDenuncia({
-        nombreCiudadano: nombreFinal,
-        cedula: cedulaRadicado,
-        telefono: d.telefono,
-        ubicacion: d.direccion ?? `${d.barrio ?? ''} - ${d.comuna ?? ''}`.trim(),
-        descripcion: d.descripcion ?? '',
-        dependenciaAsignada: d.dependencia,
-        esEspecial: false,
-        barrio: d.barrio,
-        comuna: d.comuna,
-        descripcionResumen: d.descripcionResumen,
-        esAnonimo,
-        documentoPendiente: true,
-        solicitudAdicional: d.solicitudAdicional?.trim() || undefined,
-        imagenesEvidencia: imagenesJson,
-      });
+      // Filtrar solicitud adicional por IA antes de guardarla en el oficio oficial
+      const solicitudFiltrada = await this.filtrarSolicitudAdicional(d.solicitudAdicional, numero);
+
+      // Si ya existe una denuncia parcial del mismo teléfono, la completamos en lugar
+      // de crear una nueva — así evitamos duplicados (registro parcial + completo).
+      const parcial = await this.dashboardApi.buscarParcialPorTelefono(d.telefono);
+
+      let id: number;
+      let radicado: string;
+      if (parcial && parcial.incompleta) {
+        this.logger.log(`[${numero}] Completando denuncia parcial existente #${parcial.id} (${parcial.radicado})`);
+        ({ id, radicado } = await this.dashboardApi.completarDenuncia(parcial.id, {
+          nombreCiudadano: nombreFinal,
+          cedula: cedulaRadicado,
+          ubicacion: d.direccion ?? `${d.barrio ?? ''} - ${d.comuna ?? ''}`.trim(),
+          descripcion: d.descripcion ?? '',
+          dependenciaAsignada: d.dependencia,
+          barrio: d.barrio,
+          comuna: d.comuna,
+          descripcionResumen: d.descripcionResumen,
+          esAnonimo,
+          documentoPendiente: true,
+          solicitudAdicional: solicitudFiltrada,
+          imagenesEvidencia: imagenesJson,
+        }));
+      } else {
+        ({ id, radicado } = await this.dashboardApi.crearDenuncia({
+          nombreCiudadano: nombreFinal,
+          cedula: cedulaRadicado,
+          telefono: d.telefono,
+          ubicacion: d.direccion ?? `${d.barrio ?? ''} - ${d.comuna ?? ''}`.trim(),
+          descripcion: d.descripcion ?? '',
+          dependenciaAsignada: d.dependencia,
+          esEspecial: false,
+          barrio: d.barrio,
+          comuna: d.comuna,
+          descripcionResumen: d.descripcionResumen,
+          esAnonimo,
+          documentoPendiente: true,
+          solicitudAdicional: solicitudFiltrada,
+          imagenesEvidencia: imagenesJson,
+        }));
+      }
 
       d.etapa = 'finalizado';
 
@@ -342,6 +369,31 @@ export class ChatbotService {
       'una persona de confianza del equipo del concejal se encargará de atenderte directamente.\n\n' +
       'Por favor estate pendiente.'
     );
+  }
+
+  /**
+   * Filtra la solicitud adicional del ciudadano con Gemini.
+   * Devuelve la versión formal si es apropiada para un oficio oficial, o undefined si no.
+   * Si falla el filtro por error técnico, conserva el texto original como best-effort.
+   */
+  private async filtrarSolicitudAdicional(
+    solicitud: string | undefined,
+    numero: string,
+  ): Promise<string | undefined> {
+    const texto = solicitud?.trim();
+    if (!texto) return undefined;
+
+    try {
+      const resultado = await this.gemini.filtrarSolicitudAdicional(texto);
+      if (!resultado.incluir) {
+        this.logger.log(`[${numero}] Solicitud adicional descartada por filtro IA: "${texto.substring(0, 60)}"`);
+        return undefined;
+      }
+      return resultado.solicitudFormateada ?? texto;
+    } catch (err) {
+      this.logger.warn(`[${numero}] Filtro IA falló, se conserva solicitud original: ${(err as Error).message}`);
+      return texto;
+    }
   }
 
   private async guardarParcialSiPosible(estado: EstadoConversacionIA, numero: string): Promise<void> {

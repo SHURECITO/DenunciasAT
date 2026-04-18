@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import DenunciaEstadoBadge from '@/components/DenunciaEstadoBadge';
 import ChatPanel from '@/components/ChatPanel';
-import { type Denuncia, type DenunciaEstado, type Mensaje } from '@/lib/api';
+import { type Denuncia, type DenunciaEstado, type Mensaje, type RespuestaDependencia } from '@/lib/api';
 
 const ESTADOS_SIGUIENTE: Record<DenunciaEstado, DenunciaEstado | null> = {
   RECIBIDA: 'EN_GESTION',
@@ -108,6 +108,56 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
       router.refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al cambiar estado');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Construye el arreglo de seguimiento a partir de la dependencia asignada (separada por coma).
+  // Si la denuncia ya tiene respuestasPorDependencia en la BD, se usa como fuente de verdad.
+  function seguimientoInicial(): RespuestaDependencia[] {
+    if (denuncia.respuestasPorDependencia && denuncia.respuestasPorDependencia.length > 0) {
+      return denuncia.respuestasPorDependencia;
+    }
+    const dependencias = (denuncia.dependenciaAsignada ?? '')
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return dependencias.map((dep) => ({
+      dependencia:    dep,
+      respondio:      false,
+      fechaRespuesta: null,
+      observacion:    null,
+    }));
+  }
+
+  const dependenciasList = (denuncia.dependenciaAsignada ?? '')
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const esMultiDependencia = dependenciasList.length > 1;
+  const seguimiento = seguimientoInicial();
+
+  async function marcarRespondida(dep: string) {
+    setLoading(true);
+    setError('');
+    try {
+      const ahora = new Date().toISOString();
+      const nuevo = seguimientoInicial().map((r) =>
+        r.dependencia === dep
+          ? { ...r, respondio: true, fechaRespuesta: ahora }
+          : r,
+      );
+      const res = await fetch(`/api/denuncias/${denuncia.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ respuestasPorDependencia: nuevo }),
+      });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const updated: Denuncia = await res.json();
+      setDenuncia(updated);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al marcar respuesta');
     } finally {
       setLoading(false);
     }
@@ -228,6 +278,59 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
               {denuncia.descripcion}
             </p>
           </section>
+
+          {/* Seguimiento por dependencia (solo cuando hay múltiples) */}
+          {esMultiDependencia && (
+            <section className="rounded-xl border border-gray-200 bg-white p-6">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                Seguimiento por dependencia
+              </h2>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    <th className="pb-2 text-left">Dependencia</th>
+                    <th className="pb-2 text-center">Respondió</th>
+                    <th className="pb-2 text-left">Fecha respuesta</th>
+                    <th className="pb-2"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-gray-700">
+                  {seguimiento.map((r) => (
+                    <tr key={r.dependencia}>
+                      <td className="py-2 pr-2 font-medium">{r.dependencia}</td>
+                      <td className="py-2 text-center">
+                        {r.respondio ? (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                            ✅ Sí
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
+                            ⏳ No
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 text-xs text-gray-600">
+                        {r.fechaRespuesta
+                          ? new Date(r.fechaRespuesta).toLocaleDateString('es-CO')
+                          : '—'}
+                      </td>
+                      <td className="py-2 text-right">
+                        {!r.respondio && (
+                          <button
+                            onClick={() => marcarRespondida(r.dependencia)}
+                            disabled={loading}
+                            className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            Marcar respondida
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
 
           {/* Fechas */}
           <section className="rounded-xl border border-gray-200 bg-white p-6">
