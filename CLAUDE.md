@@ -188,6 +188,15 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - Chatbot: paso solicitudAdicional; campos `solicitudAdicional`/`imagenesEvidencia` en Denuncia
 - ANDRÉS FELIPE TOBÓN VILLADA (corregido)
 
+**Sesión 21 (2026-04-18) — Auditoría E2E destructiva:**
+- Verificada infra (10 servicios, 2 buckets MinIO, Redis, PostgreSQL, healthchecks 4 puertos OK)
+- Auditado código: chatbot (deep merge, server-side confirm, telefono limpio, parciales), document-builder (Plantilla.docx + adm-zip, dependencias.json, sin nombre ciudadano, multi-destinatario, MinIO), webhook (remoteJid limpio, fallback MinIO, 200-always)
+- Pruebas E2E: flujo normal completo radicó DAT-000022 con .docx 214KB en MinIO; documento valida ASUNTO infinitivo, 3 párrafos HECHOS sin nombre ciudadano, 4 puntos SOLICITUD, ANDRÉS FELIPE TOBÓN VILLADA, evidencia fotográfica embebida
+- Estados: rechaza RADICADA sin documentoRevisado, rechaza retroceder; usuarios: bloquea auto-toggle; estadísticas Excel/PDF generados; mensajes endpoint OK; especiales filtrado correcto
+- Estrés: reinicio sin pérdida de Redis state; mensajes vacíos/emoji/2000 chars manejados; concurrencia con estados independientes; MinIO down → chatbot sigue, webhook fallback a URL original
+- **Bug corregido**: Gemini ocasionalmente devuelve `nombreCompleto` en lugar de `nombre` causando "listaParaRadicar=true pero faltan: nombre". Fix en `chatbot.service.ts` línea 146-156: normaliza `nombreCompleto`→`nombre` antes del merge
+- Hallazgo no-bug: Gemini API saturado (429+503) en horas pico; el fallback gemini-3.1-flash-lite-preview también cae intermitente. No es un bug del código.
+
 **Sesión 20 (2026-04-18) — MinIO completo integrado en todo el sistema:**
 - **libs/storage**: nueva librería `@app/storage` con `MinioService` (6 métodos, backoff 3x)
 - **minio-init**: servicio Docker que crea buckets al arrancar (`denunciasat-evidencias`, `denunciasat-documentos`)

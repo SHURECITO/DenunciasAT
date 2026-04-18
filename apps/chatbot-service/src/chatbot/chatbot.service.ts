@@ -144,7 +144,12 @@ export class ChatbotService {
 
     // Deep merge: arrays se concatenan, el resto se sobrescribe
     if (resultado.datosExtraidos && Object.keys(resultado.datosExtraidos).length > 0) {
-      const ext = resultado.datosExtraidos as Partial<DatosConfirmados>;
+      const ext = resultado.datosExtraidos as Partial<DatosConfirmados> & { nombreCompleto?: string };
+      // Normalizar variantes de nombre que Gemini puede devolver inconsistentemente
+      if (!ext.nombre && ext.nombreCompleto) {
+        ext.nombre = ext.nombreCompleto;
+        delete ext.nombreCompleto;
+      }
       estado.datosConfirmados = {
         ...estado.datosConfirmados,
         ...ext,
