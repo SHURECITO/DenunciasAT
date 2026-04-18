@@ -153,7 +153,7 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **chatbot-service / document-service / whatsapp-service Dockerfile**: copian `dist/` completo para preservar rutas de `libs/ai` y `libs/storage`
 - **document-service arquitectura**: adm-zip + Plantilla.docx (en `infrastructure/templates/`) → inyecta body XML preservando header/footer del membrete
 - **dependencias.json**: `infrastructure/config/dependencias.json` — 20+ entidades → `{titulo, nombre, cargo, entidad}`
-- **ANDRÉS FELIPE TOBÓN VILLADA**: nombre completo correcto del concejal (no "TOBÓN VILLA")
+- **Firma Mercurio**: el .docx NO lleva el nombre del concejal hardcodeado; usa placeholders `FIRMA_NOMBRE`/`FIRMA_CARGO` (Arial 11, izquierda) + tabla de 4320×1440 DXA con borde inferior para el espacio de firma + `Radicó: ` (Arial 9 cursiva #666666). Mercurio reemplaza los placeholders al firmar.
 - **MinIO**: `http://minio:9000` (interno), consola `http://localhost:9001`. Buckets: `denunciasat-evidencias`/`denunciasat-documentos`. `minio-init` los crea al arrancar. Sin `documentos_data` volume.
 - **imagenesEvidencia URLs**: whatsapp-service sube a MinIO inmediatamente (URL Evolution API expira). Formato: `http://minio:9000/bucket/{numero}/{ts}-{uuid}.jpg`. document-builder detecta `minio` en hostname → usa MinioService.
 - **document-service flujo MinIO**: genera .docx temporal → uploadBuffer → elimina local → PATCH documentoUrl = `${radicado}.docx`
@@ -161,6 +161,10 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **libs/storage**: `@app/storage` → `MinioService` (6 métodos, backoff 1s/2s/4s)
 - **generarHechos()**: 3 párrafos, sin nombre del ciudadano, cita normativa específica
 - **generarAsunto()**: método nuevo, verbo infinitivo en mayúsculas, máx 12 palabras
+- **document-builder — namespaces**: el opening tag `<w:document …>` se copia EXACTO de la plantilla (regex `/<w:document[^>]*>/`). Si solo se pone `xmlns:w`, Word muestra reparación y elimina membrete.
+- **document-builder — sectPr**: se extrae de la plantilla (rId10=header, rId11=footer). No hardcodear IDs.
+- **document-builder — imágenes**: `getImageDimensions()` (JPEG SOF + PNG IHDR, default 3000×2000 si no detecta) + `calcularDimensionesImagen()` (MAX 5029200×3657600 EMU, MIN 1828800 EMU, 9525 EMU/px). Extensión detectada por magic bytes, no URL.
+- **document-service validación**: antes de subir a MinIO valida ZIP + `xmlns:r` + `FIRMA_NOMBRE`/`FIRMA_CARGO` + `headerReference`/`footerReference` + nombre del ciudadano ausente en HECHOS. Si falla: `documentoGeneradoOk:false` sin subir.
 - **solicitudAdicional / imagenesEvidencia**: campos nullable en entidad Denuncia; chatbot los captura y pasa al radicar
 - **Evolution API key**: UUID válido obligatorio. Reset: `docker volume rm denunciasat_evolution_data`
 - **Parche @lid**: automático al startup en whatsapp-service
@@ -178,15 +182,15 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 
 ## Historial de sesiones (comprimido)
 
-**Sesiones 1–18 (2026-04-14/17) — comprimido:** Scaffold monorepo NestJS, dashboard-api (JWT, CRUD, SEQUENCE), frontend Next.js, Docker multi-stage, Evolution API (UUID, parche @lid), chatbot IA conversacional (Gemini, Redis, historial, deep merge, confirmación server-side). document-service implementado (EitherAuthGuard, port 3004, Gemini fallback). UI detalle: polling 8s, retry button, columna Doc.
+**Sesiones 1–20 (2026-04-14/18) — comprimido:** Scaffold monorepo NestJS, dashboard-api (JWT, CRUD, SEQUENCE), frontend Next.js, Docker multi-stage, Evolution API (UUID, parche @lid), chatbot IA conversacional (Gemini, Redis, historial, deep merge, confirmación server-side), document-service con adm-zip + Plantilla.docx + dependencias.json (20+ entidades, múltiples destinatarios), SYSTEM_PROMPT_LEGAL, generarHechos/generarAsunto, imágenes OOXML inline con portrait handling, solicitudAdicional + imagenesEvidencia. MinIO completo (`@app/storage`, `minio-init`, whatsapp-service sube media inmediato, document-service sube .docx tras generación, dashboard-api descarga buffer directo, `DocumentLifecycleService` cron 3am limpia .docx 5d post-CON_RESPUESTA). UI detalle: polling 8s, retry button, columna Doc.
 
-**Sesión 19 (2026-04-17) — Refactorización document-service + chatbot:**
-- adm-zip + Plantilla.docx; body XML inyectado preservando header/footer membrete
-- dependencias.json (20+ entidades); múltiples destinatarios por coma
-- SYSTEM_PROMPT_LEGAL; generarHechos() (3 párr., sin nombre ciudadano); generarAsunto() nuevo
-- Imágenes OOXML inline; dimensiones JPEG/PNG pure JS; portrait handling
-- Chatbot: paso solicitudAdicional; campos `solicitudAdicional`/`imagenesEvidencia` en Denuncia
-- ANDRÉS FELIPE TOBÓN VILLADA (corregido)
+**Sesión 22 (2026-04-18) — Fixes críticos document-service:**
+- **Namespaces completos**: regex `^<w:document…` fallaba (doc empieza con `<?xml…`); corregido a `/<w:document[^>]*>/`. Ahora el opening tag preserva los 35 namespaces (xmlns:w, r, wp, a, etc.) de la plantilla → Word ya no muestra reparación ni elimina membrete.
+- **Firma Mercurio**: eliminado `ANDRÉS FELIPE TOBÓN VILLADA` hardcodeado; reemplazado por tabla de firma (4320×1440 DXA, borde inferior) + placeholders `FIRMA_NOMBRE`/`FIRMA_CARGO` (Arial 11) + `Radicó: ` (Arial 9 cursiva #666666). Todo alineado izquierda.
+- **Imágenes robustas**: `getImageDimensions(buf)` (devuelve {width,height} en px) + `calcularDimensionesImagen(w,h)` (EMU con MAX 5029200×3657600, MIN 1828800 px×9525). Extensión por magic bytes (no URL). Default 3000×2000 si falla detección.
+- **Validación pre-upload**: antes de subir a MinIO se verifica ZIP, `xmlns:r`, placeholders FIRMA_*, `headerReference`/`footerReference`, ausencia del nombre del ciudadano en HECHOS. Si falla: notifica error sin subir.
+- **sectPr rIds reales**: la nota del ticket decía rId9/rId10, pero la plantilla tiene rId10 (header) / rId11 (footer). El código ya extrae el sectPr directo de la plantilla, así que los IDs siempre están sincronizados.
+- **E2E verificado**: DAT-000022 regenerado con evidencia MinIO embebida (264 KB, xmlns:r OK, 35 namespaces, tabla firma, Arial, #666666, sin nombre ciudadano en HECHOS).
 
 **Sesión 21 (2026-04-18) — Auditoría E2E destructiva:**
 - Verificada infra (10 servicios, 2 buckets MinIO, Redis, PostgreSQL, healthchecks 4 puertos OK)
@@ -196,16 +200,6 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - Estrés: reinicio sin pérdida de Redis state; mensajes vacíos/emoji/2000 chars manejados; concurrencia con estados independientes; MinIO down → chatbot sigue, webhook fallback a URL original
 - **Bug corregido**: Gemini ocasionalmente devuelve `nombreCompleto` en lugar de `nombre` causando "listaParaRadicar=true pero faltan: nombre". Fix en `chatbot.service.ts` línea 146-156: normaliza `nombreCompleto`→`nombre` antes del merge
 - Hallazgo no-bug: Gemini API saturado (429+503) en horas pico; el fallback gemini-3.1-flash-lite-preview también cae intermitente. No es un bug del código.
-
-**Sesión 20 (2026-04-18) — MinIO completo integrado en todo el sistema:**
-- **libs/storage**: nueva librería `@app/storage` con `MinioService` (6 métodos, backoff 3x)
-- **minio-init**: servicio Docker que crea buckets al arrancar (`denunciasat-evidencias`, `denunciasat-documentos`)
-- **whatsapp-service**: descarga media de Evolution API → sube a MinIO inmediatamente; Dockerfile corregido para copiar `dist/` completo
-- **document-builder**: `fetchImageBuffer()` detecta URLs MinIO (`hostname.includes('minio')`) y usa MinioService; portrait handling en imageDims
-- **document-service**: sube .docx a MinIO tras generación, elimina archivo temporal local
-- **dashboard-api**: `GET /denuncias/:id/documento` descarga buffer de MinIO directamente (ya no proxy); `DocumentLifecycleService` cron diario 3am limpia .docx 5 días post-CON_RESPUESTA; `ScheduleModule` en AppModule
-- **docker-compose**: MinIO `9000:9000`/`9001:9001`, healthcheck curl, `minio-init`, MINIO_* vars en 3 servicios, sin `documentos_data` volume
-- **Verificado E2E**: documento generado en MinIO, descargado vía API, contenido correcto (HECHOS, ASUNTO, ANDRÉS FELIPE TOBÓN VILLADA)
 
 ---
 

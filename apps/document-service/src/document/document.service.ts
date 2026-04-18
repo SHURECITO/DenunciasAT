@@ -4,8 +4,10 @@ import { readFile, unlink } from 'fs/promises';
 import { ConfigService } from '@nestjs/config';
 import { GeminiService } from '@app/ai';
 import { MinioService } from '@app/storage';
-import { DashboardApiService } from './dashboard-api.service';
+import { DashboardApiService, DenunciaData } from './dashboard-api.service';
 import { DocumentBuilderService } from './document-builder.service';
+
+import AdmZip = require('adm-zip');
 
 const DOCS_DIR = join(process.cwd(), 'infrastructure', 'documentos');
 const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -88,8 +90,17 @@ export class DocumentService {
         rutaDestino: rutaArchivo,
       });
 
+      // Leer buffer y validar integridad antes de subir a MinIO
+      const docxBuffer  = await readFile(rutaArchivo);
+      const validacion  = this.validarDocx(docxBuffer, denuncia);
+      if (!validacion.ok) {
+        this.logger.error(`Documento inválido para denuncia #${denunciaId}: ${validacion.reason}`);
+        await unlink(rutaArchivo).catch(() => undefined);
+        await this.dashboardApi.notificarDocumentoError(denunciaId);
+        return;
+      }
+
       // Subir .docx a MinIO y eliminar archivo temporal local
-      const docxBuffer = await readFile(rutaArchivo);
       await this.minio.uploadBuffer(this.bucketDocumentos, objectName, docxBuffer, DOCX_CONTENT_TYPE);
       await unlink(rutaArchivo).catch((err) =>
         this.logger.warn(`No se pudo eliminar archivo temporal ${rutaArchivo}: ${(err as Error).message}`),
@@ -103,6 +114,43 @@ export class DocumentService {
       this.logger.error(`Error generando documento para denuncia #${denunciaId}:`, err);
       await this.dashboardApi.notificarDocumentoError(denunciaId);
     }
+  }
+
+  /**
+   * Valida el .docx antes de subirlo a MinIO:
+   * - ZIP válido con word/document.xml
+   * - xmlns:r presente (indispensable para imágenes y headers/footers)
+   * - FIRMA_NOMBRE y FIRMA_CARGO presentes (Mercurio los busca)
+   * - sectPr con headerReference y footerReference (preserva membrete)
+   * - El nombre del ciudadano NO aparece en la sección HECHOS
+   */
+  private validarDocx(buffer: Buffer, denuncia: DenunciaData): { ok: boolean; reason?: string } {
+    let doc: string;
+    try {
+      const zip   = new AdmZip(buffer);
+      const entry = zip.getEntry('word/document.xml');
+      if (!entry) return { ok: false, reason: 'word/document.xml no encontrado' };
+      doc = zip.readAsText('word/document.xml');
+    } catch (err) {
+      return { ok: false, reason: `ZIP inválido: ${(err as Error).message}` };
+    }
+
+    if (!doc.includes('xmlns:r=')) {
+      return { ok: false, reason: 'namespace xmlns:r ausente' };
+    }
+    if (!doc.includes('FIRMA_NOMBRE') || !doc.includes('FIRMA_CARGO')) {
+      return { ok: false, reason: 'placeholders FIRMA_NOMBRE/FIRMA_CARGO ausentes' };
+    }
+    if (!doc.includes('w:headerReference') || !doc.includes('w:footerReference')) {
+      return { ok: false, reason: 'sectPr sin headerReference/footerReference' };
+    }
+    if (!denuncia.esAnonimo && denuncia.nombreCiudadano) {
+      const hechosMatch = doc.match(/HECHOS[\s\S]*?SOLICITUD/);
+      if (hechosMatch && hechosMatch[0].includes(denuncia.nombreCiudadano)) {
+        return { ok: false, reason: 'nombre del ciudadano aparece en HECHOS' };
+      }
+    }
+    return { ok: true };
   }
 
   async getRutaDocumento(denunciaId: number): Promise<string | null> {

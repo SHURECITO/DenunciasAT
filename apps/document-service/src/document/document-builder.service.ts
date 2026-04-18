@@ -68,20 +68,62 @@ interface ParaOpts {
   align?:        Align;
   spacingAfter?: number;
   size?:         number;
+  font?:         string;
+  color?:        string;
 }
 
 /** Genera un párrafo OOXML simple con un solo run de texto */
 function p(text: string, opts: ParaOpts = {}): string {
-  const { bold = false, italic = false, align = 'left', spacingAfter = 120, size = SZ } = opts;
+  const {
+    bold = false, italic = false, align = 'left',
+    spacingAfter = 120, size = SZ, font = FONT, color,
+  } = opts;
   const jc   = JC_MAP[align];
   const bTag = bold   ? '<w:b/><w:bCs/>' : '';
   const iTag = italic ? '<w:i/><w:iCs/>' : '';
-  const rpr  = `<w:rPr>${bTag}${iTag}<w:rFonts w:ascii="${FONT}" w:hAnsi="${FONT}"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr>`;
+  const cTag = color  ? `<w:color w:val="${color}"/>` : '';
+  const rpr  = `<w:rPr>${bTag}${iTag}${cTag}<w:rFonts w:ascii="${font}" w:hAnsi="${font}"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr>`;
   const ppr  = `<w:pPr><w:spacing w:after="${spacingAfter}" w:line="240" w:lineRule="auto"/><w:jc w:val="${jc}"/></w:pPr>`;
   if (!text) {
     return `<w:p>${ppr}</w:p>`;
   }
   return `<w:p>${ppr}<w:r>${rpr}<w:t xml:space="preserve">${xe(text)}</w:t></w:r></w:p>`;
+}
+
+/** Tabla sin bordes (salvo borde inferior) que deja espacio de firma para Mercurio */
+function signatureTableXml(): string {
+  return (
+    `<w:tbl>` +
+    `<w:tblPr>` +
+      `<w:tblW w:w="4320" w:type="dxa"/>` +
+      `<w:tblBorders>` +
+        `<w:top w:val="nil"/>` +
+        `<w:left w:val="nil"/>` +
+        `<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>` +
+        `<w:right w:val="nil"/>` +
+        `<w:insideH w:val="nil"/>` +
+        `<w:insideV w:val="nil"/>` +
+      `</w:tblBorders>` +
+      `<w:tblLook w:val="04A0"/>` +
+    `</w:tblPr>` +
+    `<w:tblGrid><w:gridCol w:w="4320"/></w:tblGrid>` +
+    `<w:tr>` +
+      `<w:trPr><w:trHeight w:val="1440" w:hRule="exact"/></w:trPr>` +
+      `<w:tc>` +
+        `<w:tcPr>` +
+          `<w:tcW w:w="4320" w:type="dxa"/>` +
+          `<w:tcBorders>` +
+            `<w:top w:val="nil"/>` +
+            `<w:left w:val="nil"/>` +
+            `<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>` +
+            `<w:right w:val="nil"/>` +
+          `</w:tcBorders>` +
+        `</w:tcPr>` +
+        `<w:p/>` +
+      `</w:tc>` +
+    `</w:tr>` +
+    `</w:tbl>`
+  );
 }
 
 /** Párrafo de ASUNTO: "ASUNTO: " en negrita + texto normal */
@@ -93,8 +135,10 @@ function asuntoP(asunto: string): string {
 }
 
 // ─── Imágenes ─────────────────────────────────────────────────────────────────
-const MAX_WIDTH_EMU  = 5486400; // ≈ 6 pulgadas
-const MAX_HEIGHT_EMU = 4114800; // ≈ 4.5 pulgadas
+const MAX_CX_EMU  = 5029200; // 5.5 pulgadas
+const MAX_CY_EMU  = 3657600; // 4.0 pulgadas
+const MIN_CX_EMU  = 1828800; // 2.0 pulgadas
+const EMU_PER_PX  = 9525;    // 96 DPI
 
 /** Descarga imagen desde URL externa (fallback para URLs no-MinIO), devuelve Buffer o null */
 async function downloadImageFromUrl(url: string): Promise<Buffer | null> {
@@ -131,58 +175,72 @@ function parseMinioUrl(url: string): { bucket: string; objectName: string } | nu
   }
 }
 
-/** Determina la extensión de la imagen por la URL */
-function imageExt(url: string): 'png' | 'jpg' {
-  return url.toLowerCase().includes('.png') ? 'png' : 'jpg';
+/** Determina la extensión de la imagen por los bytes mágicos (fallback: jpeg) */
+function detectImageExt(buf: Buffer): 'png' | 'jpeg' {
+  if (buf.length >= 8 && buf.slice(0, 8).toString('hex') === '89504e470d0a1a0a') {
+    return 'png';
+  }
+  return 'jpeg';
 }
 
-/** Lee dimensiones de JPEG o PNG desde los bytes del header */
-function imageDims(buf: Buffer, ext: string): { cx: number; cy: number } {
-  let width = 0;
-  let height = 0;
-
+/** Lee dimensiones en píxeles de JPEG o PNG desde los bytes del header */
+function getImageDimensions(buf: Buffer): { width: number; height: number } {
   try {
-    if (ext === 'png' && buf.length >= 24) {
-      const sig = buf.slice(0, 8).toString('hex');
-      if (sig === '89504e470d0a1a0a') {
-        width  = buf.readUInt32BE(16);
-        height = buf.readUInt32BE(20);
-      }
-    } else if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    // PNG: firma 89 50 4E 47 0D 0A 1A 0A, luego IHDR con width/height big-endian en offsets 16/20
+    if (buf.length >= 24 && buf.slice(0, 8).toString('hex') === '89504e470d0a1a0a') {
+      return {
+        width:  buf.readUInt32BE(16),
+        height: buf.readUInt32BE(20),
+      };
+    }
+    // JPEG: recorrer segmentos hasta encontrar un marcador SOF (0xC0–0xC3)
+    if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
       let i = 2;
       while (i + 4 < buf.length) {
         if (buf[i] !== 0xff) break;
         const marker = buf[i + 1];
         const segLen = buf.readUInt16BE(i + 2);
-        if ([0xc0, 0xc1, 0xc2].includes(marker) && i + 9 < buf.length) {
-          height = buf.readUInt16BE(i + 5);
-          width  = buf.readUInt16BE(i + 7);
-          break;
+        if (marker >= 0xc0 && marker <= 0xc3 && i + 9 < buf.length) {
+          return {
+            height: buf.readUInt16BE(i + 5),
+            width:  buf.readUInt16BE(i + 7),
+          };
         }
         i += 2 + segLen;
       }
     }
   } catch { /* fall through */ }
 
-  if (width <= 0 || height <= 0) {
-    // Fallback: proporción 4:3 landscape
-    return { cx: MAX_WIDTH_EMU, cy: Math.round(MAX_WIDTH_EMU * 3 / 4) };
+  // Default: tamaño razonable si no se puede detectar
+  return { width: 3000, height: 2000 };
+}
+
+/** Calcula dimensiones finales en EMU respetando máximos y un mínimo de ancho */
+function calcularDimensionesImagen(width: number, height: number): { cx: number; cy: number } {
+  let cx = width * EMU_PER_PX;
+  let cy = height * EMU_PER_PX;
+
+  // Si excede ancho máximo, escalar manteniendo proporción
+  if (cx > MAX_CX_EMU) {
+    cy = Math.round(cy * MAX_CX_EMU / cx);
+    cx = MAX_CX_EMU;
   }
-
-  // Escalar respetando máximos tanto de ancho como de alto (portrait handling)
-  let cx = Math.min(width * 9525, MAX_WIDTH_EMU);
-  let cy = Math.round(cx * height / width);
-
-  if (cy > MAX_HEIGHT_EMU) {
-    cy = MAX_HEIGHT_EMU;
-    cx = Math.round(cy * width / height);
+  // Si excede alto máximo, escalar manteniendo proporción
+  if (cy > MAX_CY_EMU) {
+    cx = Math.round(cx * MAX_CY_EMU / cy);
+    cy = MAX_CY_EMU;
+  }
+  // Si quedó por debajo del ancho mínimo, ampliar hasta el mínimo
+  if (cx < MIN_CX_EMU) {
+    cy = Math.round(cy * MIN_CX_EMU / cx);
+    cx = MIN_CX_EMU;
   }
 
   return { cx, cy };
 }
 
 /** Genera el XML de un párrafo con imagen inline */
-function imageParaXml(relId: string, num: number, dims: { cx: number; cy: number }): string {
+function imageParaXml(relId: string, num: number, ext: string, dims: { cx: number; cy: number }): string {
   return `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="120"/></w:pPr><w:r><w:drawing>` +
     `<wp:inline distT="0" distB="0" distL="0" distR="0" ` +
     `xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">` +
@@ -196,7 +254,7 @@ function imageParaXml(relId: string, num: number, dims: { cx: number; cy: number
     `<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
     `<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
     `<pic:nvPicPr>` +
-    `<pic:cNvPr id="${num}" name="evidencia_${num}.jpg"/>` +
+    `<pic:cNvPr id="${num}" name="evidencia_${num}.${ext}"/>` +
     `<pic:cNvPicPr/>` +
     `</pic:nvPicPr>` +
     `<pic:blipFill>` +
@@ -266,10 +324,11 @@ export class DocumentBuilderService {
     // Cargar plantilla como ZIP
     const zip = new AdmZip(TEMPLATE_PATH);
 
-    // Extraer el opening tag y el sectPr del document.xml original
+    // Extraer el opening tag (con TODOS los namespaces) y el sectPr del document.xml original
+    // Crítico: si solo usamos xmlns:w, Word muestra mensaje de reparación y elimina el membrete.
     const originalDocXml = zip.readAsText('word/document.xml');
-    const openTagMatch   = originalDocXml.match(/^<w:document[^>]*(?:>|\s*\/>)/);
-    const openTag        = openTagMatch?.[0] ?? '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">';
+    const openTagMatch   = originalDocXml.match(/<w:document[^>]*>/);
+    const openTag        = openTagMatch?.[0] ?? '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">';
     const sectPrMatch    = originalDocXml.match(/<w:sectPr[\s\S]*?<\/w:sectPr>/);
     const sectPr         = sectPrMatch?.[0] ?? '';
 
@@ -330,10 +389,11 @@ export class DocumentBuilderService {
           this.logger.warn(`No se pudo descargar imagen ${imgCount}: ${imgUrl.substring(0, 80)}`);
           continue;
         }
-        const ext      = imageExt(imgUrl);
+        const ext      = detectImageExt(imgBuf);
         const fileName = `evidencia_${imgCount}.${ext}`;
         const relId    = `rIdEv${imgCount}`;
-        const dims     = imageDims(imgBuf, ext);
+        const { width, height } = getImageDimensions(imgBuf);
+        const dims     = calcularDimensionesImagen(width, height);
 
         zip.addFile(`word/media/${fileName}`, imgBuf);
         imageRels.push(
@@ -342,7 +402,7 @@ export class DocumentBuilderService {
           `Target="media/${fileName}"/>`,
         );
 
-        body.push(imageParaXml(relId, imgCount, dims));
+        body.push(imageParaXml(relId, imgCount, ext, dims));
         body.push(p(`Evidencia fotográfica ${imgCount} aportada al despacho del concejal`, {
           align: 'center', italic: true, size: 20, spacingAfter: 240,
         }));
@@ -381,10 +441,18 @@ export class DocumentBuilderService {
       { align: 'justified', spacingAfter: 720 },
     ));
 
-    // ── Firma ─────────────────────────────────────────────────────────────────
-    body.push(p('Atentamente,', { align: 'center', spacingAfter: 960 }));
-    body.push(p('ANDRÉS FELIPE TOBÓN VILLADA', { bold: true, align: 'center', spacingAfter: 60 }));
-    body.push(p('Concejal de Medellín', { align: 'center', spacingAfter: 240 }));
+    // ── Firma (compatible Mercurio) ───────────────────────────────────────────
+    // Arial 11 (sz=22) para nombre/cargo, alineado izquierda, placeholders
+    const FONT_FIRMA = 'Arial';
+    const SZ_FIRMA   = 22; // 11pt
+    const SZ_RADICO  = 18; // 9pt
+
+    body.push(p('Atentamente,', { align: 'left', spacingAfter: 200, font: FONT_FIRMA, size: SZ_FIRMA }));
+    body.push(signatureTableXml());
+    body.push(p('', { spacingAfter: 80 }));
+    body.push(p('FIRMA_NOMBRE', { align: 'left', spacingAfter: 0,   font: FONT_FIRMA, size: SZ_FIRMA }));
+    body.push(p('FIRMA_CARGO',  { align: 'left', spacingAfter: 300, font: FONT_FIRMA, size: SZ_FIRMA }));
+    body.push(p('Radicó: ',     { align: 'left', spacingAfter: 400, font: FONT_FIRMA, size: SZ_RADICO, italic: true, color: '666666' }));
 
     // ── Reconstruir document.xml ──────────────────────────────────────────────
     const newDocXml =
