@@ -6,10 +6,10 @@ import { DashboardApiService } from './dashboard-api.service';
 const MSG_BIENVENIDA =
   '¡Hola! 👋 Soy el asistente del concejal Andrés Tobón. ' +
   'Estoy aquí para ayudarte a presentar tu denuncia.\n\n' +
-  '¿Me puedes decir tu nombre completo para empezar?';
+  '¿Cuál es el problema que deseas reportar?';
 
 const MSG_REINICIADO =
-  '¡Hola de nuevo! 😊 Empecemos desde el principio. ¿Cuál es tu nombre completo?';
+  '¡Hola de nuevo! 😊 Empecemos desde el principio. ¿Cuál es el problema que deseas reportar?';
 
 const MSG_AUDIO =
   'No puedo procesar mensajes de voz 🎤 Por favor escribe tu mensaje y te ayudo con gusto.';
@@ -17,18 +17,38 @@ const MSG_AUDIO =
 const MSG_PERDIDO =
   'Parece que hay alguna confusión 😊 ¿Quieres que empecemos de nuevo? Escribe *reiniciar* cuando quieras.';
 
+const esCedulaValida = (cedula?: string): boolean => {
+  if (!cedula) return false;
+  const clean = cedula.trim().toUpperCase();
+  if (!clean || clean === 'ANONIMO') return false;
+  return clean.length >= 6;
+};
+
+const enmascararCedula = (cedula: string): string => {
+  const clean = cedula.replace(/\D/g, '');
+  if (clean.length <= 4) return clean || '***';
+  return `${'*'.repeat(clean.length - 4)}${clean.slice(-4)}`;
+};
+
+const esConfirmacionPositiva = (mensajeNorm: string): boolean =>
+  /\b(s[ií]|ok|yes|confirmo|confirmar|confirma|de\s+acuerdo|claro|listo|dale|exacto|correcto|as[ií]\s+es|afirmativo|radica|radiques|autoriza|autorizo)\b/i
+    .test(mensajeNorm);
+
+const esConfirmacionNegativa = (mensajeNorm: string): boolean =>
+  /\b(no|negativo|incorrecto|cambiar|corrige|corregir|no\s+corresponde)\b/i.test(mensajeNorm);
+
 // Capitaliza cada palabra del nombre (ej: "juan pérez" → "Juan Pérez")
 const capitalizarNombre = (nombre: string): string =>
   nombre.trim().split(/\s+/).map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
 
-// Devuelve lista de campos pendientes según datos actuales
+// Devuelve lista de campos pendientes según datos actuales (en el orden correcto del flujo)
 const camposPendientes = (d: DatosConfirmados): string[] => [
-  !(d.nombre || d.esAnonimo === true) ? 'nombre' : null,
-  !(d.esAnonimo === true || d.cedula) ? 'cédula' : null,
+  !d.descripcion ? 'descripción del problema' : null,
   !d.barrio ? 'barrio' : null,
   !d.direccion ? 'dirección exacta' : null,
   !d.direccionConfirmada ? 'confirmar dirección' : null,
-  !d.descripcion ? 'descripción del problema' : null,
+  !(d.nombre || d.esAnonimo === true) ? 'nombre' : null,
+  !(d.esAnonimo === true || d.cedula) ? 'cédula' : null,
 ].filter(Boolean) as string[];
 
 @Injectable()
@@ -49,8 +69,12 @@ export class ChatbotService {
   ): Promise<string> {
     const mensajeNorm = mensaje.trim().toLowerCase();
 
-    // Comando reiniciar — manejo prioritario
-    if (mensajeNorm === 'reiniciar') {
+    // Comando reiniciar o cancelar — manejo prioritario
+    if (mensajeNorm === 'reiniciar' || /^cancelar\b/i.test(mensajeNorm)) {
+      const estadoExistente = await this.conversacion.getEstado(numero);
+      if (estadoExistente?.parcialId) {
+        await this.dashboardApi.eliminarDenuncia(estadoExistente.parcialId).catch(() => {});
+      }
       await this.conversacion.clearEstado(numero);
       return MSG_REINICIADO;
     }
@@ -68,9 +92,11 @@ export class ChatbotService {
 
       // Pre-llenar datos si el usuario ya tiene denuncias previas
       const usuarioExistente = await this.dashboardApi.buscarUsuarioPorTelefono(numero);
-      if (usuarioExistente && !usuarioExistente.esAnonimo) {
+      if (usuarioExistente && !usuarioExistente.esAnonimo && esCedulaValida(usuarioExistente.cedula)) {
         estado.datosConfirmados.nombre = usuarioExistente.nombreCiudadano;
         estado.datosConfirmados.cedula = usuarioExistente.cedula;
+        estado.datosConfirmados.identidadPendienteConfirmacion = true;
+        estado.datosConfirmados.identidadReutilizada = true;
       }
 
       await this.conversacion.setEstado(numero, estado);
@@ -79,12 +105,31 @@ export class ChatbotService {
       // Si el usuario incluye su nombre en el saludo ("Hola soy Juan"), dejar pasar a Gemini
       const esSaludo = /^(hola|buenas|buenos|hey|hi|start|iniciar|inicio|comenzar)[!¡\.\s]*$/.test(mensajeNorm);
       if (esSaludo) {
-        const msgBienvenida = usuarioExistente && !usuarioExistente.esAnonimo
-          ? `¡Hola de nuevo, ${usuarioExistente.nombreCiudadano}! 👋 Soy el asistente del concejal Andrés Tobón.\n\n¿En qué te puedo ayudar hoy?`
+        const msgBienvenida = usuarioExistente && !usuarioExistente.esAnonimo && esCedulaValida(usuarioExistente.cedula)
+          ? `¡Hola de nuevo, ${usuarioExistente.nombreCiudadano}! 👋 Tengo registrada la cédula terminada en ${enmascararCedula(usuarioExistente.cedula)}. ¿Usamos los mismos datos? Responde *sí* o *no* y luego cuéntame tu denuncia.`
           : MSG_BIENVENIDA;
         estado.historial.push({ rol: 'assistant', contenido: msgBienvenida, timestamp: new Date().toISOString() });
         await this.conversacion.setEstado(numero, estado);
         return msgBienvenida;
+      }
+    }
+
+    if (estado.datosConfirmados.identidadPendienteConfirmacion && tipo === 'conversation') {
+      const confirmacionPositiva = esConfirmacionPositiva(mensajeNorm);
+      const confirmacionNegativa = esConfirmacionNegativa(mensajeNorm);
+
+      if (confirmacionPositiva) {
+        estado.datosConfirmados.identidadPendienteConfirmacion = false;
+      } else if (confirmacionNegativa) {
+        estado.datosConfirmados.identidadPendienteConfirmacion = false;
+        estado.datosConfirmados.identidadReutilizada = false;
+        estado.datosConfirmados.nombre = undefined;
+        estado.datosConfirmados.cedula = undefined;
+        await this.conversacion.setEstado(numero, estado);
+        return 'Perfecto, gracias por confirmarlo. ¿Me compartes tu nombre completo y cédula para actualizar tus datos?';
+      } else {
+        await this.conversacion.setEstado(numero, estado);
+        return `Antes de seguir: tengo registrado el nombre ${estado.datosConfirmados.nombre} y cédula terminada en ${enmascararCedula(estado.datosConfirmados.cedula ?? '')}. ¿Siguen correctos? Responde *sí* o *no*.`;
       }
     }
 
@@ -118,13 +163,13 @@ export class ChatbotService {
 
     // Detección server-side de confirmación final (no depende del LLM)
     // Cubre casos donde el modelo fallback ignora el contexto en el paso 8
-    const esConfirmacion = /^(s[ií]|ok|yes|confirmo|correcto|dale|listo|exacto|as[ií]\s+es|claro|afirmativo|todo\s+bien|1)\b/i.test(mensajeNorm);
+    const esConfirmacion = esConfirmacionPositiva(mensajeNorm);
     const faltantes = camposPendientes(estado.datosConfirmados);
     const datosCompletos = faltantes.length === 0;
     const ultimaRespuestaAsistente = [...estado.historial].reverse().find((m) => m.rol === 'assistant')?.contenido ?? '';
-    const hayResumenPrevio = /resumen|radicad|correcto|¿es\s+correcto/i.test(ultimaRespuestaAsistente);
+    const hayResumenPrevio = /resumen|radicad|radicar|confirm(a|o|ar)|autoriz|¿es\s+correcto/i.test(ultimaRespuestaAsistente);
 
-    if (esConfirmacion && datosCompletos && hayResumenPrevio) {
+    if (esConfirmacion && datosCompletos && (hayResumenPrevio || estado.datosConfirmados.etapa === 'confirmando')) {
       this.logger.log(`[${numero}] Confirmación server-side detectada — forzando radicado`);
       estado.historial.push({ rol: 'user', contenido: mensajeEfectivo, timestamp: new Date().toISOString() });
       const respuestaRadicado = await this.radicarDenuncia(estado, numero);
@@ -194,6 +239,15 @@ export class ChatbotService {
       respuestaFinal = await this.cerrarCasoEspecial(estado, numero);
     }
 
+    // Caso cancelación detectado por Gemini
+    if (resultado.etapaSiguiente === 'cancelado') {
+      if (estado?.parcialId) {
+        await this.dashboardApi.eliminarDenuncia(estado.parcialId).catch(() => {});
+      }
+      await this.conversacion.clearEstado(numero);
+      return resultado.respuesta || 'Proceso cancelado. Aquí estaremos si decides denunciar más adelante. ¡Gracias por contactarnos!';
+    }
+
     // Lista para radicar — validar datos completos Y que el usuario haya visto el resumen
     if (resultado.listaParaRadicar && resultado.etapaSiguiente !== 'especial_cerrado') {
       const faltantesAhora = camposPendientes(estado.datosConfirmados);
@@ -208,6 +262,25 @@ export class ChatbotService {
       } else {
         respuestaFinal = await this.radicarDenuncia(estado, numero);
       }
+    }
+
+    if (
+      !resultado.listaParaRadicar &&
+      esConfirmacion &&
+      camposPendientes(estado.datosConfirmados).length === 0 &&
+      estado.datosConfirmados.etapa === 'confirmando' &&
+      resultado.etapaSiguiente !== 'especial_cerrado'
+    ) {
+      this.logger.log(`[${numero}] Confirmación textual detectada pese a salida LLM inconsistente — forzando radicado`);
+      respuestaFinal = await this.radicarDenuncia(estado, numero);
+    }
+
+    if (
+      /problema t[eé]cnico|me repites tu mensaje/i.test(respuestaFinal) &&
+      camposPendientes(estado.datosConfirmados).length === 0 &&
+      estado.datosConfirmados.etapa === 'confirmando'
+    ) {
+      respuestaFinal = 'Solo para confirmar: ¿autorizas radicar la denuncia con los datos ya validados?';
     }
 
     await this.conversacion.setEstado(numero, estado);
@@ -248,9 +321,14 @@ export class ChatbotService {
       // Filtrar solicitud adicional por IA antes de guardarla en el oficio oficial
       const solicitudFiltrada = await this.filtrarSolicitudAdicional(d.solicitudAdicional, numero);
 
-      // Si ya existe una denuncia parcial del mismo teléfono, la completamos en lugar
-      // de crear una nueva — así evitamos duplicados (registro parcial + completo).
-      const parcial = await this.dashboardApi.buscarParcialPorTelefono(d.telefono);
+      // Usar el parcialId guardado en estado Redis primero; si no existe, buscar por teléfono.
+      // Esto evita duplicados incluso cuando el teléfono resuelto de @lid varía entre mensajes.
+      let parcial: { id: number; incompleta: boolean } | null = null;
+      if (estado.parcialId) {
+        parcial = { id: estado.parcialId, incompleta: true };
+      } else {
+        parcial = await this.dashboardApi.buscarParcialPorTelefono(d.telefono);
+      }
 
       let id: number;
       let radicado: string;
@@ -296,7 +374,8 @@ export class ChatbotService {
         this.logger.warn(`[${numero}] No se pudo disparar document-service: ${(err as Error).message}`);
       });
 
-      // Guardar historial de la conversación (BUG 2: Promise.allSettled para no bloquear ni propagar errores)
+      // Guardar historial de la conversación (fire-and-forget, no bloquea el flujo)
+      this.logger.log(`[${numero}] Guardando historial: ${estado.historial.length} mensajes para denuncia ID=${id}`);
       Promise.allSettled(
         estado.historial.map((m) =>
           this.dashboardApi.guardarMensaje(id, {
@@ -308,19 +387,22 @@ export class ChatbotService {
       ).then((resultados) => {
         const fallidos = resultados.filter((r) => r.status === 'rejected');
         if (fallidos.length > 0) {
-          const primerError = (fallidos[0] as PromiseRejectedResult).reason as { response?: { status: number }; message?: string };
-          this.logger.warn(`[${numero}] ${fallidos.length}/${estado.historial.length} mensajes no guardados — ${primerError?.response?.status ?? primerError?.message ?? 'error desconocido'}`);
+          const primerError = (fallidos[0] as PromiseRejectedResult).reason as { response?: { status: number; data?: unknown }; message?: string };
+          this.logger.warn(
+            `[${numero}] ${fallidos.length}/${estado.historial.length} mensajes no guardados — status=${primerError?.response?.status ?? '?'} msg=${primerError?.message ?? 'desconocido'}`,
+          );
+          this.logger.warn(`[${numero}] Respuesta error: ${JSON.stringify(primerError?.response?.data ?? {})}`);
         } else {
-          this.logger.log(`[${numero}] Historial guardado (${estado.historial.length} mensajes)`);
+          this.logger.log(`[${numero}] Historial guardado correctamente (${estado.historial.length} mensajes)`);
         }
       });
 
       return (
-        '✅ ¡Tu denuncia ha sido radicada exitosamente!\n\n' +
-        `Tu número de radicado es: *${radicado}*\n\n` +
-        `El equipo del concejal Andrés Tobón gestionará tu caso ante ${d.dependencia ?? 'la entidad competente'}. ` +
-        'Cuando tengamos respuesta te notificaremos aquí mismo.\n\n' +
-        '¡Gracias por confiar en nosotros! 🤝'
+        '✅ Su denuncia ha sido radicada exitosamente.\n\n' +
+        `📋 Número de radicado: *${radicado}*\n\n` +
+        `Su caso será gestionado ante ${d.dependencia ?? 'la entidad competente'}. ` +
+        'Cuando tengamos respuesta de la administración, le notificaremos directamente por este medio.\n\n' +
+        'Gracias por utilizar el canal oficial del concejal Andrés Felipe Tobón Villada. 🤝'
       );
     } catch (err) {
       this.logger.error(`[${numero}] Error radicando denuncia:`, err);

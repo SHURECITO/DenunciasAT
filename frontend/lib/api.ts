@@ -37,6 +37,11 @@ export interface Denuncia {
   respuestasPorDependencia: RespuestaDependencia[];
   fechaCreacion: string;
   fechaActualizacion: string;
+  historialCambios?: Array<{
+    usuario: string;
+    timestamp: string;
+    cambios: Record<string, { anterior: string | null; nuevo: string | null }>;
+  }>;
 }
 
 export interface Mensaje {

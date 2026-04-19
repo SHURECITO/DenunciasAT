@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { buildDependenciasKnowledgeBase, type DependenciasKnowledgeBase } from './dependencias-kb';
 
 // ---------------------------------------------------------------------------
 // Contexto Medellín — usado para clasificación de denuncias
@@ -83,36 +84,31 @@ RESTRICCIONES ABSOLUTAS:
 const SYSTEM_PROMPT_CHATBOT = `Eres el asistente de WhatsApp del concejal Andrés Tobón (Medellín). Registras denuncias ciudadanas.
 
 ESTILO: Máximo 1-2 líneas. Una sola pregunta por mensaje. Español colombiano natural.
-Si el usuario da varios datos juntos, extráelos todos y continúa con el siguiente que falte.
+Si el usuario da varios datos juntos, extráelos TODOS de inmediato. NUNCA pidas un dato que el usuario ya proporcionó claramente.
 
-FLUJO SECUENCIAL ESTRICTO — avanza solo cuando el paso anterior esté completo:
-PASO 1: nombre → si falta, pide nombre. "anonimo"/"anónimo" acepta → esAnonimo:true.
-PASO 2: cedula → si nombre OK y cedula falta y NO es anónimo, pide cédula (6-10 dígitos).
-PASO 3: barrio → si cedula OK (o anónimo), pide el barrio donde ocurrió.
-PASO 4: direccion → pide dirección con tipo de vía + número ("Calle 44 #52-49"). Si es vaga, pide exactitud.
-PASO 5: confirmar → pregunta si la dirección es correcta. Si dice sí → direccionConfirmada:true.
-PASO 6: descripcion → si < 20 palabras, pide más detalle.
-PASO 7: evidencia → pregunta por fotos/PDFs una sola vez (es opcional).
-PASO 7.5: solicitud_adicional → Una vez el usuario respondió sobre evidencia (envió media o dijo no):
-  Informa brevemente (máx 3 líneas) qué se va a pedir a [dependencia]:
-  "Voy a solicitar a [dependencia] que: 1) visiten el lugar y verifiquen la situación, 2) informen las acciones correctivas a implementar, 3) respondan en los términos legales (10 días). ¿Quieres agregar algo específico adicional? Responde *no* si está bien así 🙏"
-  etapaSiguiente:"esperando_solicitud"
-  Si el usuario da texto adicional → datosExtraidos:{solicitudAdicional:"texto del usuario"}; etapaSiguiente:"confirmando"
-  Si responde no/listo/dale/continuar/ok → etapaSiguiente:"confirmando" (sin solicitudAdicional)
-PASO 8: resumen y confirmación → muestra resumen compacto y pide confirmación final.
-Si confirma (sí/si/ok/1/yes/confirmo) → listaParaRadicar:true, etapaSiguiente:"finalizado".
+ORDEN DE RECOPILACIÓN (respeta este orden sin excepción):
+1. descripcion — El problema a denunciar (SIEMPRE lo primero)
+2. barrio — Barrio donde ocurrió
+3. direccion — Dirección exacta (si incluye nomenclatura, marca direccionConfirmada:true y no preguntes de nuevo)
+4. imagenes/pdfs — Evidencia. Ofrecerla UNA sola vez, es opcional.
+5. solicitudAdicional — (etapaSiguiente:"esperando_solicitud") "¿Quieres agregar algo específico a la solicitud? Responde *no* si está bien 🙏"
+6. nombre — Nombre completo (o esAnonimo:true si indica anónimo)
+7. cedula — Cédula (6-10 dígitos, solo si no es anónimo)
+8. Resumen + confirmación (etapaSiguiente:"confirmando") → si confirma: listaParaRadicar:true, etapaSiguiente:"finalizado"
 
-CASOS ESPECIALES: si menciona corrupción/extorsión/grupos armados/sicariato → etapaSiguiente:"especial_cerrado".
+REGLAS CRÍTICAS:
+- NUNCA pidas nombre ni cédula antes de tener descripción y ubicación completas.
+- Si la dirección tiene nomenclatura clara, asume direccionConfirmada:true y avanza.
+- Un solo dato por mensaje.
 
-CUANDO TENGAS LA DESCRIPCIÓN DEL PROBLEMA:
-Clasifica e incluye en datosExtraidos:
-- dependencia: nombre exacto de la secretaría/entidad competente
-  REGLA CRÍTICA: identifica la dependencia PRINCIPAL (competencia más fuerte y directa).
-  Solo añade dependencias adicionales (separadas por coma) si el caso involucra CLARAMENTE
-  competencias diferentes y complementarias (ej: basura en espacio público → "Emvarias, Secretaría de Gestión y Control Territorial").
-  La mayoría de casos tiene UNA sola dependencia.
-  Guía: huecos/vías/puentes→"Secretaría de Infraestructura Física", basura/aseo→"Emvarias", agua/luz/gas→"EPM", tránsito/semáforos→"Secretaría de Movilidad", crimen/inseguridad→"Secretaría de Seguridad y Convivencia", salud/EPS→"Secretaría de Salud", colegio/PAE→"Secretaría de Educación", construcción ilegal→"Secretaría de Gestión y Control Territorial", violencia género→"Secretaría de las Mujeres", emergencias→"DAGRD"
-- esEspecial: true si menciona corrupción/extorsión/vacunas/grupos armados/sicariato
+CUANDO TENGAS LA DESCRIPCIÓN:
+Incluye en datosExtraidos:
+- dependencia: nombre EXACTO de la lista oficial (ver DEPENDENCIAS DISPONIBLES en el prompt). SOLO nombres que existan en esa lista. NUNCA inventes entidades.
+  INDER para deporte/recreación. Regla: identifica la PRINCIPAL, solo añade secundarias si hay competencias CLARAMENTE diferentes.
+- esEspecial: true si menciona corrupción/extorsión/vacunas/grupos armados/sicariato.
+
+CANCELACIÓN: "cancelar", "no quiero denunciar", "olvídalo" → etapaSiguiente:"cancelado".
+CASOS ESPECIALES: corrupción/extorsión/vacunas/grupos armados/sicariato → etapaSiguiente:"especial_cerrado".
 
 RESPONDE ÚNICAMENTE CON JSON VÁLIDO (sin texto extra):
 {"respuesta":"...","datosExtraidos":{},"etapaSiguiente":"recopilando","listaParaRadicar":false}`;
@@ -127,7 +123,7 @@ const BASE_CONFIG = { topP: 0.8, topK: 40, maxOutputTokens: 512 };
 export interface RespuestaChatbot {
   respuesta: string;
   datosExtraidos: Record<string, unknown>;
-  etapaSiguiente: 'recopilando' | 'esperando_solicitud' | 'confirmando' | 'finalizado' | 'especial_cerrado';
+  etapaSiguiente: 'recopilando' | 'esperando_solicitud' | 'confirmando' | 'finalizado' | 'especial_cerrado' | 'cancelado';
   listaParaRadicar: boolean;
 }
 
@@ -156,6 +152,7 @@ export interface ClasificacionEstructurada {
 export class GeminiService {
   private readonly logger = new Logger(GeminiService.name);
   private readonly genAI: GoogleGenerativeAI;
+  private readonly dependenciasKb: DependenciasKnowledgeBase;
 
   private readonly modelClasificacion: GenerativeModel;
   private readonly modelJustificacion: GenerativeModel;
@@ -198,7 +195,32 @@ export class GeminiService {
       generationConfig: { ...BASE_CONFIG, temperature: 0.4 },
     });
 
-    this.logger.log(`GeminiService listo — modelo: ${MODEL_CHATBOT}`);
+    this.dependenciasKb = buildDependenciasKnowledgeBase();
+
+    this.logger.log(
+      `GeminiService listo — modelo: ${MODEL_CHATBOT} | dependencias catalogadas: ${this.dependenciasKb.nombresDependencias.length}`,
+    );
+  }
+
+  private normalizarDependenciaSalida(rawDependencia: string, contexto: string): string {
+    const partes = rawDependencia
+      .split(/[,;]|\sy\s/gi)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const normalizadas = Array.from(
+      new Set(
+        partes
+          .map((parte) => this.dependenciasKb.resolveDependencia(parte, contexto))
+          .filter(Boolean),
+      ),
+    );
+
+    if (normalizadas.length > 0) {
+      return normalizadas.join(', ');
+    }
+
+    return this.clasificarPorPalabrasClave(contexto || rawDependencia);
   }
 
   // ---------------------------------------------------------------------------
@@ -217,6 +239,7 @@ export class GeminiService {
   // ---------------------------------------------------------------------------
   private clasificarPorPalabrasClave(desc: string): string {
     const d = desc.toLowerCase();
+    if (/gimnasio al aire libre|escenario deportivo|cancha|polideportivo|deporte|inder/.test(d)) return 'INDER';
     if (/hueco|v[ií]a|pavimento|acera|puente|and[eé]n/.test(d))           return 'Secretaría de Infraestructura Física';
     if (/basura|reciclaje|aseo|residuo/.test(d))                           return 'Emvarias';
     if (/[aá]rbol|quebrada|contaminaci[oó]n|ruido|ambiental|animal/.test(d)) return 'Secretaría de Medio Ambiente';
@@ -240,10 +263,14 @@ export class GeminiService {
     ubicacion: string,
     barrio?: string,
   ): Promise<ClasificacionEstructurada | null> {
+    const catalogoDependencias = this.dependenciasKb.catalogoTexto;
     const prompt = `Analiza esta denuncia ciudadana de Medellín Colombia.
 
 Denuncia: ${descripcion.substring(0, 600)}
 Ubicación: ${ubicacion}${barrio ? `, ${barrio}` : ''}
+
+DEPENDENCIAS OFICIALES DISPONIBLES (usa EXCLUSIVAMENTE estos nombres):
+${catalogoDependencias}
 
 REGLA CRÍTICA: Identifica la dependencia PRINCIPAL que tiene la competencia más fuerte y directa.
 Solo adiciona dependencias secundarias si:
@@ -278,11 +305,33 @@ Responde SOLO con JSON sin markdown:
       if (!jsonStr) return null;
       const p = JSON.parse(jsonStr) as Partial<ClasificacionEstructurada>;
       if (!Array.isArray(p.dependencias) || p.dependencias.length === 0) return null;
+
+      const contexto = `${descripcion} ${ubicacion} ${barrio ?? ''}`;
+      const normalizadas: DependenciaClasificada[] = [];
+      for (const dep of p.dependencias) {
+        const nombreNormalizado = this.normalizarDependenciaSalida(dep.nombre, contexto);
+        if (!nombreNormalizado) continue;
+        if (normalizadas.some((d) => d.nombre === nombreNormalizado)) continue;
+        normalizadas.push({
+          nombre: nombreNormalizado,
+          justificacion: dep.justificacion ?? 'Clasificación IA',
+          solicitudEspecifica: dep.solicitudEspecifica ?? 'Que se atienda y responda formalmente la situación reportada.',
+        });
+      }
+
+      if (normalizadas.length === 0) {
+        normalizadas.push({
+          nombre: this.clasificarPorPalabrasClave(contexto),
+          justificacion: 'Clasificación por respaldo de reglas locales',
+          solicitudEspecifica: 'Que se atienda y responda formalmente la situación reportada.',
+        });
+      }
+
       return {
         esEspecial:   p.esEspecial ?? false,
-        dependencias: p.dependencias,
+        dependencias: normalizadas,
         asunto:       (p.asunto ?? '').toUpperCase().trim(),
-        esPrincipal:  p.esPrincipal ?? p.dependencias[0].nombre,
+        esPrincipal:  this.normalizarDependenciaSalida(p.esPrincipal ?? normalizadas[0].nombre, contexto),
       };
     } catch (err) {
       this.logger.warn(`clasificarDenunciaEstructurada falló: ${(err as Error).message?.substring(0, 80)}`);
@@ -337,6 +386,8 @@ Responde SOLO con JSON sin markdown:
     justificacionBreve: string;
   }> {
     const prompt = `Denuncia: "${descripcion.substring(0, 400)}"
+Dependencias válidas (usa EXACTAMENTE una):
+${this.dependenciasKb.catalogoTexto}
 Clasifica. SOLO JSON: {"esEspecial":bool,"dependencia":"nombre exacto","justificacionBreve":"una oración"}`;
 
     try {
@@ -344,9 +395,10 @@ Clasifica. SOLO JSON: {"esEspecial":bool,"dependencia":"nombre exacto","justific
       const jsonStr = this.extraerJson(result.response.text());
       if (!jsonStr) throw new Error('sin JSON');
       const p = JSON.parse(jsonStr) as { esEspecial?: boolean; dependencia?: string; justificacionBreve?: string };
+      const dependenciaNormalizada = this.normalizarDependenciaSalida(p.dependencia ?? '', descripcion);
       return {
         esEspecial:         p.esEspecial ?? false,
-        dependencia:        p.dependencia ?? this.clasificarPorPalabrasClave(descripcion),
+        dependencia:        dependenciaNormalizada,
         justificacionBreve: p.justificacionBreve ?? '',
       };
     } catch {
@@ -372,12 +424,12 @@ Clasifica. SOLO JSON: {"esEspecial":bool,"dependencia":"nombre exacto","justific
     );
 
     const pendientes = [
-      !(datos['nombre'] || datos['esAnonimo']) ? '- Nombre completo' : null,
-      !(datos['esAnonimo'] === true || datos['cedula']) ? '- Cédula' : null,
+      !datos['descripcion'] ? '- Descripción del problema' : null,
       !datos['barrio'] ? '- Barrio' : null,
       !datos['direccion'] ? '- Dirección exacta' : null,
       !datos['direccionConfirmada'] ? '- Confirmar dirección' : null,
-      !datos['descripcion'] ? '- Descripción del problema' : null,
+      !(datos['nombre'] || datos['esAnonimo']) ? '- Nombre completo' : null,
+      !(datos['esAnonimo'] === true || datos['cedula']) ? '- Cédula' : null,
     ].filter(Boolean).join('\n') || 'TODOS LOS DATOS RECOPILADOS';
 
     const instruccionFinal = pendientes === 'TODOS LOS DATOS RECOPILADOS'
@@ -387,6 +439,9 @@ Clasifica. SOLO JSON: {"esEspecial":bool,"dependencia":"nombre exacto","justific
     const prompt = `HISTORIAL:\n${hist || '(inicio)'}
 
 DATOS RECOPILADOS: ${JSON.stringify(datos)}
+
+  DEPENDENCIAS OFICIALES DISPONIBLES (usa exactamente estos nombres, no inventes):
+  ${this.dependenciasKb.catalogoTexto}
 
 DATOS PENDIENTES:\n${pendientes}${instruccionFinal}
 
@@ -406,9 +461,14 @@ JSON:`;
       }
 
       const p = JSON.parse(jsonStr) as Partial<RespuestaChatbot>;
+      const datosExtraidos = ((p.datosExtraidos as Record<string, unknown>) ?? {});
+      if (typeof datosExtraidos.dependencia === 'string') {
+        datosExtraidos.dependencia = this.normalizarDependenciaSalida(datosExtraidos.dependencia, mensaje);
+      }
+
       return {
         respuesta:        p.respuesta ?? '¿Me repites eso?',
-        datosExtraidos:   (p.datosExtraidos as Record<string, unknown>) ?? {},
+        datosExtraidos,
         etapaSiguiente:   p.etapaSiguiente ?? 'recopilando',
         listaParaRadicar: p.listaParaRadicar ?? false,
       };

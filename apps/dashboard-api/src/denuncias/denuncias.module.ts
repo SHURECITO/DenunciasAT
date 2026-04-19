@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { EitherAuthGuard } from '../auth/guards/either-auth.guard';
 import { StorageModule } from '@app/storage';
@@ -9,7 +10,7 @@ import { DocumentLifecycleService } from './document-lifecycle.service';
 import { Denuncia } from './entities/denuncia.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Denuncia]), AuthModule, StorageModule],
+  imports: [TypeOrmModule.forFeature([Denuncia]), ConfigModule, AuthModule, StorageModule],
   controllers: [DenunciasController],
   providers: [DenunciasService, EitherAuthGuard, DocumentLifecycleService],
 })

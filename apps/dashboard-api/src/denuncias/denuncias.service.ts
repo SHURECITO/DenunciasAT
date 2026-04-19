@@ -1,10 +1,13 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { DataSource, Repository } from 'typeorm';
+import axios from 'axios';
 import { CreateDenunciaDto } from './dto/create-denuncia.dto';
 import { CreateIncompletaDto } from './dto/create-incompleta.dto';
 import { CreateParcialDto } from './dto/create-parcial.dto';
@@ -25,10 +28,13 @@ const ESTADOS_ORDEN: DenunciaEstado[] = [
 
 @Injectable()
 export class DenunciasService {
+  private readonly logger = new Logger(DenunciasService.name);
+
   constructor(
     @InjectRepository(Denuncia)
     private readonly denunciasRepo: Repository<Denuncia>,
     private readonly dataSource: DataSource,
+    private readonly config: ConfigService,
   ) {}
 
   private async createWithRunner(
@@ -45,6 +51,7 @@ export class DenunciasService {
       const seq: number = result[0].seq;
       const radicado = `DAT-${String(seq).padStart(6, '0')}`;
 
+      const origen = extra.origenManual === true ? 'Dashboard manual' : 'WhatsApp';
       const denuncia = queryRunner.manager.create(Denuncia, {
         documentoPendiente: false,
         incompleta: false,
@@ -54,6 +61,11 @@ export class DenunciasService {
         ...extra,
         radicado,
         estado: DenunciaEstado.RECIBIDA,
+        historialCambios: [{
+          usuario: 'sistema',
+          timestamp: new Date().toISOString(),
+          cambios: { creacion: { anterior: null, nuevo: `Denuncia creada vía ${origen}` } },
+        }],
       });
       const saved = await queryRunner.manager.save(denuncia);
       await queryRunner.commitTransaction();
@@ -167,8 +179,34 @@ export class DenunciasService {
       );
     }
 
+    const estadoAnterior = denuncia.estado;
     denuncia.estado = dto.estado;
-    return this.denunciasRepo.save(denuncia);
+
+    const historial = Array.isArray(denuncia.historialCambios) ? [...denuncia.historialCambios] : [];
+    historial.push({
+      usuario: 'sistema',
+      timestamp: new Date().toISOString(),
+      cambios: { estado: { anterior: estadoAnterior, nuevo: dto.estado } },
+    });
+    denuncia.historialCambios = historial;
+
+    const saved = await this.denunciasRepo.save(denuncia);
+
+    // Notificar al ciudadano vía WhatsApp cuando la denuncia tiene respuesta (fire-and-forget)
+    if (dto.estado === DenunciaEstado.CON_RESPUESTA && denuncia.telefono) {
+      const notifUrl = this.config.get<string>('NOTIFICATION_SERVICE_URL', 'http://notification-service:3005');
+      axios.post(`${notifUrl}/notificar/respuesta`, {
+        denunciaId: denuncia.id,
+        telefono: denuncia.telefono,
+        radicado: denuncia.radicado,
+        dependencia: denuncia.dependenciaAsignada ?? 'la entidad competente',
+        contenidoRespuesta: dto.respuesta ?? 'La administración ha dado respuesta a su solicitud.',
+      }).catch((err: Error) => {
+        this.logger.warn(`Error notificando respuesta al ciudadano: ${err.message}`);
+      });
+    }
+
+    return saved;
   }
 
   async marcarDocumentoPendiente(id: number): Promise<Denuncia> {
@@ -179,6 +217,21 @@ export class DenunciasService {
   }
 
   async findDatosUsuarioPorTelefono(telefono: string): Promise<{ nombreCiudadano: string; cedula: string; esAnonimo: boolean } | null> {
+    const dConCedula = await this.denunciasRepo
+      .createQueryBuilder('d')
+      .where('d.telefono = :telefono', { telefono })
+      .andWhere('d.incompleta = false')
+      .andWhere('d.esAnonimo = false')
+      .andWhere("COALESCE(TRIM(d.cedula), '') <> ''")
+      .andWhere("UPPER(TRIM(d.cedula)) <> 'ANONIMO'")
+      .orderBy('d.fechaCreacion', 'DESC')
+      .select(['d.nombreCiudadano', 'd.cedula', 'd.esAnonimo'])
+      .getOne();
+
+    if (dConCedula) {
+      return { nombreCiudadano: dConCedula.nombreCiudadano, cedula: dConCedula.cedula, esAnonimo: dConCedula.esAnonimo };
+    }
+
     const d = await this.denunciasRepo.findOne({
       where: { telefono, incompleta: false },
       order: { fechaCreacion: 'DESC' },
@@ -206,7 +259,7 @@ export class DenunciasService {
     const p = path.join(process.cwd(), 'infrastructure', 'config', 'dependencias.json');
     const data = JSON.parse(fs.readFileSync(p, 'utf8'));
     
-    const result = [];
+    const result: any[] = [];
     for (const [key, val] of Object.entries(data)) {
       if (key.startsWith('_')) continue;
       const typedVal: any = val;
@@ -266,13 +319,29 @@ export class DenunciasService {
       denuncia.solicitudAdicional = dto.solicitudAdicional;
     }
     
-    const historial = denuncia.historialCambios || [];
-    historial.push({
-      usuario: usuario?.email || usuario?.nombre || 'Usuario',
-      timestamp: new Date().toISOString(),
-      cambios
-    });
-    denuncia.historialCambios = historial;
+    if (dto.nombreCiudadano !== undefined) {
+      cambios.nombreCiudadano = { anterior: denuncia.nombreCiudadano, nuevo: dto.nombreCiudadano };
+      denuncia.nombreCiudadano = dto.nombreCiudadano;
+    }
+    if (dto.cedula !== undefined) {
+      cambios.cedula = { anterior: denuncia.cedula, nuevo: dto.cedula };
+      denuncia.cedula = dto.cedula;
+    }
+    if (dto.telefono !== undefined) {
+      cambios.telefono = { anterior: denuncia.telefono, nuevo: dto.telefono };
+      denuncia.telefono = dto.telefono;
+    }
+    
+    // Solo guardamos histórico si realmente hay algo que cambiar
+    if (Object.keys(cambios).length > 0) {
+      const historial = denuncia.historialCambios || [];
+      historial.push({
+        usuario: usuario?.email || usuario?.nombre || 'Usuario',
+        timestamp: new Date().toISOString(),
+        cambios
+      });
+      denuncia.historialCambios = historial;
+    }
     
     if (dto.regenerarDocumento) {
       denuncia.documentoGeneradoOk = false;
@@ -280,5 +349,20 @@ export class DenunciasService {
     }
     
     return this.denunciasRepo.save(denuncia);
+  }
+
+  async eliminarDenuncia(id: number): Promise<{ success: boolean; id: number }> {
+    const denuncia = await this.findOne(id);
+    await this.denunciasRepo.remove(denuncia);
+    return { success: true, id };
+  }
+
+  async cancelarParcial(id: number): Promise<{ success: boolean; id: number }> {
+    const denuncia = await this.findOne(id);
+    if (!denuncia.incompleta) {
+      throw new BadRequestException('Solo se pueden cancelar denuncias parciales incompletas');
+    }
+    await this.denunciasRepo.remove(denuncia);
+    return { success: true, id };
   }
 }

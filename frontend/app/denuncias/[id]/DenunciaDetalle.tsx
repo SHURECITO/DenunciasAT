@@ -473,6 +473,27 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
                 Esta denuncia ya ha sido completamente gestionada.
               </p>
             )}
+
+            <div className="mt-6 pt-4 border-t border-red-100">
+              <button
+                onClick={async () => {
+                  if (!confirm('¿Estás seguro de eliminar esta denuncia? Esta acción no se puede deshacer.')) return;
+                  setLoading(true);
+                  try {
+                    const res = await fetch(`/api/denuncias/${denuncia.id}`, { method: 'DELETE' });
+                    if (res.ok) router.push('/');
+                    else throw new Error('Error al eliminar');
+                  } catch (e: unknown) {
+                    setError(e instanceof Error ? e.message : 'Error de red');
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+                className="w-full rounded-lg bg-red-50 text-red-600 px-4 py-2 text-sm font-medium hover:bg-red-100 disabled:opacity-50 transition-colors"
+              >
+                🗑️ Eliminar denuncia
+              </button>
+            </div>
           </section>
 
           {/* Chat */}
@@ -492,6 +513,56 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
               Ver conversación
             </button>
           </section>
+
+          {/* Historial de Trazabilidad */}
+          {denuncia.historialCambios && denuncia.historialCambios.length > 0 && (
+            <section className="rounded-xl border border-gray-200 bg-white p-6">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                Historial de la denuncia
+              </h2>
+              <div className="space-y-3">
+                {denuncia.historialCambios.slice().reverse().map((hist, idx) => (
+                  <div key={idx} className="border-l-2 border-blue-200 pl-3">
+                    <p className="text-xs text-gray-500">
+                      {new Date(hist.timestamp).toLocaleString('es-CO')}
+                      {hist.usuario && hist.usuario !== 'sistema' && (
+                        <span className="ml-1 font-medium text-gray-700">— {hist.usuario}</span>
+                      )}
+                    </p>
+                    <div className="mt-0.5 text-xs text-gray-700">
+                      {Object.keys(hist.cambios).map(key => {
+                        const c = hist.cambios[key];
+                        if (key === 'creacion') {
+                          return (
+                            <span key={key} className="text-blue-700 font-medium">
+                              {c.nuevo ?? ''}
+                            </span>
+                          );
+                        }
+                        if (key === 'estado') {
+                          return (
+                            <span key={key}>
+                              Estado: <span className="line-through text-red-500 mr-1">{c.anterior ?? '—'}</span>
+                              <span className="text-green-600">→ {c.nuevo ?? '—'}</span>
+                            </span>
+                          );
+                        }
+                        return (
+                          <div key={key} className="mb-0.5">
+                            <span className="font-semibold capitalize">{key}: </span>
+                            {c.anterior != null && (
+                              <span className="line-through text-red-500 opacity-60 mr-1">{c.anterior || '(vacío)'}</span>
+                            )}
+                            <span className="text-green-600">→ {c.nuevo ?? '(vacío)'}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </div>
       

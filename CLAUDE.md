@@ -40,7 +40,7 @@ Sistema de gestión de denuncias ciudadanas para el concejal Andrés Tobón (Med
 | redis | 6379 | ✅ |
 | postgres | 5432 | ✅ |
 | document-service | 3004 | ✅ |
-| notification-service | 3005 | 🔜 |
+| notification-service | 3005 | ✅ |
 | rag-service | 3006 | 🔜 |
 
 **Puertos expuestos al host (no estándar):** API `8741`, Frontend `8742`.
@@ -169,8 +169,8 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **document-service validación**: antes de subir a MinIO valida ZIP + `xmlns:r` + `FIRMA_NOMBRE`/`FIRMA_CARGO` + `headerReference`/`footerReference` + ausencia del nombre del ciudadano en HECHOS. Si falla: `documentoGeneradoOk:false` sin subir.
 - **solicitudAdicional / imagenesEvidencia**: campos nullable en entidad Denuncia; chatbot los captura y pasa al radicar
 - **Evolution**: API key UUID obligatorio (reset: `docker volume rm denunciasat_evolution_data`); parche @lid automático al startup en whatsapp-service
-- **Mutex WhatsApp (S24)**: Redis `lock:{numero}` (TTL 15s) + `queue:{numero}` (LPUSH/RPOP) — drena secuencial con delay 1500ms. Media a MinIO ANTES del lock (URL Evolution expira). `limpiarNumero()` ignora `@g.us`/`@broadcast` y trunca JID @lid >13 dígitos.
-- **Upsert parcial (S24)**: chatbot consulta `GET /denuncias/parcial/telefono/:telefono` antes de radicar; si existe parcial `incompleta:true`, hace PATCH con `incompleta:false` + datos finales. Evita duplicados.
+- **Mutex WhatsApp (S28)**: Redis `lock:{numero}` (TTL **8s**) + `queue:{numero}` (LPUSH/RPOP) — lock liberado ANTES de drenar cola, delay 2000ms. Media a MinIO ANTES del lock. `resolverNumeroLid()`: si JID @lid >13 dígitos, llama `POST /chat/whatsappNumbers/{instance}` de Evolution API; fallback: prefijo 57 + últimos 10 dígitos.
+- **Upsert parcial (S28)**: `radicarDenuncia()` usa `estado.parcialId` Redis PRIMERO (antes de buscar por teléfono) — evita duplicados aunque el número @lid varíe entre mensajes.
 - **IA multi-dep selectiva (S24)**: `clasificarDenunciaEstructurada()` (temp 0.15) devuelve `[{dependencia, solicitud}]`. Solo añade secundaria si competencia es genuinamente distinta. Document-builder genera sub-bloques SOLICITUD por dependencia. `filtrarSolicitudAdicional()` remueve inapropiado antes del oficio.
 - **Content-Types imágenes (S24)**: `extensionesUsadas: Set` añade `<Default Extension>` a `[Content_Types].xml` si falta. docPr id = `100 + imgCount`. Sin pie de foto.
 - **Stats dependencias separadas (S24)**: `string_to_array + unnest` en SQL splitea CSV. UI trunca nombres a 30 chars con "…".
@@ -196,6 +196,29 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - JSON de dependencias actualizado con información oficial (Total: 47 dependencias).
 - **Backend**: Añadido campo `historialCambios` (JSONB) en la entidad `Denuncia`. Nuevos endpoints `GET /dependencias`, `PATCH /denuncias/:id/editar`, `POST /generar-desde-descripcion`.
 - **Frontend**: Nuevo modal para editar denuncia (modificar dependencias y regenerar documento vía webhook manual). Refactorización del formulario de creación manual (`NuevaDenunciaForm`), que ahora delega la clasificación de la dependencia a la IA de manera automática si el usuario marca "Generar documento oficial".
+
+**Sesión 26 (2026-04-19) — Endurecimiento de seguridad predeploy (sin romper flujos):**
+- Auth interna segmentada de extremo a extremo (`x-internal-service` + claves por servicio): chatbot↔dashboard, document↔dashboard, dashboard→document, dashboard→whatsapp-qr.
+- Superficie de ataque reducida: endpoints destructivos internos acotados a parciales (`POST /denuncias/:id/cancelar-parcial`), eliminación total solo con JWT; generación documental interna movida a `POST /denuncias/:id/generar` con `EitherAuthGuard`.
+- SSRF mitigado: `MinioService.uploadFromUrl()` y fallback de imágenes en `document-builder` validan `ALLOWED_REMOTE_MEDIA_HOSTS`; descarga externa deshabilitada por defecto con `ALLOW_EXTERNAL_IMAGE_URLS=false`.
+- Hardening runtime/config: DTOs estrictos para generación manual/documental, `SEED_ADMIN_PASSWORD` obligatorio (sin password hardcodeado), Swagger condicional por `SWAGGER_ENABLED`, `helmet + ValidationPipe` en document-service, y contenedores backend ejecutando como usuario no-root.
+
+**Sesión 27 (2026-04-19) — Correcciones funcionales chatbot/documentos (QA manual):**
+- Normalización fuerte de dependencias: nuevo KB local con aliases + búsqueda vectorial dispersa (`libs/ai/src/dependencias-kb.ts`), catálogo oficial inyectado en prompts y post-procesamiento de salida IA para evitar entidades inventadas (ej. recreación/deporte → `INDER`).
+- Chatbot más robusto al radicar: confirmación server-side ampliada (`radicar/confirmar/autorizar`), fallback anti-loop de “problema técnico” en etapa final y pregunta explícita para confirmar identidad previa (nombre+cédula) antes de reutilizar datos.
+- Reutilización de identidad mejorada: `findDatosUsuarioPorTelefono()` prioriza registros no anónimos con cédula válida, evitando tomar denuncias antiguas incompletas o con cédula vacía.
+- Estabilidad de evidencia y .docx: whatsapp-service preserva extensión/MIME real al subir a MinIO; document-builder soporta esquema actual de `dependencias.json` (`nombreTitular/cargoTitular/entidadCompleta`) y omite imágenes en formato no soportado en lugar de dañar el documento.
+
+**Sesión 28 (2026-04-19) — Flujo chatbot reordenado, fixes mutex/@lid/duplicados, notification-service, historial:**
+- **Flujo chatbot**: nuevo orden descripción→ubicación→evidencia→solicitud→nombre→cédula→confirmación. `SYSTEM_PROMPT_CHATBOT` y `MSG_BIENVENIDA` actualizados. Pendientes reordenados en Gemini.
+- **Mutex**: TTL 8s (era 15s), delay 2000ms (era 1500ms), lock liberado ANTES de drenar cola (fix “problema técnico” al confirmar).
+- **@lid resolver**: si número >13 dígitos, llama Evolution API `/chat/whatsappNumbers`; fallback 57+10 dígitos.
+- **Duplicados**: `radicarDenuncia()` usa `estado.parcialId` primero antes de buscar por teléfono.
+- **Logs historial mensajes**: mejorados con status y body de error.
+- **Tono cierre**: mensaje formal del concejal Andrés Felipe Tobón Villada.
+- **`historialCambios`**: entradas CREACION (al crear) y ESTADO (al cambiar estado) en `denuncias.service.ts`.
+- **notification-service** (puerto 3005): nuevo microservicio con `/notificar/respuesta` que llama Evolution API (3 reintentos con 5s). Integrado en docker-compose.yml y nest-cli.json. Dashboard-api lo llama fire-and-forget al pasar a CON_RESPUESTA. `UpdateEstadoDto` tiene campo `respuesta` opcional.
+- **Frontend historial**: sección “Historial de la denuncia” actualizada para mostrar CREACION/ESTADO correctamente.
 
 ---
 

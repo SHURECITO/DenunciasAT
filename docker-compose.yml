@@ -62,8 +62,14 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       SEED_ENABLED: ${SEED_ENABLED:-false}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8742}
       DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
+      CHATBOT_API_INTERNAL_KEY: ${CHATBOT_API_INTERNAL_KEY}
+      DOCUMENT_API_INTERNAL_KEY: ${DOCUMENT_API_INTERNAL_KEY}
+      WHATSAPP_QR_INTERNAL_KEY: ${WHATSAPP_QR_INTERNAL_KEY}
+      DASHBOARD_TO_DOCUMENT_KEY: ${DASHBOARD_TO_DOCUMENT_KEY}
       EVOLUTION_API_URL: http://evolution-api:8080
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
       EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-denunciasAt}
@@ -71,6 +77,8 @@ services:
       WHATSAPP_SERVICE_URL: http://whatsapp-service:3003
       # URL interna del document-service (ya no se usa para proxy, solo para fire-and-forget)
       DOCUMENT_SERVICE_URL: http://document-service:3004
+      # URL interna del notification-service
+      NOTIFICATION_SERVICE_URL: http://notification-service:3005
       # MinIO para servir .docx al frontend
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
@@ -100,7 +108,7 @@ services:
     # Parche @lid: aplicar antes de arrancar el servidor (ver infrastructure/evolution-api/patch-lid.js)
     entrypoint: ["/bin/bash", "-c", "node /patches/patch-lid.js && . ./Docker/scripts/deploy_database.sh && npm run start:prod"]
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       # IMPORTANTE: el valor DEBE tener formato UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
       # Si no es UUID, Evolution API lo ignora y genera su propia clave aleatoria
@@ -147,7 +155,7 @@ services:
       dockerfile: apps/whatsapp-service/Dockerfile
     restart: unless-stopped
     ports:
-      - "3003:3003"
+      - "127.0.0.1:3003:3003"
     environment:
       NODE_ENV: production
       PORT: 3003
@@ -159,12 +167,17 @@ services:
       DASHBOARD_API_URL: http://dashboard-api:3000
       # Redis para almacenar QR temporalmente (TTL 90s)
       REDIS_URL: redis://redis:6379
+      DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
+      WHATSAPP_QR_INTERNAL_KEY: ${WHATSAPP_QR_INTERNAL_KEY}
+      WHATSAPP_TO_CHATBOT_KEY: ${WHATSAPP_TO_CHATBOT_KEY}
+      WHATSAPP_WEBHOOK_HMAC_SECRET: ${WHATSAPP_WEBHOOK_HMAC_SECRET}
       # MinIO para subir evidencias inmediatamente (las URLs de Evolution API expiran)
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET_EVIDENCIAS: denunciasat-evidencias
+      ALLOWED_REMOTE_MEDIA_HOSTS: ${ALLOWED_REMOTE_MEDIA_HOSTS:-evolution-api}
     depends_on:
       evolution-api:
         condition: service_started
@@ -185,7 +198,7 @@ services:
       dockerfile: apps/chatbot-service/Dockerfile
     restart: unless-stopped
     ports:
-      - "3002:3002"
+      - "127.0.0.1:3002:3002"
     environment:
       NODE_ENV: production
       PORT: 3002
@@ -194,6 +207,8 @@ services:
       # dashboard-api se referencia por puerto INTERNO Docker (3000), no por el host (8741)
       DASHBOARD_API_URL: http://dashboard-api:3000
       DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
+      CHATBOT_API_INTERNAL_KEY: ${CHATBOT_API_INTERNAL_KEY}
+      WHATSAPP_TO_CHATBOT_KEY: ${WHATSAPP_TO_CHATBOT_KEY}
       ADMIN_WHATSAPP_NUMBER: ${ADMIN_WHATSAPP_NUMBER}
       DOCUMENT_SERVICE_URL: http://document-service:3004
     depends_on:
@@ -214,12 +229,14 @@ services:
       dockerfile: apps/document-service/Dockerfile
     restart: unless-stopped
     ports:
-      - "3004:3004"
+      - "127.0.0.1:3004:3004"
     environment:
       NODE_ENV: production
       PORT: 3004
       DASHBOARD_API_URL: http://dashboard-api:3000
       DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
+      DOCUMENT_API_INTERNAL_KEY: ${DOCUMENT_API_INTERNAL_KEY}
+      DASHBOARD_TO_DOCUMENT_KEY: ${DASHBOARD_TO_DOCUMENT_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       # MinIO para guardar .docx generados y leer imágenes de evidencia
       MINIO_ENDPOINT: minio
@@ -228,6 +245,8 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET_EVIDENCIAS: denunciasat-evidencias
       MINIO_BUCKET_DOCUMENTOS: denunciasat-documentos
+      ALLOWED_REMOTE_MEDIA_HOSTS: ${ALLOWED_REMOTE_MEDIA_HOSTS:-evolution-api}
+      ALLOW_EXTERNAL_IMAGE_URLS: ${ALLOW_EXTERNAL_IMAGE_URLS:-false}
     depends_on:
       dashboard-api:
         condition: service_healthy
@@ -245,8 +264,8 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -281,6 +300,29 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     restart: on-failure
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: apps/notification-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3005:3005"
+    environment:
+      NODE_ENV: production
+      PORT: 3005
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-denunciasAt}
+    depends_on:
+      evolution-api:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
 
   frontend:
     build:
