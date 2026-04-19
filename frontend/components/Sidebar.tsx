@@ -1,5 +1,9 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import LogoutButton from './LogoutButton';
+import { getSocket } from '@/lib/socket';
 
 type ActivePage = 'denuncias' | 'nueva' | 'especiales' | 'estadisticas' | 'usuarios' | 'configuracion';
 
@@ -59,7 +63,67 @@ const NAV_ITEMS = [
 
 const NAV_DISABLED: typeof NAV_ITEMS = [];
 
+type WsStatus = 'connected' | 'disconnected' | 'reconnecting';
+
+const WS_STATUS_UI: Record<
+  WsStatus,
+  { label: string; dotClass: string; textClass: string }
+> = {
+  connected: {
+    label: 'En vivo',
+    dotClass: 'bg-emerald-400 animate-pulse',
+    textClass: 'text-emerald-300',
+  },
+  disconnected: {
+    label: 'Sin conexión en tiempo real',
+    dotClass: 'bg-red-400',
+    textClass: 'text-red-300',
+  },
+  reconnecting: {
+    label: 'Reconectando...',
+    dotClass: 'bg-amber-300 animate-pulse',
+    textClass: 'text-amber-200',
+  },
+};
+
 export default function Sidebar({ active }: { active: ActivePage }) {
+  const [wsStatus, setWsStatus] = useState<WsStatus>('disconnected');
+
+  useEffect(() => {
+    const socket = getSocket();
+
+    const handleConnect = () => setWsStatus('connected');
+    const handleDisconnect = () => setWsStatus('disconnected');
+    const handleReconnectAttempt = () => setWsStatus('reconnecting');
+    const handleReconnect = () => setWsStatus('connected');
+    const handleReconnectFailed = () => setWsStatus('disconnected');
+    const handleConnectError = () => setWsStatus('reconnecting');
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('connect_error', handleConnectError);
+    socket.io.on('reconnect_attempt', handleReconnectAttempt);
+    socket.io.on('reconnect', handleReconnect);
+    socket.io.on('reconnect_failed', handleReconnectFailed);
+
+    if (socket.connected) {
+      setWsStatus('connected');
+    } else if (socket.active) {
+      setWsStatus('reconnecting');
+    }
+
+    return () => {
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('connect_error', handleConnectError);
+      socket.io.off('reconnect_attempt', handleReconnectAttempt);
+      socket.io.off('reconnect', handleReconnect);
+      socket.io.off('reconnect_failed', handleReconnectFailed);
+    };
+  }, []);
+
+  const statusUi = WS_STATUS_UI[wsStatus];
+
   return (
     <aside className="flex w-60 flex-col bg-gray-900 text-white">
       {/* Logo */}
@@ -116,6 +180,13 @@ export default function Sidebar({ active }: { active: ActivePage }) {
           </>
         )}
       </nav>
+
+      <div className="mx-3 mb-3 rounded-md border border-gray-700 bg-gray-800/80 px-3 py-2">
+        <p className={`flex items-center gap-2 text-xs font-semibold ${statusUi.textClass}`}>
+          <span className={`h-2.5 w-2.5 rounded-full ${statusUi.dotClass}`} />
+          {statusUi.label}
+        </p>
+      </div>
 
       {/* Usuario */}
       <div className="border-t border-gray-700 px-3 py-3">

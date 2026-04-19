@@ -3,9 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import DenunciaEstadoBadge from '@/components/DenunciaEstadoBadge';
 import ChatPanel from '@/components/ChatPanel';
 import ModalEditarDenuncia from '@/components/ModalEditarDenuncia';
+import { useWebSocket } from '@/hooks/useWebSocket';
 import { type Denuncia, type DenunciaEstado, type Mensaje, type RespuestaDependencia } from '@/lib/api';
 
 const ESTADOS_SIGUIENTE: Record<DenunciaEstado, DenunciaEstado | null> = {
@@ -35,9 +37,20 @@ interface Props {
   mensajes: Mensaje[];
 }
 
+interface DocumentoListoEvent {
+  denunciaId: number;
+  radicado: string;
+}
+
+interface NuevoMensajeEvent {
+  denunciaId: number;
+  mensaje: Mensaje;
+}
+
 export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) {
   const router = useRouter();
   const [denuncia, setDenuncia] = useState(initial);
+  const [mensajesLive, setMensajesLive] = useState(mensajes);
   const [chatOpen, setChatOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -52,6 +65,50 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
     !tieneDocumento &&
     !denuncia.esEspecial &&
     denuncia.estado !== 'RECIBIDA';
+
+  useEffect(() => {
+    setMensajesLive(mensajes);
+  }, [mensajes]);
+
+  useWebSocket<DocumentoListoEvent>(
+    'documento_listo',
+    (data) => {
+      if (data.denunciaId !== denuncia.id) {
+        return;
+      }
+
+      setDenuncia((prev) => ({
+        ...prev,
+        documentoGeneradoOk: true,
+        documentoPendiente: false,
+      }));
+
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+
+      toast.success('Documento generado correctamente');
+    },
+    [denuncia.id],
+  );
+
+  useWebSocket<NuevoMensajeEvent>(
+    'nuevo_mensaje',
+    (data) => {
+      if (data.denunciaId !== denuncia.id) {
+        return;
+      }
+
+      setMensajesLive((prev) => {
+        if (prev.some((m) => m.id === data.mensaje.id)) {
+          return prev;
+        }
+        return [...prev, data.mensaje];
+      });
+    },
+    [denuncia.id],
+  );
 
   // Polling: mientras documentoPendiente && !documentoGeneradoOk, refresca cada 8 s
   useEffect(() => {
@@ -186,7 +243,7 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
 
   return (
     <>
-      <ChatPanel mensajes={mensajes} open={chatOpen} onClose={() => setChatOpen(false)} />
+      <ChatPanel mensajes={mensajesLive} open={chatOpen} onClose={() => setChatOpen(false)} />
 
       {/* Header */}
       <header className="border-b border-gray-200 bg-white px-8 py-5">
@@ -502,9 +559,9 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
               Conversación
             </h2>
             <p className="mb-4 text-sm text-gray-500">
-              {mensajes.length === 0
+              {mensajesLive.length === 0
                 ? 'Sin mensajes de WhatsApp registrados.'
-                : `${mensajes.length} mensaje${mensajes.length !== 1 ? 's' : ''} en WhatsApp`}
+                : `${mensajesLive.length} mensaje${mensajesLive.length !== 1 ? 's' : ''} en WhatsApp`}
             </p>
             <button
               onClick={() => setChatOpen(true)}

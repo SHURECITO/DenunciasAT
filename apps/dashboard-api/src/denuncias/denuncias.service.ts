@@ -15,6 +15,7 @@ import { UpdateDenunciaDto } from './dto/update-denuncia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { EditarDenunciaDto } from './dto/editar-denuncia.dto';
 import { Denuncia, DenunciaEstado } from './entities/denuncia.entity';
+import { EventsGateway } from '../events/events.gateway';
 
 const capitalizar = (str: string): string =>
   str.toLowerCase().split(' ').map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
@@ -35,6 +36,7 @@ export class DenunciasService {
     private readonly denunciasRepo: Repository<Denuncia>,
     private readonly dataSource: DataSource,
     private readonly config: ConfigService,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   private async createWithRunner(
@@ -78,8 +80,10 @@ export class DenunciasService {
     }
   }
 
-  create(dto: CreateDenunciaDto): Promise<Denuncia> {
-    return this.createWithRunner(dto);
+  async create(dto: CreateDenunciaDto): Promise<Denuncia> {
+    const denuncia = await this.createWithRunner(dto);
+    this.eventsGateway.emitNuevaDenuncia(denuncia);
+    return denuncia;
   }
 
   createManual(dto: CreateDenunciaDto): Promise<Denuncia> {
@@ -154,8 +158,16 @@ export class DenunciasService {
 
   async update(id: number, dto: UpdateDenunciaDto): Promise<Denuncia> {
     const denuncia = await this.findOne(id);
+    const documentoGeneradoAntes = denuncia.documentoGeneradoOk;
     Object.assign(denuncia, dto);
-    return this.denunciasRepo.save(denuncia);
+    const saved = await this.denunciasRepo.save(denuncia);
+
+    // El document-service notifica por PATCH cuando el .docx ya quedó listo.
+    if (!documentoGeneradoAntes && saved.documentoGeneradoOk) {
+      this.eventsGateway.emitDocumentoListo(saved.id, saved.radicado);
+    }
+
+    return saved;
   }
 
   async updateEstado(id: number, dto: UpdateEstadoDto): Promise<Denuncia> {
@@ -191,6 +203,7 @@ export class DenunciasService {
     denuncia.historialCambios = historial;
 
     const saved = await this.denunciasRepo.save(denuncia);
+    this.eventsGateway.emitCambioEstado(id, estadoAnterior, dto.estado);
 
     // Notificar al ciudadano vía WhatsApp cuando la denuncia tiene respuesta (fire-and-forget)
     if (dto.estado === DenunciaEstado.CON_RESPUESTA && denuncia.telefono) {

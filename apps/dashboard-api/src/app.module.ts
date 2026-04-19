@@ -11,6 +11,7 @@ import { MensajesModule } from './mensajes/mensajes.module';
 import { UsuariosModule } from './usuarios/usuarios.module';
 import { EstadisticasModule } from './estadisticas/estadisticas.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { EventsModule } from './events/events.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -29,6 +30,7 @@ import { AppController } from './app.controller';
     UsuariosModule,
     EstadisticasModule,
     WhatsappModule,
+    EventsModule,
   ],
   controllers: [AppController],
   providers: [

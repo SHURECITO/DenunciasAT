@@ -174,6 +174,7 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **IA multi-dep selectiva (S24)**: `clasificarDenunciaEstructurada()` (temp 0.15) devuelve `[{dependencia, solicitud}]`. Solo añade secundaria si competencia es genuinamente distinta. Document-builder genera sub-bloques SOLICITUD por dependencia. `filtrarSolicitudAdicional()` remueve inapropiado antes del oficio.
 - **Content-Types imágenes (S24)**: `extensionesUsadas: Set` añade `<Default Extension>` a `[Content_Types].xml` si falta. docPr id = `100 + imgCount`. Sin pie de foto.
 - **Stats dependencias separadas (S24)**: `string_to_array + unnest` en SQL splitea CSV. UI trunca nombres a 30 chars con "…".
+- **WebSockets dashboard (S29)**: Socket.IO en `dashboard-api` sobre el mismo puerto HTTP (host `8741` → contenedor `3000`), namespace `/eventos`, eventos `nueva_denuncia`, `cambio_estado`, `documento_listo`, `nuevo_mensaje`.
 
 ## Infraestructura operacional
 
@@ -219,6 +220,11 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **`historialCambios`**: entradas CREACION (al crear) y ESTADO (al cambiar estado) en `denuncias.service.ts`.
 - **notification-service** (puerto 3005): nuevo microservicio con `/notificar/respuesta` que llama Evolution API (3 reintentos con 5s). Integrado en docker-compose.yml y nest-cli.json. Dashboard-api lo llama fire-and-forget al pasar a CON_RESPUESTA. `UpdateEstadoDto` tiene campo `respuesta` opcional.
 - **Frontend historial**: sección “Historial de la denuncia” actualizada para mostrar CREACION/ESTADO correctamente.
+
+**Sesión 29 (2026-04-19) — WebSockets tiempo real dashboard:**
+- Backend: nuevo `EventsGateway` (namespace `/eventos`) y emisiones en `create()` (`nueva_denuncia`), `updateEstado()` (`cambio_estado`), `update()` cuando documento queda listo (`documento_listo`) y `POST /mensajes/:denunciaId` (`nuevo_mensaje`).
+- Frontend: cliente Socket.IO (`frontend/lib/socket.ts`), hook `useWebSocket`, listado principal en vivo sin recarga, detalle en vivo para documento/mensajes y toast global con `sonner`.
+- UI: indicador de conexión en Sidebar con estados conectado (verde), desconectado (rojo) y reconectando (amarillo). Compose frontend expone `NEXT_PUBLIC_WS_URL` por defecto `http://localhost:8741`.
 
 ---
 
