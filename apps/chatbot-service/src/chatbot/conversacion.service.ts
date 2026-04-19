@@ -12,6 +12,8 @@ export interface DatosConfirmados {
   nombre?: string;
   esAnonimo?: boolean;
   cedula?: string;
+  identidadPendienteConfirmacion?: boolean;
+  identidadReutilizada?: boolean;
   telefono: string;
   barrio?: string;
   comuna?: string;
@@ -21,10 +23,11 @@ export interface DatosConfirmados {
   descripcionResumen?: string;
   dependencia?: string;
   esEspecial?: boolean;
+  clasificacionRagTexto?: string;
   imagenes?: string[];
   pdfs?: string[];
   solicitudAdicional?: string;
-  etapa: 'recopilando' | 'esperando_solicitud' | 'confirmando' | 'finalizado' | 'especial_cerrado';
+  etapa: 'recopilando' | 'esperando_solicitud' | 'confirmando' | 'finalizado' | 'especial_cerrado' | 'cancelado';
 }
 
 export interface EstadoConversacionIA {

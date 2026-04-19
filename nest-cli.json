@@ -98,6 +98,15 @@
       "compilerOptions": {
         "tsConfigPath": "apps/notification-service/tsconfig.app.json"
       }
+    },
+    "rag-service": {
+      "type": "application",
+      "root": "apps/rag-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/rag-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/rag-service/tsconfig.app.json"
+      }
     }
   }
 }

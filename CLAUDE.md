@@ -36,21 +36,23 @@ Sistema de gestión de denuncias ciudadanas para el concejal Andrés Tobón (Med
 | frontend | 3001 | ✅ |
 | chatbot-service | 3002 | ✅ |
 | whatsapp-service | 3003 | ✅ |
+| minio | 9000 | ✅ |
 | evolution-api | 8080 | ✅ |
 | redis | 6379 | ✅ |
 | postgres | 5432 | ✅ |
 | document-service | 3004 | ✅ |
 | notification-service | 3005 | ✅ |
-| rag-service | 3006 | 🔜 |
+| rag-service | 3006 | ✅ |
 
 **Puertos expuestos al host (no estándar):** API `8741`, Frontend `8742`.
+**Total servicios activos:** 11.
 
 ## Estado del proyecto
 
 - [x] Fase 1–9 — Scaffold, dashboard-api, frontend, Docker, seguridad, whatsapp/chatbot/Evolution API
 - [x] Sesión 14 — Chatbot IA conversacional (Gemini guía el flujo, sin máquina de estados rígida)
 - [x] Entrega 4 (parcial) — document-service + MinIO completo
-- [ ] Entrega 4 (resto) — notification-service + rag-service
+- [x] Entrega 4 (resto) — notification-service + rag-service
 - [ ] Entrega final — Kubernetes
 
 ## Entidades TypeORM
@@ -175,6 +177,7 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **Content-Types imágenes (S24)**: `extensionesUsadas: Set` añade `<Default Extension>` a `[Content_Types].xml` si falta. docPr id = `100 + imgCount`. Sin pie de foto.
 - **Stats dependencias separadas (S24)**: `string_to_array + unnest` en SQL splitea CSV. UI trunca nombres a 30 chars con "…".
 - **WebSockets dashboard (S29)**: Socket.IO en `dashboard-api` sobre el mismo puerto HTTP (host `8741` → contenedor `3000`), namespace `/eventos`, eventos `nueva_denuncia`, `cambio_estado`, `documento_listo`, `nuevo_mensaje`.
+- **RAG semántico (S30)**: `rag-service` (puerto `3006`) con tabla `dependencias_vectores` (pgvector 768D) y endpoints `POST /buscar`, `POST /clasificar`, `POST /reindexar` (internal key), más `GET /dependencias`/`GET /health`. Si Gemini no está disponible, activa fallback local (embeddings/clasificación) sin tumbar el servicio.
 
 ## Infraestructura operacional
 
@@ -225,6 +228,13 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - Backend: nuevo `EventsGateway` (namespace `/eventos`) y emisiones en `create()` (`nueva_denuncia`), `updateEstado()` (`cambio_estado`), `update()` cuando documento queda listo (`documento_listo`) y `POST /mensajes/:denunciaId` (`nuevo_mensaje`).
 - Frontend: cliente Socket.IO (`frontend/lib/socket.ts`), hook `useWebSocket`, listado principal en vivo sin recarga, detalle en vivo para documento/mensajes y toast global con `sonner`.
 - UI: indicador de conexión en Sidebar con estados conectado (verde), desconectado (rojo) y reconectando (amarillo). Compose frontend expone `NEXT_PUBLIC_WS_URL` por defecto `http://localhost:8741`.
+
+**Sesión 30 (2026-04-19) — rag-service con pgvector + Gemini/fallback:**
+- Nuevo microservicio `rag-service` (puerto interno `3006`) registrado en `nest-cli.json` y `docker-compose.yml`.
+- Esquema RAG en PostgreSQL con extensión `vector`, tabla `dependencias_vectores` y metadatos de índice (`rag_index_meta`) para reindexado por hash de `dependencias.json`.
+- Endpoints implementados: `POST /buscar`, `POST /clasificar`, `POST /reindexar` (con `x-internal-key`) y apoyo `GET /dependencias`, `GET /health`.
+- Integraciones: chatbot usa clasificación semántica vía RAG; dashboard-api expone proxy JWT para listado/reindex; frontend agrega panel de base de conocimiento con reindex y tabla de dependencias.
+- Resiliencia: si faltan créditos/API de Gemini, el servicio no cae; usa fallback local determinístico para embeddings/búsqueda/clasificación.
 
 ---
 

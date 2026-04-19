@@ -12,6 +12,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
 import { EstadisticasModule } from './estadisticas/estadisticas.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { EventsModule } from './events/events.module';
+import { RagModule } from './rag/rag.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -31,6 +32,7 @@ import { AppController } from './app.controller';
     EstadisticasModule,
     WhatsappModule,
     EventsModule,
+    RagModule,
   ],
   controllers: [AppController],
   providers: [

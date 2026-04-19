@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -79,6 +79,8 @@ services:
       DOCUMENT_SERVICE_URL: http://document-service:3004
       # URL interna del notification-service
       NOTIFICATION_SERVICE_URL: http://notification-service:3005
+      # URL interna del rag-service para base de conocimiento semántica
+      RAG_SERVICE_URL: http://rag-service:3006
       # MinIO para servir .docx al frontend
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
@@ -209,6 +211,7 @@ services:
       DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
       CHATBOT_API_INTERNAL_KEY: ${CHATBOT_API_INTERNAL_KEY}
       WHATSAPP_TO_CHATBOT_KEY: ${WHATSAPP_TO_CHATBOT_KEY}
+      RAG_SERVICE_URL: http://rag-service:3006
       ADMIN_WHATSAPP_NUMBER: ${ADMIN_WHATSAPP_NUMBER}
       DOCUMENT_SERVICE_URL: http://document-service:3004
     depends_on:
@@ -216,6 +219,8 @@ services:
         condition: service_healthy
       dashboard-api:
         condition: service_healthy
+      rag-service:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -323,6 +328,24 @@ services:
           memory: 256M
         reservations:
           memory: 128M
+
+  rag-service:
+    build:
+      context: .
+      dockerfile: apps/rag-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3006:3006"
+    environment:
+      NODE_ENV: production
+      PORT: 3006
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT:-5432}/${DB_NAME}
+      DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 512m
 
   frontend:
     build:

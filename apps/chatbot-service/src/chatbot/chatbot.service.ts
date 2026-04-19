@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { GeminiService } from '@app/ai';
 import { ConversacionService, DatosConfirmados, EstadoConversacionIA } from './conversacion.service';
 import { DashboardApiService } from './dashboard-api.service';
+import { RagApiService } from './rag-api.service';
 
 const MSG_BIENVENIDA =
   '¡Hola! 👋 Soy el asistente del concejal Andrés Tobón. ' +
@@ -58,6 +59,7 @@ export class ChatbotService {
   constructor(
     private readonly conversacion: ConversacionService,
     private readonly dashboardApi: DashboardApiService,
+    private readonly ragApi: RagApiService,
     private readonly gemini: GeminiService,
   ) {}
 
@@ -205,6 +207,9 @@ export class ChatbotService {
       this.logger.log(`[${numero}] Datos tras merge: ${JSON.stringify(estado.datosConfirmados)}`);
     }
 
+    // Clasificación semántica centralizada en rag-service (reemplaza clasificación directa en Gemini).
+    await this.actualizarClasificacionConRag(estado, numero, mensajeEfectivo, resultado);
+
     // Actualizar etapa — 'finalizado' solo lo setea radicarDenuncia() al confirmar el radicado.
     // Si Gemini devuelve 'finalizado' acá es porque quiere radicar pero aún no hemos creado la denuncia;
     // usamos 'confirmando' como etapa de espera para no provocar un reset en el próximo turno.
@@ -292,6 +297,43 @@ export class ChatbotService {
     return respuestaFinal;
   }
 
+  private async actualizarClasificacionConRag(
+    estado: EstadoConversacionIA,
+    numero: string,
+    mensajeEfectivo: string,
+    resultado: {
+      etapaSiguiente: 'recopilando' | 'esperando_solicitud' | 'confirmando' | 'finalizado' | 'especial_cerrado' | 'cancelado';
+    },
+  ): Promise<void> {
+    const d = estado.datosConfirmados;
+    const descripcion = d.descripcion?.trim();
+    if (!descripcion) return;
+
+    // Evita recalcular embeddings en cada turno cuando la descripción no cambió.
+    if (d.clasificacionRagTexto === descripcion) {
+      return;
+    }
+
+    const ubicacion = [d.direccion, d.barrio, d.comuna].filter(Boolean).join(', ') || undefined;
+    const clasificacion = await this.ragApi.clasificar(descripcion, ubicacion);
+    if (!clasificacion || !Array.isArray(clasificacion.dependencias) || clasificacion.dependencias.length === 0) {
+      return;
+    }
+
+    d.dependencia = clasificacion.dependencias.map((dep) => dep.nombre).join(', ');
+    d.esEspecial = clasificacion.esEspecial;
+    d.clasificacionRagTexto = descripcion;
+
+    if (clasificacion.esEspecial && resultado.etapaSiguiente !== 'especial_cerrado') {
+      resultado.etapaSiguiente = 'especial_cerrado';
+      this.logger.log(`[${numero}] Clasificación RAG marcó caso especial con mensaje: "${mensajeEfectivo}"`);
+    }
+
+    this.logger.log(
+      `[${numero}] Clasificación RAG aplicada: dependencia="${d.dependencia}", especial=${d.esEspecial}`,
+    );
+  }
+
   private async radicarDenuncia(estado: EstadoConversacionIA, numero: string): Promise<string> {
     const d = estado.datosConfirmados;
 
@@ -323,7 +365,7 @@ export class ChatbotService {
 
       // Usar el parcialId guardado en estado Redis primero; si no existe, buscar por teléfono.
       // Esto evita duplicados incluso cuando el teléfono resuelto de @lid varía entre mensajes.
-      let parcial: { id: number; incompleta: boolean } | null = null;
+      let parcial: { id: number; incompleta: boolean; radicado?: string } | null = null;
       if (estado.parcialId) {
         parcial = { id: estado.parcialId, incompleta: true };
       } else {
