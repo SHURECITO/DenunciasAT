@@ -39,3 +39,20 @@ export async function PATCH(
   const data = await res.json();
   return NextResponse.json(data, { status: res.status });
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const token = cookies().get('token')?.value;
+
+  const res = await fetch(`${API_URL}/denuncias/${params.id}`, {
+    method: 'DELETE',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  const data = await res.json().catch(() => ({}));
+  return NextResponse.json(data, { status: res.status });
+}

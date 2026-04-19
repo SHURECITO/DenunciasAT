@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
@@ -16,6 +18,7 @@ export class AuthService {
     @InjectRepository(Usuario)
     private readonly usuariosRepo: Repository<Usuario>,
     private readonly jwtService: JwtService,
+    private readonly config: ConfigService,
   ) {}
 
   async login(dto: LoginDto): Promise<{ access_token: string }> {
@@ -39,13 +42,18 @@ export class AuthService {
     });
     if (existe) throw new ConflictException('El usuario admin ya existe');
 
-    const passwordHash = await bcrypt.hash('Admin1234!', 12);
+    const adminPassword = this.config.get<string>('SEED_ADMIN_PASSWORD', '').trim();
+    if (adminPassword.length < 12) {
+      throw new BadRequestException('SEED_ADMIN_PASSWORD debe tener al menos 12 caracteres');
+    }
+
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
     const admin = this.usuariosRepo.create({
       nombre: 'Administrador',
       email: 'admin@denunciasat.co',
       passwordHash,
     });
     await this.usuariosRepo.save(admin);
-    return { message: 'Usuario admin creado: admin@denunciasat.co / Admin1234!' };
+    return { message: 'Usuario admin creado: admin@denunciasat.co' };
   }
 }

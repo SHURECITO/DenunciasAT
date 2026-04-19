@@ -516,6 +516,18 @@
     "areasTematicas": ["macroproyectos", "Metro de la 80", "proyectos estratégicos", "grandes obras"],
     "jerarquiaDecision": 4
   },
+  "_aliases": {
+    "secretaria de recreacion y deporte": "INDER",
+    "secretaria de deportes": "INDER",
+    "instituto de deporte y recreacion": "INDER",
+    "instituto de recreacion y deporte": "INDER",
+    "inder medellin": "INDER",
+    "secretaria de control territorial": "Secretaría de Gestión y Control Territorial",
+    "secretaria de infraestructura": "Secretaría de Infraestructura Física",
+    "secretaria de derechos humanos": "Secretaría de Paz y Derechos Humanos",
+    "secretaria de no violencia": "Secretaría de Paz y Derechos Humanos",
+    "secretaria de inclusion": "Secretaría de Inclusión Social, Familia y DDHH"
+  },
   "_guiaFiltrado": {
     "_descripcion": "Lógica de decisión para que la IA priorice correctamente la dependencia según el tipo de denuncia",
     "_version": "2026",

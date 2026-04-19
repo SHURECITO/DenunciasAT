@@ -7,6 +7,7 @@ import axios from 'axios';
 export class MinioService implements OnModuleInit {
   private readonly logger = new Logger(MinioService.name);
   private readonly client: Minio.Client;
+  private readonly allowedRemoteHosts: string[];
 
   constructor(private readonly config: ConfigService) {
     const endPointRaw = this.config.get<string>('MINIO_ENDPOINT', 'minio');
@@ -21,10 +22,33 @@ export class MinioService implements OnModuleInit {
       accessKey: this.config.get<string>('MINIO_ACCESS_KEY', ''),
       secretKey: this.config.get<string>('MINIO_SECRET_KEY', ''),
     });
+
+    this.allowedRemoteHosts = this.config
+      .get<string>('ALLOWED_REMOTE_MEDIA_HOSTS', 'evolution-api')
+      .split(',')
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean);
   }
 
   async onModuleInit() {
-    this.logger.log('MinioService inicializado');
+    this.logger.log(`MinioService inicializado (hosts remotos permitidos: ${this.allowedRemoteHosts.join(', ') || 'ninguno'})`);
+  }
+
+  private isRemoteHostAllowed(remoteUrl: string): boolean {
+    let hostname: string;
+    try {
+      hostname = new URL(remoteUrl).hostname.toLowerCase();
+    } catch {
+      return false;
+    }
+
+    return this.allowedRemoteHosts.some((allowed) => {
+      if (allowed.startsWith('*.')) {
+        const suffix = allowed.slice(2);
+        return hostname === suffix || hostname.endsWith(`.${suffix}`);
+      }
+      return hostname === allowed;
+    });
   }
 
   // ─── Retry con backoff exponencial ───────────────────────────────────────────
@@ -71,6 +95,10 @@ export class MinioService implements OnModuleInit {
     url: string,
     contentType = 'application/octet-stream',
   ): Promise<string> {
+    if (!this.isRemoteHostAllowed(url)) {
+      throw new Error('Host remoto no permitido para descarga de media');
+    }
+
     const res = await axios.get<ArrayBuffer>(url, { responseType: 'arraybuffer', timeout: 15000 });
     const buffer = Buffer.from(res.data);
     // Detectar content-type real si no se especificó

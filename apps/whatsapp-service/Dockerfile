@@ -19,4 +19,8 @@ ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 # Copiar dist completo para preservar rutas de libs/storage compilado
 COPY --from=build /app/dist ./dist
+RUN chown -R node:node /app
+
+USER node
+
 CMD ["node", "dist/apps/whatsapp-service/src/main"]

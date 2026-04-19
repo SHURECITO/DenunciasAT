@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpException,
   Param,
   ParseIntPipe,
@@ -12,17 +11,12 @@ import {
   Res,
   UseGuards,
   Req,
+  Delete,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiQuery,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { Response } from 'express';
+import type { Response, Request } from 'express';
 import axios from 'axios';
-import { MinioService } from '@app/storage';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EitherAuthGuard } from '../auth/guards/either-auth.guard';
 import { SkipJwt } from '../auth/decorators/skip-jwt.decorator';
@@ -33,6 +27,7 @@ import { CreateParcialDto } from './dto/create-parcial.dto';
 import { UpdateDenunciaDto } from './dto/update-denuncia.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { EditarDenunciaDto } from './dto/editar-denuncia.dto';
+import { GenerarManualDto } from './dto/generar-manual.dto';
 import { DenunciaEstado } from './entities/denuncia.entity';
 
 @ApiTags('denuncias')
@@ -41,13 +36,23 @@ import { DenunciaEstado } from './entities/denuncia.entity';
 @Controller('denuncias')
 export class DenunciasController {
   private readonly bucketDocumentos: string;
+  private readonly dashboardToDocumentKey: string;
 
   constructor(
     private readonly denunciasService: DenunciasService,
     private readonly config: ConfigService,
-    private readonly minio: MinioService,
   ) {
     this.bucketDocumentos = this.config.get<string>('MINIO_BUCKET_DOCUMENTOS', 'denunciasat-documentos');
+    const scoped = this.config.get<string>('DASHBOARD_TO_DOCUMENT_KEY', '').trim();
+    const fallback = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '').trim();
+    this.dashboardToDocumentKey = scoped || fallback;
+  }
+
+  private getDocumentServiceHeaders(): Record<string, string> {
+    return {
+      'x-internal-key': this.dashboardToDocumentKey,
+      'x-internal-service': 'dashboard',
+    };
   }
 
   @Post()
@@ -128,16 +133,14 @@ export class DenunciasController {
   async editar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: EditarDenunciaDto,
-    @Req() req: any,
+    @Req() req: Request,
   ) {
     const updated = await this.denunciasService.editarDenuncia(id, dto, req.user);
     
     if (dto.regenerarDocumento) {
       const docServiceUrl = this.config.get<string>('DOCUMENT_SERVICE_URL', 'http://document-service:3004');
-      const internalKey = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '');
-      
       axios
-        .post(`${docServiceUrl}/generar/${id}`, {}, { headers: { 'x-internal-key': internalKey } })
+        .post(`${docServiceUrl}/generar/${id}`, {}, { headers: this.getDocumentServiceHeaders() })
         .catch(() => { /* error silencioso */ });
     }
     
@@ -165,16 +168,17 @@ export class DenunciasController {
   }
 
   @Post(':id/generar')
+  @SkipJwt()
+  @UseGuards(EitherAuthGuard)
   @ApiOperation({ summary: 'Reintentar generación de documento (dispara document-service)' })
   async generarDocumento(@Param('id', ParseIntPipe) id: number) {
     const docServiceUrl = this.config.get<string>('DOCUMENT_SERVICE_URL', 'http://document-service:3004');
-    const internalKey = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '');
 
     const updated = await this.denunciasService.marcarDocumentoPendiente(id);
 
     // Fire-and-forget — no esperamos la respuesta del document-service
     axios
-      .post(`${docServiceUrl}/generar/${id}`, {}, { headers: { 'x-internal-key': internalKey } })
+      .post(`${docServiceUrl}/generar/${id}`, {}, { headers: this.getDocumentServiceHeaders() })
       .catch(() => { /* document-service actualizará el estado vía PATCH */ });
 
     return updated;
@@ -197,10 +201,16 @@ export class DenunciasController {
       throw new HttpException('Documento no disponible', 404);
     }
 
-    // documentoUrl contiene solo el object name dentro del bucket (ej. "DAT-000001.docx")
     const objectName = denuncia.documentoUrl;
     try {
-      const buffer = await this.minio.downloadBuffer(this.bucketDocumentos, objectName);
+      // Usamos el downloader via http porque no tenemos MinioService expuesto fácilmente o hacemos una peticion
+      const docStorageUrl = this.config.get<string>('MINIO_ENDPOINT', 'minio');
+      const docStoragePort = this.config.get<string>('MINIO_PORT', '9000');
+      const minioUrl = `http://${docStorageUrl}:${docStoragePort}/${this.bucketDocumentos}/${objectName}`;
+      
+      const fileRes = await axios.get(minioUrl, { responseType: 'arraybuffer' });
+      const buffer = fileRes.data;
+      
       const filename = `${denuncia.radicado}.docx`;
       res.set({
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -210,6 +220,42 @@ export class DenunciasController {
       res.send(buffer);
     } catch {
       throw new HttpException('Documento no disponible', 503);
+    }
+  }
+
+  @Post(':id/eliminar')
+  @ApiOperation({ summary: 'Eliminar una denuncia completamente de la DB' })
+  async eliminar(@Param('id', ParseIntPipe) id: number) {
+    return this.denunciasService.eliminarDenuncia(id);
+  }
+
+  @Post(':id/cancelar-parcial')
+  @SkipJwt()
+  @UseGuards(EitherAuthGuard)
+  @ApiOperation({ summary: 'Eliminar una denuncia parcial (incompleta) desde flujo interno' })
+  async cancelarParcial(@Param('id', ParseIntPipe) id: number) {
+    return this.denunciasService.cancelarParcial(id);
+  }
+
+  // Soporte para verbo DELETE nativo
+  @Delete(':id')
+  @ApiOperation({ summary: 'Eliminar una denuncia completamente de la DB' })
+  async deleteNative(@Param('id', ParseIntPipe) id: number) {
+    return this.denunciasService.eliminarDenuncia(id);
+  }
+
+  @Post('generar-manual')
+  @ApiOperation({ summary: 'Genera documento pasándolo al document-service' })
+  async generarManual(@Body() body: GenerarManualDto) {
+    const documentServiceUrl = this.config.get<string>('DOCUMENT_SERVICE_URL', 'http://document-service:3004');
+
+    try {
+      const res = await axios.post(`${documentServiceUrl}/generar-desde-descripcion`, body, {
+        headers: this.getDocumentServiceHeaders(),
+      });
+      return res.data;
+    } catch (e: any) {
+      throw new HttpException(e.response?.data?.message || 'Error en document-service', e.response?.status || 500);
     }
   }
 }

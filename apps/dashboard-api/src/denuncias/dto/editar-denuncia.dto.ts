@@ -34,6 +34,21 @@ export class EditarDenunciaDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsString()
+  nombreCiudadano?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  cedula?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  telefono?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsBoolean()
   regenerarDocumento?: boolean;
 }

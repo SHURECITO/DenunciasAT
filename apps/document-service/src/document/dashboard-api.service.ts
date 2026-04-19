@@ -17,6 +17,8 @@ export interface DenunciaData {
   esAnonimo: boolean;
   esEspecial: boolean;
   documentoUrl: string | null;
+  documentoGeneradoOk: boolean;
+  documentoPendiente: boolean;
   fechaCreacion: string;
   solicitudAdicional: string | null;
   imagenesEvidencia: string | null;
@@ -30,11 +32,17 @@ export class DashboardApiService {
 
   constructor(private readonly config: ConfigService) {
     this.baseUrl = this.config.get<string>('DASHBOARD_API_URL', 'http://dashboard-api:3000');
-    this.internalKey = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '');
+    const scoped = this.config.get<string>('DOCUMENT_API_INTERNAL_KEY', '').trim();
+    const fallback = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '').trim();
+    this.internalKey = scoped || fallback;
   }
 
   private get headers() {
-    return { 'x-internal-key': this.internalKey, 'Content-Type': 'application/json' };
+    return {
+      'x-internal-key': this.internalKey,
+      'x-internal-service': 'document',
+      'Content-Type': 'application/json',
+    };
   }
 
   async getDenuncia(id: number): Promise<DenunciaData> {

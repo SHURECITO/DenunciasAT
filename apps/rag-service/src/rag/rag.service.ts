@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { Pool } from 'pg';
@@ -54,6 +60,7 @@ export interface ClasificacionResultado {
 const VECTOR_DIMENSIONS = 768;
 const DEFAULT_TOP_K = 3;
 const DEPS_PATH = join(process.cwd(), 'infrastructure', 'config', 'dependencias.json');
+const RAG_GEMINI_UNAVAILABLE_CODE = 'RAG_GEMINI_UNAVAILABLE';
 
 @Injectable()
 export class RagService implements OnModuleInit, OnModuleDestroy {
@@ -97,6 +104,12 @@ export class RagService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     try {
       await this.ensureSchema();
+
+      if (!this.embeddingModel || !this.embeddingGeminiDisponible) {
+        this.logger.warn('RAG inicializado sin Gemini disponible. Clasificación semántica temporalmente deshabilitada.');
+        return;
+      }
+
       await this.indexarSiCambio();
     } catch (err) {
       this.logger.error(
@@ -113,9 +126,38 @@ export class RagService implements OnModuleInit, OnModuleDestroy {
     return !!this.internalKey && headerValue?.trim() === this.internalKey;
   }
 
+  private throwGeminiUnavailable(): never {
+    throw new ServiceUnavailableException({
+      code: RAG_GEMINI_UNAVAILABLE_CODE,
+      message: 'Servicio de IA temporalmente no disponible',
+    });
+  }
+
+  private assertEmbeddingDisponible() {
+    if (!this.embeddingModel || !this.embeddingGeminiDisponible) {
+      this.throwGeminiUnavailable();
+    }
+  }
+
+  private assertClasificacionDisponible() {
+    if (!this.clasificacionModel || !this.clasificacionGeminiDisponible) {
+      this.throwGeminiUnavailable();
+    }
+  }
+
   async health() {
     const [{ ok }] = (await this.pool.query<{ ok: number }>('SELECT 1 AS ok')).rows;
-    return { status: ok === 1 ? 'ok' : 'degraded', service: 'rag-service' };
+    const iaDisponible =
+      !!this.embeddingModel &&
+      !!this.clasificacionModel &&
+      this.embeddingGeminiDisponible &&
+      this.clasificacionGeminiDisponible;
+
+    return {
+      status: ok === 1 && iaDisponible ? 'ok' : 'degraded',
+      service: 'rag-service',
+      iaDisponible,
+    };
   }
 
   async listarDependencias() {
@@ -139,16 +181,8 @@ export class RagService implements OnModuleInit, OnModuleDestroy {
   async buscar(descripcion: string, topK = DEFAULT_TOP_K) {
     const limit = Number.isFinite(topK) ? Math.max(1, Math.min(10, topK)) : DEFAULT_TOP_K;
 
-    // Sin créditos/llave de Gemini, usar ranking léxico robusto para mantener operatividad.
-    if (!this.embeddingModel || !this.embeddingGeminiDisponible) {
-      return this.buscarFallbackLexico(descripcion, limit);
-    }
-
+    this.assertEmbeddingDisponible();
     const embedding = await this.generarEmbeddingSeguro(descripcion);
-    if (!this.embeddingGeminiDisponible) {
-      return this.buscarFallbackLexico(descripcion, limit);
-    }
-
     const vector = this.toVectorLiteral(embedding);
 
     const rows = await this.pool.query<DependenciaVectorRow>(
@@ -259,50 +293,49 @@ Responde SOLO con JSON:
   "asunto": "VERBO + DESCRIPCIÓN EN MAYÚSCULAS"
 }`;
 
-    if (this.clasificacionModel && this.clasificacionGeminiDisponible) {
-      try {
-        const result = await this.clasificacionModel.generateContent(prompt);
-        const raw = result.response.text();
-        const parsed = this.parseJson<Partial<ClasificacionResultado>>(raw) ?? {};
+    this.assertClasificacionDisponible();
+    try {
+      const result = await this.clasificacionModel.generateContent(prompt);
+      const raw = result.response.text();
+      const parsed = this.parseJson<Partial<ClasificacionResultado>>(raw) ?? {};
 
-        const nombresValidos = new Set(candidatos.map((c) => c.nombre));
-        const dependencias = (Array.isArray(parsed.dependencias) ? parsed.dependencias : [])
-          .filter((d): d is ClasificacionDependencia => !!d && typeof d.nombre === 'string')
-          .filter((d) => nombresValidos.has(d.nombre))
-          .map((d) => ({
-            nombre: d.nombre,
-            justificacion: d.justificacion ?? 'Coincidencia semántica con la descripción reportada',
-            solicitudEspecifica: d.solicitudEspecifica ?? 'Atender y responder formalmente la situación reportada.',
-          }));
+      const nombresValidos = new Set(candidatos.map((c) => c.nombre));
+      const dependencias = (Array.isArray(parsed.dependencias) ? parsed.dependencias : [])
+        .filter((d): d is ClasificacionDependencia => !!d && typeof d.nombre === 'string')
+        .filter((d) => nombresValidos.has(d.nombre))
+        .map((d) => ({
+          nombre: d.nombre,
+          justificacion: d.justificacion ?? 'Coincidencia semántica con la descripción reportada',
+          solicitudEspecifica: d.solicitudEspecifica ?? 'Atender y responder formalmente la situación reportada.',
+        }));
 
-        const dependenciasFinales =
-          dependencias.length > 0
-            ? dependencias
-            : [
-                {
-                  nombre: candidatos[0].nombre,
-                  justificacion: 'Mayor similitud semántica según embeddings',
-                  solicitudEspecifica: 'Atender y responder formalmente la situación reportada.',
-                },
-              ];
+      const dependenciasFinales =
+        dependencias.length > 0
+          ? dependencias
+          : [
+              {
+                nombre: candidatos[0].nombre,
+                justificacion: 'Mayor similitud semántica según embeddings',
+                solicitudEspecifica: 'Atender y responder formalmente la situación reportada.',
+              },
+            ];
 
-        return {
-          esEspecial: parsed.esEspecial === true || this.esCasoEspecial(descripcion),
-          dependencias: dependenciasFinales,
-          asunto: (parsed.asunto ?? this.construirAsuntoFallback(descripcion)).toUpperCase().trim(),
-        };
-      } catch (err) {
-        this.clasificacionGeminiDisponible = false;
-        this.logger.warn(
-          `Clasificación Gemini no disponible, usando fallback local: ${(err as Error).message?.substring(0, 120)}`,
-        );
-      }
+      return {
+        esEspecial: parsed.esEspecial === true || this.esCasoEspecial(descripcion),
+        dependencias: dependenciasFinales,
+        asunto: (parsed.asunto ?? this.construirAsuntoFallback(descripcion)).toUpperCase().trim(),
+      };
+    } catch (err) {
+      this.clasificacionGeminiDisponible = false;
+      this.logger.warn(
+        `Clasificación Gemini no disponible: ${(err as Error).message?.substring(0, 120)}`,
+      );
+      this.throwGeminiUnavailable();
     }
-
-    return this.clasificacionFallback(candidatos, descripcion);
   }
 
   async reindexarForzado(): Promise<ResultadoReindexado> {
+    this.assertEmbeddingDisponible();
     return this.indexarSiCambio(true);
   }
 
@@ -441,27 +474,26 @@ Responde SOLO con JSON:
   }
 
   private async generarEmbeddingSeguro(texto: string): Promise<number[]> {
-    if (this.embeddingModel && this.embeddingGeminiDisponible) {
-      try {
-        const result = await this.embeddingModel.embedContent(texto);
-        const values = result.embedding?.values ?? [];
+    this.assertEmbeddingDisponible();
 
-        if (!Array.isArray(values) || values.length !== VECTOR_DIMENSIONS) {
-          throw new Error(
-            `Embedding inválido. Dimensión esperada: ${VECTOR_DIMENSIONS}, obtenida: ${values.length}`,
-          );
-        }
+    try {
+      const result = await this.embeddingModel.embedContent(texto);
+      const values = result.embedding?.values ?? [];
 
-        return values;
-      } catch (err) {
-        this.embeddingGeminiDisponible = false;
-        this.logger.warn(
-          `Embeddings Gemini no disponibles, activando fallback local: ${(err as Error).message?.substring(0, 120)}`,
+      if (!Array.isArray(values) || values.length !== VECTOR_DIMENSIONS) {
+        throw new Error(
+          `Embedding inválido. Dimensión esperada: ${VECTOR_DIMENSIONS}, obtenida: ${values.length}`,
         );
       }
-    }
 
-    return this.generarEmbeddingLocal(texto);
+      return values;
+    } catch (err) {
+      this.embeddingGeminiDisponible = false;
+      this.logger.warn(
+        `Embeddings Gemini no disponibles: ${(err as Error).message?.substring(0, 120)}`,
+      );
+      this.throwGeminiUnavailable();
+    }
   }
 
   private generarEmbeddingLocal(texto: string): number[] {

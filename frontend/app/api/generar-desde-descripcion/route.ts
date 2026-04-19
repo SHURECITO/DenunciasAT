@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const DOCUMENT_SERVICE_URL = process.env.DOCUMENT_SERVICE_URL ?? 'http://document-service:3004';
-const INTERNAL_KEY = process.env.DASHBOARD_API_INTERNAL_KEY ?? '';
+const DASHBOARD_API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 export async function POST(req: NextRequest) {
   const token = req.cookies.get('token')?.value;
   if (!token) return NextResponse.json({ message: 'No autenticado' }, { status: 401 });
   
   const body = await req.json();
-  const res = await fetch(`${DOCUMENT_SERVICE_URL}/generar-desde-descripcion`, {
+  const res = await fetch(`${DASHBOARD_API_URL}/denuncias/generar-manual`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-internal-key': INTERNAL_KEY
+      'Authorization': `Bearer ${token}`
     },
     body: JSON.stringify(body),
     cache: 'no-store'

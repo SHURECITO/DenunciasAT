@@ -24,4 +24,8 @@ COPY infrastructure/templates/Plantilla.docx ./infrastructure/templates/Plantill
 COPY infrastructure/config/dependencias.json ./infrastructure/config/dependencias.json
 # Directorio de documentos generados (montado como volumen en producción)
 RUN mkdir -p /app/infrastructure/documentos
+RUN chown -R node:node /app
+
+USER node
+
 CMD ["node", "dist/apps/document-service/src/main"]

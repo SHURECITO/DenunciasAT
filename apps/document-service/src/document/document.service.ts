@@ -142,7 +142,7 @@ export class DocumentService {
     denunciaId: number;
     descripcion: string;
     ubicacion: string;
-    barrio: string;
+    barrio?: string;
     esEspecial: boolean;
     generarDocumento: boolean;
   }): Promise<{ dependenciaDetectada: string | null; documentoGenerado: boolean }> {
@@ -158,12 +158,14 @@ export class DocumentService {
         if (clasif && clasif.dependencias.length > 0) {
           dependenciaDetectada = clasif.dependencias.map(d => d.nombre).join(', ');
         } else {
-          dependenciaDetectada = await this.gemini.clasificarDenuncia(dto.descripcion, dto.ubicacion, dto.barrio || undefined);
+          const fallback = await this.gemini.clasificarDenuncia(dto.descripcion);
+          dependenciaDetectada = fallback.dependencia;
         }
       } catch (err) {
         this.logger.error('Error clasificando dependencia', err);
         try {
-          dependenciaDetectada = await this.gemini.clasificarDenuncia(dto.descripcion, dto.ubicacion, dto.barrio || undefined);
+          const fallback = await this.gemini.clasificarDenuncia(dto.descripcion);
+          dependenciaDetectada = fallback.dependencia;
         } catch (e) {}
       }
       

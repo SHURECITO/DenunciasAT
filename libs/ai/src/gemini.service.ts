@@ -494,7 +494,7 @@ JSON:`;
 
   private fallback(datos: Record<string, unknown>): RespuestaChatbot {
     return {
-      respuesta:       'Tuve un problema técnico, disculpa. ¿Me repites tu mensaje? 🙏',
+      respuesta:       'En este momento tenemos un error técnico y no podemos procesar tu denuncia. Por favor intenta nuevamente en unos minutos.',
       datosExtraidos:  {},
       etapaSiguiente:  (datos['etapa'] as RespuestaChatbot['etapaSiguiente']) ?? 'recopilando',
       listaParaRadicar: false,

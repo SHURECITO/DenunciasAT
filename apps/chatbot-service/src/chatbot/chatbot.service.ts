@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { GeminiService } from '@app/ai';
 import { ConversacionService, DatosConfirmados, EstadoConversacionIA } from './conversacion.service';
 import { DashboardApiService } from './dashboard-api.service';
-import { RagApiService } from './rag-api.service';
+import { RagApiService, RagTecnicoError } from './rag-api.service';
 
 const MSG_BIENVENIDA =
   '¡Hola! 👋 Soy el asistente del concejal Andrés Tobón. ' +
@@ -17,6 +17,9 @@ const MSG_AUDIO =
 
 const MSG_PERDIDO =
   'Parece que hay alguna confusión 😊 ¿Quieres que empecemos de nuevo? Escribe *reiniciar* cuando quieras.';
+
+const MSG_ERROR_TECNICO =
+  'En este momento tenemos un error técnico y no podemos procesar tu denuncia. Por favor intenta nuevamente en unos minutos.';
 
 const esCedulaValida = (cedula?: string): boolean => {
   if (!cedula) return false;
@@ -208,7 +211,17 @@ export class ChatbotService {
     }
 
     // Clasificación semántica centralizada en rag-service (reemplaza clasificación directa en Gemini).
-    await this.actualizarClasificacionConRag(estado, numero, mensajeEfectivo, resultado);
+    try {
+      await this.actualizarClasificacionConRag(estado, numero, mensajeEfectivo, resultado);
+    } catch (err) {
+      if (err instanceof RagTecnicoError) {
+        this.logger.warn(`[${numero}] RAG no disponible por créditos/cuota. Se responde error técnico al ciudadano.`);
+        return this.responderErrorTecnico(estado, numero, mensajeEfectivo);
+      }
+
+      this.logger.error(`[${numero}] Error inesperado en clasificación RAG: ${(err as Error).message}`);
+      return this.responderErrorTecnico(estado, numero, mensajeEfectivo);
+    }
 
     // Actualizar etapa — 'finalizado' solo lo setea radicarDenuncia() al confirmar el radicado.
     // Si Gemini devuelve 'finalizado' acá es porque quiere radicar pero aún no hemos creado la denuncia;
@@ -295,6 +308,20 @@ export class ChatbotService {
     await new Promise((r) => setTimeout(r, delay));
 
     return respuestaFinal;
+  }
+
+  private async responderErrorTecnico(
+    estado: EstadoConversacionIA,
+    numero: string,
+    mensajeEfectivo: string,
+  ): Promise<string> {
+    const timestamp = new Date().toISOString();
+    estado.historial.push(
+      { rol: 'user', contenido: mensajeEfectivo, timestamp },
+      { rol: 'assistant', contenido: MSG_ERROR_TECNICO, timestamp: new Date().toISOString() },
+    );
+    await this.conversacion.setEstado(numero, estado);
+    return MSG_ERROR_TECNICO;
   }
 
   private async actualizarClasificacionConRag(

@@ -11,12 +11,16 @@ export class WhatsappService {
   private readonly apiKey: string;
   private readonly instance: string;
   private readonly whatsappServiceUrl: string;
+  private readonly qrInternalKey: string;
 
   constructor(private readonly config: ConfigService) {
     this.evolutionUrl = this.config.get<string>('EVOLUTION_API_URL', 'http://evolution-api:8080');
     this.apiKey = this.config.get<string>('EVOLUTION_API_KEY', '');
     this.instance = this.config.get<string>('EVOLUTION_INSTANCE_NAME', 'denunciasAt');
     this.whatsappServiceUrl = this.config.get<string>('WHATSAPP_SERVICE_URL', 'http://whatsapp-service:3003');
+    const scopedQrKey = this.config.get<string>('WHATSAPP_QR_INTERNAL_KEY', '').trim();
+    const fallback = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '').trim();
+    this.qrInternalKey = scopedQrKey || fallback;
   }
 
   private get headers() {
@@ -44,7 +48,13 @@ export class WhatsappService {
     try {
       const res = await axios.get<{ qr?: string; disponible: boolean }>(
         `${this.whatsappServiceUrl}/qr`,
-        { timeout: 5000 },
+        {
+          timeout: 5000,
+          headers: {
+            'x-internal-key': this.qrInternalKey,
+            'x-internal-service': 'dashboard',
+          },
+        },
       );
       return res.data;
     } catch (err) {

@@ -66,12 +66,15 @@ export class DashboardApiService {
 
   constructor(private readonly config: ConfigService) {
     this.baseUrl = this.config.get<string>('DASHBOARD_API_URL', 'http://dashboard-api:3000');
-    this.internalKey = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '');
+    const serviceKey = this.config.get<string>('CHATBOT_API_INTERNAL_KEY', '').trim();
+    const fallback = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '').trim();
+    this.internalKey = serviceKey || fallback;
   }
 
   private get headers() {
     return {
       'x-internal-key': this.internalKey,
+      'x-internal-service': 'chatbot',
       'Content-Type': 'application/json',
     };
   }
@@ -147,10 +150,19 @@ export class DashboardApiService {
     );
   }
 
+  async eliminarDenuncia(id: number): Promise<void> {
+    try {
+      await axios.post(`${this.baseUrl}/denuncias/${id}/cancelar-parcial`, {}, { headers: this.headers });
+    } catch (err) {
+      if ((err as any).response?.status !== 404) {
+        throw err;
+      }
+    }
+  }
+
   async triggerDocumentacion(denunciaId: number): Promise<void> {
-    const documentServiceUrl = this.config.get<string>('DOCUMENT_SERVICE_URL', 'http://document-service:3004');
     await axios.post(
-      `${documentServiceUrl}/generar/${denunciaId}`,
+      `${this.baseUrl}/denuncias/${denunciaId}/generar`,
       {},
       { headers: this.headers },
     );

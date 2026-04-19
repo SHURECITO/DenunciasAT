@@ -38,15 +38,18 @@ async function bootstrap() {
   // Logging de todas las peticiones HTTP
   app.useGlobalInterceptors(new LoggingInterceptor());
 
-  // Swagger: documentación de la API
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('DenunciasAT API')
-    .setDescription('API del sistema de gestión de denuncias del concejal Andrés Tobón')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api', app, document);
+  const swaggerEnabled = (process.env.SWAGGER_ENABLED ?? 'false').toLowerCase() === 'true';
+  if (swaggerEnabled) {
+    // Swagger: documentación de la API
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('DenunciasAT API')
+      .setDescription('API del sistema de gestión de denuncias del concejal Andrés Tobón')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api', app, document);
+  }
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

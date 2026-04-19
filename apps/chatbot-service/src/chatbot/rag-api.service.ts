@@ -2,6 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 
+export class RagTecnicoError extends Error {
+  constructor(message = 'RAG_SERVICE_TECNICO') {
+    super(message);
+    this.name = 'RagTecnicoError';
+  }
+}
+
 interface DependenciaClasificada {
   nombre: string;
   justificacion: string;
@@ -50,6 +57,14 @@ export class RagApiService {
       );
       return res.data;
     } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        const data = err.response?.data as { code?: string; message?: string } | undefined;
+        if (status === 503 || data?.code === 'RAG_GEMINI_UNAVAILABLE') {
+          throw new RagTecnicoError(data?.message ?? 'RAG_SERVICE_TECNICO');
+        }
+      }
+
       this.logger.warn(
         `No se pudo clasificar con rag-service: ${(err as Error).message?.substring(0, 120)}`,
       );

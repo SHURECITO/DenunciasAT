@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { readFileSync, mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
@@ -24,6 +25,16 @@ interface Destinatario {
   nombre: string;   // "SECRETARIO DE INFRAESTRUCTURA FÍSICA"
   cargo:  string;   // "Secretario de Infraestructura Física"
   entidad: string;  // "Secretaría de Infraestructura Física"
+}
+
+interface DestinatarioConfig {
+  titulo?: string;
+  nombre?: string;
+  cargo?: string;
+  entidad?: string;
+  nombreTitular?: string;
+  cargoTitular?: string;
+  entidadCompleta?: string;
 }
 
 export interface BuildInput {
@@ -184,12 +195,27 @@ function parseMinioUrl(url: string): { bucket: string; objectName: string } | nu
   }
 }
 
-/** Determina la extensión de la imagen por los bytes mágicos (fallback: jpeg) */
-function detectImageExt(buf: Buffer): 'png' | 'jpeg' {
+/** Determina la extensión de la imagen por bytes mágicos */
+function detectImageExt(buf: Buffer): 'png' | 'jpeg' | 'unsupported' {
   if (buf.length >= 8 && buf.slice(0, 8).toString('hex') === '89504e470d0a1a0a') {
     return 'png';
   }
-  return 'jpeg';
+
+  // JPEG
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return 'jpeg';
+  }
+
+  // WEBP (Word puede fallar al renderizarlo en este flujo)
+  if (
+    buf.length >= 12 &&
+    buf.slice(0, 4).toString('ascii') === 'RIFF' &&
+    buf.slice(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return 'unsupported';
+  }
+
+  return 'unsupported';
 }
 
 /** Lee dimensiones en píxeles de JPEG o PNG desde los bytes del header */
@@ -279,12 +305,12 @@ function imageParaXml(relId: string, num: number, ext: string, dims: { cx: numbe
 }
 
 // ─── Resolución de destinatario ───────────────────────────────────────────────
-let _depsCache: Record<string, Destinatario> | null = null;
+let _depsCache: Record<string, DestinatarioConfig> | null = null;
 
-function loadDeps(): Record<string, Destinatario> {
+function loadDeps(): Record<string, DestinatarioConfig> {
   if (_depsCache) return _depsCache;
   try {
-    _depsCache = JSON.parse(readFileSync(DEPS_PATH, 'utf8')) as Record<string, Destinatario>;
+    _depsCache = JSON.parse(readFileSync(DEPS_PATH, 'utf8')) as Record<string, DestinatarioConfig>;
   } catch {
     _depsCache = {};
   }
@@ -293,7 +319,15 @@ function loadDeps(): Record<string, Destinatario> {
 
 function resolveDestinatario(dependencia: string): Destinatario {
   const deps = loadDeps();
-  if (deps[dependencia]) return deps[dependencia];
+  const dep = deps[dependencia];
+  if (dep) {
+    return {
+      titulo: dep.titulo ?? 'Doctor',
+      nombre: dep.nombreTitular ?? dep.nombre ?? dependencia.toUpperCase(),
+      cargo: dep.cargoTitular ?? dep.cargo ?? 'Director/a',
+      entidad: dep.entidadCompleta ?? dep.entidad ?? dependencia,
+    };
+  }
   // Fallback: construir desde el nombre
   const titulo = dependencia.toLowerCase().includes('secretar') &&
     /a\s+de\s+/i.test(dependencia) ? 'Doctora' : 'Doctor';
@@ -309,8 +343,38 @@ function resolveDestinatario(dependencia: string): Destinatario {
 @Injectable()
 export class DocumentBuilderService {
   private readonly logger = new Logger(DocumentBuilderService.name);
+  private readonly allowExternalImageUrls: boolean;
+  private readonly allowedRemoteHosts: string[];
 
-  constructor(private readonly minio: MinioService) {}
+  constructor(
+    private readonly minio: MinioService,
+    private readonly config: ConfigService,
+  ) {
+    const raw = this.config.get<string>('ALLOW_EXTERNAL_IMAGE_URLS', 'false').toLowerCase();
+    this.allowExternalImageUrls = raw === 'true' || raw === '1' || raw === 'yes';
+    this.allowedRemoteHosts = this.config
+      .get<string>('ALLOWED_REMOTE_MEDIA_HOSTS', 'evolution-api')
+      .split(',')
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  private isExternalHostAllowed(url: string): boolean {
+    let hostname: string;
+    try {
+      hostname = new URL(url).hostname.toLowerCase();
+    } catch {
+      return false;
+    }
+
+    return this.allowedRemoteHosts.some((allowed) => {
+      if (allowed.startsWith('*.')) {
+        const suffix = allowed.slice(2);
+        return hostname === suffix || hostname.endsWith(`.${suffix}`);
+      }
+      return hostname === allowed;
+    });
+  }
 
   /** Descarga imagen desde MinIO (si es URL interna) o desde URL externa */
   private async fetchImageBuffer(url: string): Promise<Buffer | null> {
@@ -323,6 +387,17 @@ export class DocumentBuilderService {
         return null;
       }
     }
+
+    if (!this.allowExternalImageUrls) {
+      this.logger.warn('Imagen externa descartada por política de seguridad (ALLOW_EXTERNAL_IMAGE_URLS=false)');
+      return null;
+    }
+
+    if (!this.isExternalHostAllowed(url)) {
+      this.logger.warn('Imagen externa descartada: host no permitido por ALLOWED_REMOTE_MEDIA_HOSTS');
+      return null;
+    }
+
     return downloadImageFromUrl(url);
   }
 
@@ -404,6 +479,10 @@ export class DocumentBuilderService {
           continue;
         }
         const ext      = detectImageExt(imgBuf);
+        if (ext === 'unsupported') {
+          this.logger.warn(`Imagen ${imgCount} omitida por formato no soportado en Word (${imgUrl.substring(0, 80)})`);
+          continue;
+        }
         const fileName = `evidencia_${imgCount}.${ext}`;
         const relId    = `rIdEv${imgCount}`;
         const docPrId  = DOCPR_BASE + imgCount;
