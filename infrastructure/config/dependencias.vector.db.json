@@ -106,7 +106,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 1
+        "jerarquiaDecision": 1,
+        "sector": "gobierno",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 209"
+          ],
+          "legal": [
+            "Ley 1437 de 2011 (CPACA)",
+            "Ley 1755 de 2015"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -191,7 +205,83 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "gobierno",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 209"
+          ],
+          "legal": [
+            "Ley 1437 de 2011 (CPACA)",
+            "Ley 1755 de 2015"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
+      }
+    },
+    {
+      "id": "Secretaría Privada",
+      "nombre": "Secretaría Privada",
+      "normalized": "secretaria privada",
+      "alias": [],
+      "keywords": [
+        "alcalde",
+        "despacho",
+        "coordinacion",
+        "proyectos estrategicos",
+        "gobierno corporativo"
+      ],
+      "vectorSparse": [
+        [
+          39,
+          0.378
+        ],
+        [
+          44,
+          0.378
+        ],
+        [
+          105,
+          0.378
+        ],
+        [
+          108,
+          0.378
+        ],
+        [
+          119,
+          0.378
+        ],
+        [
+          134,
+          0.378
+        ],
+        [
+          183,
+          0.378
+        ]
+      ],
+      "metadata": {
+        "nivel": "central",
+        "tipo": "secretaria",
+        "jerarquiaDecision": 1,
+        "sector": "gobierno",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 209"
+          ],
+          "legal": [
+            "Ley 1437 de 2011 (CPACA)",
+            "Ley 1755 de 2015"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -266,7 +356,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "administrativo",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 209"
+          ],
+          "legal": [
+            "Ley 617 de 2000",
+            "Ley 819 de 2003"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -356,7 +460,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "administrativo",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 209"
+          ],
+          "legal": [
+            "Ley 87 de 1993",
+            "Ley 1474 de 2011"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -491,7 +609,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "administrativo",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 125"
+          ],
+          "legal": [
+            "Ley 909 de 2004",
+            "Ley 1960 de 2019"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -556,7 +688,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 4
+        "jerarquiaDecision": 4,
+        "sector": "gobierno",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 20",
+            "Constitucion Politica de Colombia de 1991, articulo 74"
+          ],
+          "legal": [
+            "Ley 1712 de 2014",
+            "Ley 1755 de 2015"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -633,7 +779,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 3
+        "jerarquiaDecision": 3,
+        "sector": "administrativo",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 209"
+          ],
+          "legal": [
+            "Ley 80 de 1993",
+            "Ley 1150 de 2007"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -708,7 +868,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 3
+        "jerarquiaDecision": 3,
+        "sector": "administrativo",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 209"
+          ],
+          "legal": [
+            "Ley 527 de 1999",
+            "Ley 1341 de 2009"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -784,7 +958,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 67"
+          ],
+          "legal": [
+            "Ley 115 de 1994 (Ley General de Educacion)",
+            "Ley 715 de 2001"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -854,7 +1042,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 49"
+          ],
+          "legal": [
+            "Ley 1751 de 2015",
+            "Ley 715 de 2001"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -961,7 +1163,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 13"
+          ],
+          "legal": [
+            "Ley 1448 de 2011",
+            "Ley 361 de 1997"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -1046,7 +1262,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 43"
+          ],
+          "legal": [
+            "Ley 1257 de 2008",
+            "Ley 1761 de 2015"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -1116,7 +1346,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 3
+        "jerarquiaDecision": 3,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 45"
+          ],
+          "legal": [
+            "Ley 1622 de 2013",
+            "Ley 1885 de 2018"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -1209,7 +1453,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 13"
+          ],
+          "legal": [
+            "Ley 1755 de 2015",
+            "Ley 1448 de 2011"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -1279,7 +1537,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 4
+        "jerarquiaDecision": 4,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 70"
+          ],
+          "legal": [
+            "Ley 397 de 1997",
+            "Ley 1185 de 2008"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -1354,7 +1626,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 3
+        "jerarquiaDecision": 3,
+        "sector": "gobierno",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 40"
+          ],
+          "legal": [
+            "Ley 1757 de 2015",
+            "Ley 136 de 1994"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -1459,7 +1745,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 1
+        "jerarquiaDecision": 1,
+        "sector": "seguridad",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 315"
+          ],
+          "legal": [
+            "Ley 1801 de 2016 (Codigo Nacional de Seguridad y Convivencia)",
+            "Ley 1551 de 2012"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -1544,7 +1844,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 1
+        "jerarquiaDecision": 1,
+        "sector": "movilidad",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 24"
+          ],
+          "legal": [
+            "Ley 769 de 2002 (Codigo Nacional de Transito)",
+            "Ley 105 de 1993"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -1636,7 +1950,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 1
+        "jerarquiaDecision": 1,
+        "sector": "infraestructura",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 311"
+          ],
+          "legal": [
+            "Ley 388 de 1997",
+            "Ley 1551 de 2012"
+          ],
+          "reglamentaria": [
+            "Acuerdo 48 de 2014 (POT Medellín)"
+          ]
+        }
       }
     },
     {
@@ -1723,7 +2051,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 1
+        "jerarquiaDecision": 1,
+        "sector": "infraestructura",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 311"
+          ],
+          "legal": [
+            "Ley 388 de 1997",
+            "Ley 1551 de 2012"
+          ],
+          "reglamentaria": [
+            "Acuerdo 48 de 2014 (POT Medellín)"
+          ]
+        }
       }
     },
     {
@@ -1808,7 +2150,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 1
+        "jerarquiaDecision": 1,
+        "sector": "territorial",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 79"
+          ],
+          "legal": [
+            "Ley 99 de 1993",
+            "Ley 1333 de 2009"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -1878,7 +2234,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 3
+        "jerarquiaDecision": 3,
+        "sector": "economico",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 333"
+          ],
+          "legal": [
+            "Ley 590 de 2000",
+            "Ley 2069 de 2020"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -1958,7 +2328,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "secretaria",
-        "jerarquiaDecision": 4
+        "jerarquiaDecision": 4,
+        "sector": "economico",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 333"
+          ],
+          "legal": [
+            "Ley 300 de 1996",
+            "Ley 2068 de 2020"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -2030,7 +2414,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "departamento",
-        "jerarquiaDecision": 3
+        "jerarquiaDecision": 3,
+        "sector": "infraestructura",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 311"
+          ],
+          "legal": [
+            "Ley 388 de 1997",
+            "Ley 1551 de 2012"
+          ],
+          "reglamentaria": [
+            "Acuerdo 48 de 2014 (POT Medellín)"
+          ]
+        }
       }
     },
     {
@@ -2086,7 +2484,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "departamento",
-        "jerarquiaDecision": 1
+        "jerarquiaDecision": 1,
+        "sector": "seguridad",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 315"
+          ],
+          "legal": [
+            "Ley 1801 de 2016 (Codigo Nacional de Seguridad y Convivencia)",
+            "Ley 1551 de 2012"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -2181,7 +2593,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "unidad",
-        "jerarquiaDecision": 4
+        "jerarquiaDecision": 4,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 67"
+          ],
+          "legal": [
+            "Ley 115 de 1994 (Ley General de Educacion)",
+            "Ley 715 de 2001"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -2251,7 +2677,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "unidad",
-        "jerarquiaDecision": 4
+        "jerarquiaDecision": 4,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 67"
+          ],
+          "legal": [
+            "Ley 115 de 1994 (Ley General de Educacion)",
+            "Ley 715 de 2001"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -2337,7 +2777,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 1
+        "jerarquiaDecision": 1,
+        "sector": "servicios_publicos",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 365"
+          ],
+          "legal": [
+            "Ley 142 de 1994",
+            "Ley 1437 de 2011 (CPACA)"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -2397,7 +2851,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "movilidad",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 24"
+          ],
+          "legal": [
+            "Ley 769 de 2002 (Codigo Nacional de Transito)",
+            "Ley 105 de 1993"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -2462,7 +2930,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 3
+        "jerarquiaDecision": 3,
+        "sector": "infraestructura",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 311"
+          ],
+          "legal": [
+            "Ley 388 de 1997",
+            "Ley 1551 de 2012"
+          ],
+          "reglamentaria": [
+            "Acuerdo 48 de 2014 (POT Medellín)"
+          ]
+        }
       }
     },
     {
@@ -2533,7 +3015,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 1
+        "jerarquiaDecision": 1,
+        "sector": "servicios_publicos",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 365"
+          ],
+          "legal": [
+            "Ley 142 de 1994",
+            "Ley 1437 de 2011 (CPACA)"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -2593,7 +3089,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "establecimiento",
-        "jerarquiaDecision": 3
+        "jerarquiaDecision": 3,
+        "sector": "infraestructura",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 311"
+          ],
+          "legal": [
+            "Ley 388 de 1997",
+            "Ley 1551 de 2012"
+          ],
+          "reglamentaria": [
+            "Acuerdo 48 de 2014 (POT Medellín)"
+          ]
+        }
       }
     },
     {
@@ -2700,7 +3210,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "establecimiento",
-        "jerarquiaDecision": 3
+        "jerarquiaDecision": 3,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 52"
+          ],
+          "legal": [
+            "Ley 181 de 1995",
+            "Ley 934 de 2004"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -2775,7 +3299,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 49"
+          ],
+          "legal": [
+            "Ley 1751 de 2015",
+            "Ley 715 de 2001"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -2850,7 +3388,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 2
+        "jerarquiaDecision": 2,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 49"
+          ],
+          "legal": [
+            "Ley 1751 de 2015",
+            "Ley 715 de 2001"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -2915,7 +3467,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 6
+        "jerarquiaDecision": 6,
+        "sector": "social",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 13"
+          ],
+          "legal": [
+            "Ley 1448 de 2011",
+            "Ley 361 de 1997"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -2970,7 +3536,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 3
+        "jerarquiaDecision": 3,
+        "sector": "movilidad",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 24"
+          ],
+          "legal": [
+            "Ley 769 de 2002 (Codigo Nacional de Transito)",
+            "Ley 105 de 1993"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -3025,7 +3605,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 5
+        "jerarquiaDecision": 5,
+        "sector": "movilidad",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 24"
+          ],
+          "legal": [
+            "Ley 769 de 2002 (Codigo Nacional de Transito)",
+            "Ley 105 de 1993"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -3090,7 +3684,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 5
+        "jerarquiaDecision": 5,
+        "sector": "economico",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 71"
+          ],
+          "legal": [
+            "Ley 29 de 1990",
+            "Ley 1286 de 2009"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -3150,7 +3758,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 6
+        "jerarquiaDecision": 6,
+        "sector": "economico",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 333"
+          ],
+          "legal": [
+            "Ley 80 de 1993",
+            "Ley 1150 de 2007"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -3210,7 +3832,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "unidad",
-        "jerarquiaDecision": 6
+        "jerarquiaDecision": 6,
+        "sector": "economico",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 209"
+          ],
+          "legal": [
+            "Ley 1508 de 2012",
+            "Ley 80 de 1993"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -3260,7 +3896,21 @@
       "metadata": {
         "nivel": "descentralizado",
         "tipo": "empresa",
-        "jerarquiaDecision": 3
+        "jerarquiaDecision": 3,
+        "sector": "seguridad",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 315"
+          ],
+          "legal": [
+            "Ley 1801 de 2016 (Codigo Nacional de Seguridad y Convivencia)",
+            "Ley 1551 de 2012"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -3335,7 +3985,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "gerencia",
-        "jerarquiaDecision": 5
+        "jerarquiaDecision": 5,
+        "sector": "territorial",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 311"
+          ],
+          "legal": [
+            "Ley 1551 de 2012",
+            "Ley 1454 de 2011"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -3410,7 +4074,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "gerencia",
-        "jerarquiaDecision": 5
+        "jerarquiaDecision": 5,
+        "sector": "territorial",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 311"
+          ],
+          "legal": [
+            "Ley 1551 de 2012",
+            "Ley 1454 de 2011"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -3465,7 +4143,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "gerencia",
-        "jerarquiaDecision": 6
+        "jerarquiaDecision": 6,
+        "sector": "territorial",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 311"
+          ],
+          "legal": [
+            "Ley 1551 de 2012",
+            "Ley 1454 de 2011"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -3525,7 +4217,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "gerencia",
-        "jerarquiaDecision": 6
+        "jerarquiaDecision": 6,
+        "sector": "territorial",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 311"
+          ],
+          "legal": [
+            "Ley 1551 de 2012",
+            "Ley 1454 de 2011"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     },
     {
@@ -3590,7 +4296,21 @@
       "metadata": {
         "nivel": "central",
         "tipo": "gerencia",
-        "jerarquiaDecision": 4
+        "jerarquiaDecision": 4,
+        "sector": "territorial",
+        "normativa": {
+          "constitucional": [
+            "Constitucion Politica de Colombia de 1991, articulo 2",
+            "Constitucion Politica de Colombia de 1991, articulo 311"
+          ],
+          "legal": [
+            "Ley 1551 de 2012",
+            "Ley 1454 de 2011"
+          ],
+          "reglamentaria": [
+            "Plan de Desarrollo Distrital 2024-2027 \"Medellín Te Quiere\""
+          ]
+        }
       }
     }
   ]

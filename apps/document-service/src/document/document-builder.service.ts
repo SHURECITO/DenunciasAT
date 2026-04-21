@@ -44,6 +44,7 @@ export interface BuildInput {
   solicitudAdicional?: string;
   imagenes:          string[];
   rutaDestino:       string;
+  dependenciaSecundaria?: string;
   // Solicitudes específicas por dependencia (cuando hay múltiples destinatarios).
   // Si se provee, se usa para renderizar sub-bloques en la sección SOLICITUD.
   dependenciasEstructuradas?: DependenciaSolicitud[];
@@ -402,7 +403,15 @@ export class DocumentBuilderService {
   }
 
   async construir(input: BuildInput): Promise<void> {
-    const { denuncia, hechos, asunto, solicitudAdicional, imagenes, rutaDestino } = input;
+    const {
+      denuncia,
+      hechos,
+      asunto,
+      solicitudAdicional,
+      imagenes,
+      rutaDestino,
+      dependenciaSecundaria,
+    } = input;
     mkdirSync(dirname(rutaDestino), { recursive: true });
 
     // Cargar plantilla como ZIP
@@ -544,6 +553,13 @@ export class DocumentBuilderService {
         body.push(p('Solicitud adicional del ciudadano:', { bold: true, align: 'justified', spacingAfter: 120 }));
         body.push(p(solicitudAdicional.trim(), { align: 'justified', spacingAfter: 180 }));
       }
+
+      if (dependenciaSecundaria?.trim()) {
+        body.push(p(
+          `Se solicita adelantar las acciones correspondientes y, de ser necesario, articular con ${dependenciaSecundaria.trim()} para la atención integral de la situación reportada.`,
+          { align: 'justified', spacingAfter: 180 },
+        ));
+      }
     } else {
       // Flujo estándar: una sola dependencia
       const solicitudes = [
@@ -551,6 +567,13 @@ export class DocumentBuilderService {
         `2. Que se informe sobre las acciones a implementar por parte de ${depList[0] ?? depStr} para dar solución efectiva a la problemática planteada.`,
         `3. Que se garantice una respuesta oportuna conforme a los términos establecidos en el artículo 30 de la Ley 1755 de 2015, que establece un término máximo de diez (10) días para responder solicitudes entre autoridades.`,
       ];
+
+      if (dependenciaSecundaria?.trim()) {
+        solicitudes.push(
+          `Se solicita adelantar las acciones correspondientes y, de ser necesario, articular con ${dependenciaSecundaria.trim()} para la atención integral de la situación reportada.`,
+        );
+      }
+
       if (solicitudAdicional?.trim()) {
         solicitudes.push(`4. ${solicitudAdicional.trim()}`);
       }

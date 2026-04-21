@@ -41,9 +41,32 @@ const esConfirmacionPositiva = (mensajeNorm: string): boolean =>
 const esConfirmacionNegativa = (mensajeNorm: string): boolean =>
   /\b(no|negativo|incorrecto|cambiar|corrige|corregir|no\s+corresponde)\b/i.test(mensajeNorm);
 
+const REGEX_TIPO_VIA = /\b(calle|cl\.?|carrera|cra\.?|kr\.?|avenida|av\.?|diagonal|diag\.?|transversal|tv\.?|autopista|circular)\b/i;
+
+type CampoPrioritario = 'ubicacion' | 'descripcion' | 'nombre' | 'cedula' | 'none';
+
 // Capitaliza cada palabra del nombre (ej: "juan pérez" → "Juan Pérez")
 const capitalizarNombre = (nombre: string): string =>
   nombre.trim().split(/\s+/).map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+
+const contarPalabras = (texto: string): number =>
+  texto.trim().split(/\s+/).filter(Boolean).length;
+
+const esDireccionValida = (direccion?: string): boolean => {
+  if (!direccion) return false;
+  return REGEX_TIPO_VIA.test(direccion.trim());
+};
+
+const esNombreValido = (nombre?: string): boolean => {
+  if (!nombre) return false;
+  return nombre.trim().length >= 3;
+};
+
+const normalizarCedula = (cedula?: string): string | null => {
+  if (!cedula) return null;
+  const clean = cedula.replace(/\D/g, '');
+  return /^\d{6,10}$/.test(clean) ? clean : null;
+};
 
 // Devuelve lista de campos pendientes según datos actuales (en el orden correcto del flujo)
 const camposPendientes = (d: DatosConfirmados): string[] => [
@@ -65,6 +88,199 @@ export class ChatbotService {
     private readonly ragApi: RagApiService,
     private readonly gemini: GeminiService,
   ) {}
+
+  private clonarDatosConfirmados(datos: DatosConfirmados): DatosConfirmados {
+    return {
+      ...datos,
+      imagenes: [...(datos.imagenes ?? [])],
+      pdfs: [...(datos.pdfs ?? [])],
+    };
+  }
+
+  private mergeDatosConfirmadosSeguro(
+    actual: DatosConfirmados,
+    extraidos: Partial<DatosConfirmados>,
+  ): DatosConfirmados {
+    const merged: DatosConfirmados = {
+      ...actual,
+      imagenes: [...new Set([...(actual.imagenes ?? [])])],
+      pdfs: [...new Set([...(actual.pdfs ?? [])])],
+    };
+
+    if (esNombreValido(extraidos.nombre)) {
+      merged.nombre = extraidos.nombre!.trim();
+    }
+
+    if (typeof extraidos.esAnonimo === 'boolean') {
+      merged.esAnonimo = extraidos.esAnonimo;
+    }
+
+    if (typeof extraidos.cedula === 'string') {
+      const cedula = normalizarCedula(extraidos.cedula);
+      if (cedula) {
+        merged.cedula = cedula;
+      }
+    }
+
+    if (typeof extraidos.descripcion === 'string' && contarPalabras(extraidos.descripcion) >= 20) {
+      merged.descripcion = extraidos.descripcion.trim();
+    }
+
+    if (typeof extraidos.barrio === 'string' && extraidos.barrio.trim()) {
+      merged.barrio = extraidos.barrio.trim();
+    }
+
+    if (typeof extraidos.comuna === 'string' && extraidos.comuna.trim()) {
+      merged.comuna = extraidos.comuna.trim();
+    }
+
+    if (typeof extraidos.direccion === 'string' && esDireccionValida(extraidos.direccion)) {
+      merged.direccion = extraidos.direccion.trim();
+      merged.direccionConfirmada = true;
+    }
+
+    if (extraidos.direccionConfirmada === true && merged.direccion) {
+      merged.direccionConfirmada = true;
+    }
+
+    if (typeof extraidos.solicitudAdicional === 'string' && extraidos.solicitudAdicional.trim()) {
+      merged.solicitudAdicional = extraidos.solicitudAdicional.trim();
+    }
+
+    if (typeof extraidos.dependencia === 'string' && extraidos.dependencia.trim()) {
+      merged.dependencia = extraidos.dependencia.trim();
+    }
+
+    if (typeof extraidos.esEspecial === 'boolean') {
+      merged.esEspecial = extraidos.esEspecial;
+    }
+
+    if (Array.isArray(extraidos.imagenes)) {
+      merged.imagenes = [...new Set([
+        ...(merged.imagenes ?? []),
+        ...extraidos.imagenes.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim()),
+      ])];
+    }
+
+    if (Array.isArray(extraidos.pdfs)) {
+      merged.pdfs = [...new Set([
+        ...(merged.pdfs ?? []),
+        ...extraidos.pdfs.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim()),
+      ])];
+    }
+
+    return merged;
+  }
+
+  private obtenerPrioridadDinamica(datos: DatosConfirmados): CampoPrioritario {
+    const faltaUbicacion = !datos.direccion || !datos.barrio || !datos.direccionConfirmada;
+    if (faltaUbicacion) {
+      return 'ubicacion';
+    }
+
+    if (!datos.descripcion) {
+      return 'descripcion';
+    }
+
+    if (!(datos.nombre || datos.esAnonimo === true)) {
+      return 'nombre';
+    }
+
+    if (!(datos.esAnonimo === true || datos.cedula)) {
+      return 'cedula';
+    }
+
+    return 'none';
+  }
+
+  private obtenerNuevosDatosValidos(antes: DatosConfirmados, despues: DatosConfirmados): string[] {
+    const cambios: string[] = [];
+    const keys: Array<keyof DatosConfirmados> = [
+      'descripcion',
+      'direccion',
+      'barrio',
+      'comuna',
+      'nombre',
+      'cedula',
+      'dependencia',
+      'solicitudAdicional',
+    ];
+
+    for (const key of keys) {
+      const prev = (antes[key] ?? '').toString().trim();
+      const curr = (despues[key] ?? '').toString().trim();
+      if (curr && curr !== prev) {
+        cambios.push(key);
+      }
+    }
+
+    if ((despues.imagenes?.length ?? 0) > (antes.imagenes?.length ?? 0)) {
+      cambios.push('imagenes');
+    }
+
+    if ((despues.pdfs?.length ?? 0) > (antes.pdfs?.length ?? 0)) {
+      cambios.push('pdfs');
+    }
+
+    if (despues.esAnonimo === true && antes.esAnonimo !== true) {
+      cambios.push('esAnonimo');
+    }
+
+    return cambios;
+  }
+
+  private esMensajeAclaracion(mensajeNorm: string): boolean {
+    return /\?|no\s+entiendo|c[oó]mo|que\s+hago|qu[eé]\s+debo|me\s+ayudas?/i.test(mensajeNorm);
+  }
+
+  private usuarioIntentoDatoInvalido(
+    prioridad: CampoPrioritario,
+    mensajeOriginal: string,
+    mensajeNorm: string,
+  ): boolean {
+    switch (prioridad) {
+      case 'ubicacion': {
+        const intentoUbicacion = /\d/.test(mensajeNorm) || REGEX_TIPO_VIA.test(mensajeNorm) || /barrio|sector|esquina|cuadra/i.test(mensajeNorm);
+        return intentoUbicacion && !esDireccionValida(mensajeOriginal);
+      }
+      case 'descripcion': {
+        const palabras = contarPalabras(mensajeOriginal);
+        return palabras > 0 && palabras < 20;
+      }
+      case 'nombre':
+        return /[a-záéíóúñ]/i.test(mensajeNorm) && !esNombreValido(mensajeOriginal);
+      case 'cedula': {
+        const tieneDigitos = /\d/.test(mensajeNorm);
+        return tieneDigitos && !normalizarCedula(mensajeOriginal);
+      }
+      default:
+        return false;
+    }
+  }
+
+  private construirPreguntaAdaptativa(
+    prioridad: CampoPrioritario,
+    estancado: boolean,
+    intentosFallidos: number,
+  ): string {
+    const empatico = intentosFallidos >= 2
+      ? 'Tranquilo, te ayudo. Vamos paso a paso. '
+      : '';
+    const refuerzo = estancado ? 'Hagámoslo simple con este formato: ' : '';
+
+    switch (prioridad) {
+      case 'ubicacion':
+        return `${empatico}${refuerzo}Por ejemplo: Calle 10 #20-30, barrio Laureles. ¿Podrías escribirme tu dirección de forma similar?`;
+      case 'descripcion':
+        return `${empatico}${refuerzo}Cuéntame qué pasó, dónde ocurrió y desde cuándo, en al menos 20 palabras.`;
+      case 'nombre':
+        return `${empatico}¿Me compartes tu nombre completo (mínimo 3 caracteres)?`;
+      case 'cedula':
+        return `${empatico}Escríbeme solo los números de tu cédula (de 6 a 10 dígitos).`;
+      default:
+        return `${empatico}Gracias, ya casi terminamos. Continúo con el siguiente dato.`;
+    }
+  }
 
   async procesarMensaje(
     numero: string,
@@ -138,6 +354,8 @@ export class ChatbotService {
       }
     }
 
+    estado.turnosSinNuevosDatos = estado.turnosSinNuevosDatos ?? 0;
+
     this.logger.log(`[${numero}] Procesando mensaje. Datos actuales: ${JSON.stringify(estado.datosConfirmados)}`);
 
     // Manejo de media (imágenes / documentos PDF)
@@ -151,17 +369,19 @@ export class ChatbotService {
     }
 
     // Detección de mensajes repetidos para usuarios perdidos
+    let incrementoPorRepeticion = false;
     if (estado.ultimoMensaje === mensajeEfectivo && tipo === 'conversation') {
       estado.contadorRepeticiones = (estado.contadorRepeticiones ?? 0) + 1;
       if ((estado.contadorRepeticiones ?? 0) >= 2) {
         estado.intentosFallidos = (estado.intentosFallidos ?? 0) + 1;
+        incrementoPorRepeticion = true;
       }
     } else {
       estado.contadorRepeticiones = 0;
       estado.ultimoMensaje = mensajeEfectivo;
     }
 
-    if ((estado.intentosFallidos ?? 0) >= 3) {
+    if ((estado.intentosFallidos ?? 0) >= 5) {
       await this.conversacion.setEstado(numero, estado);
       return MSG_PERDIDO;
     }
@@ -185,6 +405,9 @@ export class ChatbotService {
       return respuestaRadicado;
     }
 
+    const datosAntesTurno = this.clonarDatosConfirmados(estado.datosConfirmados);
+    const prioridadAntesTurno = this.obtenerPrioridadDinamica(datosAntesTurno);
+
     // Llamar a Gemini — el historial no incluye el mensaje actual todavía
     const resultado = await this.gemini.procesarMensajeChatbot(
       estado.historial,
@@ -200,13 +423,7 @@ export class ChatbotService {
         ext.nombre = ext.nombreCompleto;
         delete ext.nombreCompleto;
       }
-      estado.datosConfirmados = {
-        ...estado.datosConfirmados,
-        ...ext,
-        // Arrays: concatenar y deduplicar por URL
-        imagenes: [...new Set([...(estado.datosConfirmados.imagenes ?? []), ...((ext.imagenes as string[] | undefined) ?? [])])],
-        pdfs: [...new Set([...(estado.datosConfirmados.pdfs ?? []), ...((ext.pdfs as string[] | undefined) ?? [])])],
-      };
+      estado.datosConfirmados = this.mergeDatosConfirmadosSeguro(estado.datosConfirmados, ext);
       this.logger.log(`[${numero}] Datos tras merge: ${JSON.stringify(estado.datosConfirmados)}`);
     }
 
@@ -233,6 +450,36 @@ export class ChatbotService {
     }
     // Si listaParaRadicar:true + etapaSiguiente:'finalizado', se radicarà abajo y ahí se setea 'finalizado'
 
+    const nuevosDatosValidos = this.obtenerNuevosDatosValidos(datosAntesTurno, estado.datosConfirmados);
+    const hayDatosNuevos = nuevosDatosValidos.length > 0;
+
+    if (hayDatosNuevos) {
+      estado.turnosSinNuevosDatos = 0;
+      estado.intentosFallidos = Math.max((estado.intentosFallidos ?? 0) - 1, 0);
+    } else if (tipo === 'conversation') {
+      estado.turnosSinNuevosDatos = (estado.turnosSinNuevosDatos ?? 0) + 1;
+    }
+
+    const puedeEvaluarFallo =
+      tipo === 'conversation' &&
+      resultado.etapaSiguiente !== 'especial_cerrado' &&
+      resultado.etapaSiguiente !== 'cancelado' &&
+      !resultado.listaParaRadicar;
+
+    if (puedeEvaluarFallo && !hayDatosNuevos) {
+      const intentoInvalido = this.usuarioIntentoDatoInvalido(prioridadAntesTurno, mensajeEfectivo, mensajeNorm);
+      const noRespondioLoPedido =
+        prioridadAntesTurno !== 'none' &&
+        !intentoInvalido &&
+        !this.esMensajeAclaracion(mensajeNorm) &&
+        !esConfirmacion &&
+        !esConfirmacionNegativa(mensajeNorm);
+
+      if ((intentoInvalido || noRespondioLoPedido) && !incrementoPorRepeticion) {
+        estado.intentosFallidos = (estado.intentosFallidos ?? 0) + 1;
+      }
+    }
+
     // Persistir turno completo en el historial
     estado.historial.push(
       { rol: 'user', contenido: mensajeEfectivo, timestamp: new Date().toISOString() },
@@ -242,7 +489,6 @@ export class ChatbotService {
     let respuestaFinal = resultado.respuesta;
 
     // Guardar parcial cuando hay datos nuevos
-    const hayDatosNuevos = Object.keys(resultado.datosExtraidos ?? {}).length > 0;
     if (
       estado.datosConfirmados.nombre &&
       hayDatosNuevos &&
@@ -299,6 +545,24 @@ export class ChatbotService {
       estado.datosConfirmados.etapa === 'confirmando'
     ) {
       respuestaFinal = 'Solo para confirmar: ¿autorizas radicar la denuncia con los datos ya validados?';
+    }
+
+    const prioridadDespuesTurno = this.obtenerPrioridadDinamica(estado.datosConfirmados);
+    const estancado = (estado.turnosSinNuevosDatos ?? 0) >= 3;
+    const necesitaAdaptacion =
+      prioridadDespuesTurno !== 'none' &&
+      !hayDatosNuevos &&
+      resultado.etapaSiguiente !== 'especial_cerrado' &&
+      resultado.etapaSiguiente !== 'cancelado' &&
+      !resultado.listaParaRadicar &&
+      ((estado.intentosFallidos ?? 0) >= 2 || estancado);
+
+    if (necesitaAdaptacion) {
+      respuestaFinal = this.construirPreguntaAdaptativa(
+        prioridadDespuesTurno,
+        estancado,
+        estado.intentosFallidos ?? 0,
+      );
     }
 
     await this.conversacion.setEstado(numero, estado);

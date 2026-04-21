@@ -34,6 +34,7 @@ export interface EstadoConversacionIA {
   historial: MensajeHistorial[];
   datosConfirmados: DatosConfirmados;
   intentosFallidos: number;
+  turnosSinNuevosDatos?: number;
   ultimoMensaje?: string;
   contadorRepeticiones?: number;
   parcialId?: number;
@@ -77,6 +78,7 @@ export class ConversacionService implements OnModuleDestroy {
       historial: [],
       datosConfirmados: { telefono, etapa: 'recopilando' },
       intentosFallidos: 0,
+      turnosSinNuevosDatos: 0,
     };
   }
 }

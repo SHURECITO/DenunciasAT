@@ -236,6 +236,20 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - Integraciones: chatbot usa clasificación semántica vía RAG; dashboard-api expone proxy JWT para listado/reindex; frontend agrega panel de base de conocimiento con reindex y tabla de dependencias.
 - Resiliencia: si faltan créditos/API de Gemini, el servicio no cae; usa fallback local determinístico para embeddings/búsqueda/clasificación.
 
+**Sesión 31 (2026-04-21) — Articulación institucional en casos mixtos:**
+- `rag-service`: selección de `dependenciaPrincipal` + `dependenciaSecundaria` opcional (máximo una), con criterios de score cercano + temática distinta + señal dual real; log estructurado `caso_mixto` con scores.
+- `document-service`: se pasa la secundaria al builder y se agrega en SOLICITUD la frase: “Se solicita adelantar las acciones correspondientes y, de ser necesario, articular con [dependenciaSecundaria] para la atención integral de la situación reportada.”
+- Compatibilidad preservada: no se cambiaron endpoints ni DTOs de entrada; los nuevos campos en clasificación son opcionales.
+
+**Sesión 32 (2026-04-20) — Prompt jurídico avanzado con contexto RAG:**
+- `document-service` ahora resuelve `normativaAplicable` desde `infrastructure/config/normativa.juridica.json` usando dependencia principal/secundaria antes de llamar a Gemini.
+- `GeminiService.generarHechos()` reemplazó el prompt anterior por una versión jurídica avanzada que prohíbe citar normas sin certeza y usa el contexto solo como guía institucional.
+- El fallback de HECHOS se simplificó para evitar citas normativas inciertas y mantener redacción institucional general.
+
+**Sesión 33 (2026-04-20) — Catálogo vectorial enriquecido:**
+- `infrastructure/config/dependencias.vector.db.json` quedó enriquecido con `sector` y `normativa` en todas las metadata, sin tocar `vectorSparse` existentes.
+- Se añadió `Secretaría Privada` con sector `gobierno` y normativa asociada, preservando compatibilidad con el catálogo actual.
+
 ---
 
 > Al terminar cada sesión: marcar fases, comprimir historial si supera 200 líneas.

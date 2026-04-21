@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
+import { readFileSync } from 'fs';
 import { readFile, unlink } from 'fs/promises';
 import { ConfigService } from '@nestjs/config';
 import { GeminiService } from '@app/ai';
@@ -11,12 +12,26 @@ import AdmZip = require('adm-zip');
 
 const DOCS_DIR = join(process.cwd(), 'infrastructure', 'documentos');
 const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const NORMATIVA_PATH = join(process.cwd(), 'infrastructure', 'config', 'normativa.juridica.json');
+
+interface NormativaJuridicaEntry {
+  id: string;
+  tipo: 'ley' | 'competencia';
+  entidad?: string;
+  nombre: string;
+  descripcion: string;
+  aplicaPara: string[];
+  keywords: string[];
+  nivel: 'nacional' | 'territorial';
+  prioridad: number;
+}
 
 @Injectable()
 export class DocumentService {
   private readonly logger = new Logger(DocumentService.name);
   // Map denunciaId → ruta del archivo ya generado (cache en memoria)
   private readonly rutasGeneradas = new Map<number, string>();
+  private normativaCache: NormativaJuridicaEntry[] | null = null;
 
   private readonly bucketDocumentos: string;
 
@@ -28,6 +43,107 @@ export class DocumentService {
     private readonly config: ConfigService,
   ) {
     this.bucketDocumentos = this.config.get<string>('MINIO_BUCKET_DOCUMENTOS', 'denunciasat-documentos');
+  }
+
+  private normalizarTexto(texto: string): string {
+    return texto
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private cargarNormativaJuridica(): NormativaJuridicaEntry[] {
+    if (this.normativaCache) {
+      return this.normativaCache;
+    }
+
+    try {
+      const raw = readFileSync(NORMATIVA_PATH, 'utf8');
+      const parsed = JSON.parse(raw) as unknown;
+      this.normativaCache = Array.isArray(parsed) ? (parsed as NormativaJuridicaEntry[]) : [];
+    } catch (err) {
+      this.logger.warn(`No se pudo leer normativa juridica: ${(err as Error).message}`);
+      this.normativaCache = [];
+    }
+
+    return this.normativaCache;
+  }
+
+  private buscarNormativaPorTexto(texto: string): NormativaJuridicaEntry | undefined {
+    const textoNorm = this.normalizarTexto(texto);
+    if (!textoNorm) {
+      return undefined;
+    }
+    const entries = this.cargarNormativaJuridica();
+
+    return entries.find((entry) => {
+      const candidatos = [entry.entidad ?? '', entry.nombre, ...entry.keywords, ...entry.aplicaPara];
+      return candidatos.some((candidato) => this.normalizarTexto(candidato).includes(textoNorm) || textoNorm.includes(this.normalizarTexto(candidato)));
+    });
+  }
+
+  private obtenerNormativaAplicable(dependenciaPrincipal: string, dependenciaSecundaria?: string): string {
+    const entries = this.cargarNormativaJuridica();
+    const seleccionadas = new Map<string, NormativaJuridicaEntry>();
+
+    const principal = this.buscarNormativaPorTexto(dependenciaPrincipal);
+    if (principal) {
+      seleccionadas.set(principal.id, principal);
+    }
+
+    if (dependenciaSecundaria?.trim()) {
+      const secundaria = this.buscarNormativaPorTexto(dependenciaSecundaria);
+      if (secundaria) {
+        seleccionadas.set(secundaria.id, secundaria);
+      }
+    }
+
+    const leyesBase = [
+      'ley-constitucion-1991',
+      'ley-1755-2015',
+      'ley-1437-2011',
+    ];
+
+    for (const leyId of leyesBase) {
+      const ley = entries.find((entry) => entry.id === leyId);
+      if (ley) {
+        seleccionadas.set(ley.id, ley);
+      }
+    }
+
+    const temas = new Set<string>();
+    for (const entry of seleccionadas.values()) {
+      for (const tema of entry.aplicaPara) {
+        temas.add(this.normalizarTexto(tema));
+      }
+    }
+
+    const leyesRelacionadas = entries
+      .filter((entry) => entry.tipo === 'ley')
+      .filter((entry) => entry.prioridad >= 4)
+      .filter((entry) => entry.aplicaPara.some((tema) => temas.has(this.normalizarTexto(tema))))
+      .sort((a, b) => b.prioridad - a.prioridad)
+      .slice(0, 3);
+
+    for (const ley of leyesRelacionadas) {
+      seleccionadas.set(ley.id, ley);
+    }
+
+    const ordenadas = Array.from(seleccionadas.values()).sort((a, b) => {
+      if (a.tipo !== b.tipo) return a.tipo === 'competencia' ? -1 : 1;
+      if (a.prioridad !== b.prioridad) return b.prioridad - a.prioridad;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    return ordenadas
+      .map((entry) => {
+        const entidad = entry.entidad ? ` (${entry.entidad})` : '';
+        return `${entry.tipo.toUpperCase()} - ${entry.nombre}${entidad}: ${entry.descripcion}`;
+      })
+      .join('\n');
   }
 
   async generarDocumento(denunciaId: number): Promise<void> {
@@ -52,6 +168,9 @@ export class DocumentService {
       const resumen     = denuncia.descripcionResumen ?? denuncia.descripcion.substring(0, 200);
       const depList     = dependencia.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
       const hayMultiple = depList.length > 1;
+      const dependenciaPrincipal = depList[0] ?? dependencia;
+      const dependenciaSecundaria = depList[1];
+      const normativaAplicable = this.obtenerNormativaAplicable(dependenciaPrincipal, dependenciaSecundaria);
 
       // Cuando hay múltiples dependencias, pedir a Gemini solicitudes específicas por cada una.
       // Si el resultado trae solicitudes → las usamos para construir la sección SOLICITUD por bloques.
@@ -72,20 +191,26 @@ export class DocumentService {
         }
       }
 
+      // Si hay una dependencia secundaria (posición 2), usarla para frase de articulación institucional.
+      const dependenciaSecundaria = depList.length > 1 ? depList[1] : undefined;
+
       // Generar HECHOS y ASUNTO en paralelo (ambos usan Gemini con el prompt jurídico)
       const [hechos, asuntoGenerado] = await Promise.all([
         this.gemini.generarHechos({
+          descripcion:     denuncia.descripcion,
+          ubicacion:       denuncia.ubicacion,
           nombreCiudadano: denuncia.nombreCiudadano,
           esAnonimo:       denuncia.esAnonimo,
+          direccion:       denuncia.ubicacion,
           barrio:          denuncia.barrio ?? '',
           comuna:          denuncia.comuna ?? '',
-          direccion:       denuncia.ubicacion,
-          descripcion:     denuncia.descripcion,
-          dependencia,
+          dependenciaPrincipal,
+          dependenciaSecundaria,
+          normativaAplicable,
         }),
         asuntoEstructurado
           ? Promise.resolve(asuntoEstructurado)
-          : this.gemini.generarAsunto({ descripcionResumen: resumen, dependencia }),
+          : this.gemini.generarAsunto({ descripcionResumen: resumen, dependencia: dependenciaPrincipal }),
       ]);
       const asunto = asuntoGenerado;
 
@@ -109,6 +234,7 @@ export class DocumentService {
         solicitudAdicional: denuncia.solicitudAdicional ?? undefined,
         imagenes,
         rutaDestino: rutaArchivo,
+        dependenciaSecundaria,
         dependenciasEstructuradas,
       });
 

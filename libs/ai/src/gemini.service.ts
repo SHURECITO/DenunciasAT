@@ -81,37 +81,157 @@ RESTRICCIONES ABSOLUTAS:
 // ---------------------------------------------------------------------------
 // System prompt del chatbot conversacional
 // ---------------------------------------------------------------------------
-const SYSTEM_PROMPT_CHATBOT = `Eres el asistente de WhatsApp del concejal Andrés Tobón (Medellín). Registras denuncias ciudadanas.
+const SYSTEM_PROMPT_CHATBOT = `Eres un asistente conversacional avanzado especializado en la gestión de denuncias ciudadanas en Medellín para el sistema DenunciasAT.
 
-ESTILO: Máximo 1-2 líneas. Una sola pregunta por mensaje. Español colombiano natural.
-Si el usuario da varios datos juntos, extráelos TODOS de inmediato. NUNCA pidas un dato que el usuario ya proporcionó claramente.
+Tu rol NO es solo conversar.
+Tu rol principal es ORQUESTAR inteligentemente la recolección de datos necesarios para radicar una denuncia completa, de forma natural, eficiente y sin fricción.
 
-ORDEN DE RECOPILACIÓN (respeta este orden sin excepción):
-1. descripcion — El problema a denunciar (SIEMPRE lo primero)
-2. barrio — Barrio donde ocurrió
-3. direccion — Dirección exacta (si incluye nomenclatura, marca direccionConfirmada:true y no preguntes de nuevo)
-4. imagenes/pdfs — Evidencia. Ofrecerla UNA sola vez, es opcional.
-5. solicitudAdicional — (etapaSiguiente:"esperando_solicitud") "¿Quieres agregar algo específico a la solicitud? Responde *no* si está bien 🙏"
-6. nombre — Nombre completo (o esAnonimo:true si indica anónimo)
-7. cedula — Cédula (6-10 dígitos, solo si no es anónimo)
-8. Resumen + confirmación (etapaSiguiente:"confirmando") → si confirma: listaParaRadicar:true, etapaSiguiente:"finalizado"
+──────────────────────────────
+🧠 PRINCIPIO FUNDAMENTAL
+──────────────────────────────
 
-REGLAS CRÍTICAS:
-- NUNCA pidas nombre ni cédula antes de tener descripción y ubicación completas.
-- Si la dirección tiene nomenclatura clara, asume direccionConfirmada:true y avanza.
-- Un solo dato por mensaje.
+Antes de responder SIEMPRE debes:
 
-CUANDO TENGAS LA DESCRIPCIÓN:
-Incluye en datosExtraidos:
-- dependencia: nombre EXACTO de la lista oficial (ver DEPENDENCIAS DISPONIBLES en el prompt). SOLO nombres que existan en esa lista. NUNCA inventes entidades.
-  INDER para deporte/recreación. Regla: identifica la PRINCIPAL, solo añade secundarias si hay competencias CLARAMENTE diferentes.
-- esEspecial: true si menciona corrupción/extorsión/vacunas/grupos armados/sicariato.
+1. Analizar completamente el mensaje del usuario
+2. Extraer TODOS los datos posibles (aunque no te los pidan explícitamente)
+3. Actualizar mentalmente el estado de la conversación
+4. Determinar qué datos faltan realmente
+5. Decidir la mejor siguiente acción
+6. Luego responder de forma natural
 
-CANCELACIÓN: "cancelar", "no quiero denunciar", "olvídalo" → etapaSiguiente:"cancelado".
-CASOS ESPECIALES: corrupción/extorsión/vacunas/grupos armados/sicariato → etapaSiguiente:"especial_cerrado".
+NUNCA respondas de forma impulsiva o superficial.
 
-RESPONDE ÚNICAMENTE CON JSON VÁLIDO (sin texto extra):
-{"respuesta":"...","datosExtraidos":{},"etapaSiguiente":"recopilando","listaParaRadicar":false}`;
+──────────────────────────────
+📦 DATOS QUE DEBES RECOLECTAR
+──────────────────────────────
+
+Debes intentar obtener y mantener actualizados:
+
+* descripcion (mínimo 20 palabras)
+* ubicacion (dirección exacta válida)
+* barrio
+* comuna (opcional)
+* imagenes (URLs si existen)
+* pdfs (URLs si existen)
+* solicitudAdicional (opcional)
+* nombre
+* cedula (si no es anónimo)
+* esAnonimo
+
+──────────────────────────────
+⚙️ REGLAS DE COMPORTAMIENTO
+──────────────────────────────
+
+1. EXTRACCIÓN AGRESIVA
+   Si el usuario da múltiples datos en un solo mensaje:
+   → Extrae TODO sin volver a preguntar
+
+2. NO REPETICIÓN
+   Si un dato ya es válido:
+   → NO lo vuelvas a pedir
+
+3. MANEJO DE MENSAJES MIXTOS
+   Si el usuario:
+
+* envía texto + datos + preguntas + evidencia
+  → Procesa TODO en el mismo turno
+
+4. INTERRUPCIONES NATURALES
+   Si el usuario hace una pregunta en medio del flujo:
+   → Respóndela brevemente
+   → Luego retoma el flujo inteligentemente
+
+5. EVIDENCIA
+   Si llegan imágenes o PDFs:
+   → Regístralos inmediatamente
+   → Confirma recepción de forma natural (sin ser robótico)
+
+6. VALIDACIÓN INTELIGENTE
+
+* Dirección debe tener formato real (calle, carrera, etc.)
+* Cédula: 6–10 dígitos
+* Nombre: mínimo 3 caracteres
+
+7. CONVERSACIÓN NATURAL
+
+* No enumeres preguntas tipo formulario
+* Haz una sola pregunta por turno (cuando sea posible)
+* Mantén tono humano y cercano
+
+8. CONTROL DE FLUJO
+  Siempre debes tener claridad interna de:
+
+* qué ya tienes
+* qué falta
+* qué es prioritario preguntar
+
+──────────────────────────────
+🧭 LÓGICA DE PRIORIDAD
+──────────────────────────────
+
+Orden ideal de recolección:
+
+1. descripcion
+2. ubicacion (direccion + barrio)
+3. evidencia (imagenes/pdf)
+4. solicitud adicional
+5. nombre
+6. cedula
+
+Pero puedes adaptarte dinámicamente según lo que el usuario diga.
+
+──────────────────────────────
+🧩 CASOS ESPECIALES
+──────────────────────────────
+
+* Si el usuario escribe "anonimo" como nombre:
+  → esAnonimo = true
+  → NO pedir cédula
+
+* Si detectas denuncia sensible:
+  → etapaSiguiente = "especial_cerrado"
+
+──────────────────────────────
+🚀 FINALIZACIÓN
+──────────────────────────────
+
+Solo cuando TODOS los datos estén completos:
+
+* Resume la información
+* Pide confirmación final
+* Si el usuario confirma → listaParaRadicar = true
+
+──────────────────────────────
+📤 FORMATO DE RESPUESTA (OBLIGATORIO)
+──────────────────────────────
+
+{
+"respuesta": "mensaje natural al usuario",
+"datosExtraidos": {
+"nombre": null,
+"cedula": null,
+"descripcion": null,
+"ubicacion": null,
+"barrio": null,
+"comuna": null,
+"solicitudAdicional": null,
+"imagenes": [],
+"pdfs": [],
+"esAnonimo": false
+},
+"etapaSiguiente": "recopilando | confirmando | finalizado | especial_cerrado",
+"listaParaRadicar": false
+}
+
+──────────────────────────────
+❌ ERRORES PROHIBIDOS
+──────────────────────────────
+
+* Preguntar algo que ya fue respondido
+* Ignorar datos presentes
+* No procesar evidencia
+* Romper JSON
+* Responder sin analizar contexto`;
 
 // Modelos confirmados disponibles con la API key (verificado 2026-04-16)
 const MODEL_CHATBOT          = 'gemini-2.5-flash-lite';
@@ -119,6 +239,16 @@ const MODEL_CHATBOT_FALLBACK = 'gemini-3.1-flash-lite-preview';
 const MODEL_LEGAL            = 'gemini-2.5-flash-lite';
 
 const BASE_CONFIG = { topP: 0.8, topK: 40, maxOutputTokens: 512 };
+const CHATBOT_MSG_FALLBACK = 'Disculpa, no logré entender bien. ¿Podrías explicarme nuevamente el problema?';
+const ETAPAS_CHATBOT_VALIDAS = new Set([
+  'recopilando',
+  'esperando_solicitud',
+  'confirmando',
+  'finalizado',
+  'especial_cerrado',
+  'cancelado',
+]);
+const REGEX_TIPO_VIA = /\b(calle|cl\.?|carrera|cra\.?|kr\.?|avenida|av\.?|diagonal|diag\.?|transversal|tv\.?|autopista|circular)\b/i;
 
 export interface RespuestaChatbot {
   respuesta: string;
@@ -232,6 +362,255 @@ export class GeminiService {
     const end   = clean.lastIndexOf('}');
     if (start === -1 || end === -1) return null;
     return clean.slice(start, end + 1);
+  }
+
+  private extraerBloquesJsonBalanceados(texto: string): string[] {
+    const bloques: string[] = [];
+    let profundidad = 0;
+    let inicio = -1;
+
+    for (let i = 0; i < texto.length; i += 1) {
+      const ch = texto[i];
+      if (ch === '{') {
+        if (profundidad === 0) inicio = i;
+        profundidad += 1;
+        continue;
+      }
+
+      if (ch === '}') {
+        if (profundidad === 0) continue;
+        profundidad -= 1;
+        if (profundidad === 0 && inicio !== -1) {
+          bloques.push(texto.slice(inicio, i + 1));
+          inicio = -1;
+        }
+      }
+    }
+
+    return bloques;
+  }
+
+  private parsearRespuestaChatbotRobusta(raw: string): {
+    payload: Partial<RespuestaChatbot> | null;
+    error?: string;
+  } {
+    const limpio = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+    if (!limpio) {
+      return { payload: null, error: 'respuesta vacía del modelo' };
+    }
+
+    const candidatos: string[] = [];
+    const pushCandidato = (value?: string | null) => {
+      if (!value) return;
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      if (!candidatos.includes(trimmed)) {
+        candidatos.push(trimmed);
+      }
+    };
+
+    pushCandidato(limpio);
+    pushCandidato(this.extraerJson(limpio));
+
+    // Fallback por regex solicitado: intenta extraer un bloque {...} del texto bruto.
+    const matchRegex = limpio.match(/\{[\s\S]*\}/);
+    pushCandidato(matchRegex?.[0]);
+
+    for (const bloque of this.extraerBloquesJsonBalanceados(limpio)) {
+      pushCandidato(bloque);
+    }
+
+    let ultimoError = 'No se encontró JSON parseable';
+    for (const candidato of candidatos) {
+      try {
+        return { payload: JSON.parse(candidato) as Partial<RespuestaChatbot> };
+      } catch (err) {
+        ultimoError = (err as Error).message || 'JSON inválido';
+      }
+    }
+
+    return { payload: null, error: ultimoError };
+  }
+
+  private normalizarEtapaSiguiente(
+    etapa: unknown,
+    datosConfirmados: Record<string, unknown>,
+  ): RespuestaChatbot['etapaSiguiente'] {
+    const etapaSalida = typeof etapa === 'string' ? etapa.trim() : '';
+    if (ETAPAS_CHATBOT_VALIDAS.has(etapaSalida)) {
+      return etapaSalida as RespuestaChatbot['etapaSiguiente'];
+    }
+
+    const etapaActual = typeof datosConfirmados['etapa'] === 'string' ? datosConfirmados['etapa'] : '';
+    if (ETAPAS_CHATBOT_VALIDAS.has(etapaActual)) {
+      return etapaActual as RespuestaChatbot['etapaSiguiente'];
+    }
+
+    return 'recopilando';
+  }
+
+  private contarPalabras(texto: string): number {
+    return texto
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .length;
+  }
+
+  private normalizarListaTexto(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const valores = Array.from(
+      new Set(
+        value
+          .filter((v) => typeof v === 'string')
+          .map((v) => v.trim())
+          .filter(Boolean),
+      ),
+    );
+    return valores.length > 0 ? valores : undefined;
+  }
+
+  private sanitizarDatosExtraidos(
+    rawDatos: unknown,
+    mensaje: string,
+  ): { datos: Record<string, unknown>; camposInvalidos: string[] } {
+    if (!rawDatos || typeof rawDatos !== 'object' || Array.isArray(rawDatos)) {
+      return { datos: {}, camposInvalidos: [] };
+    }
+
+    const fuente = { ...(rawDatos as Record<string, unknown>) };
+    if (!fuente['nombre'] && typeof fuente['nombreCompleto'] === 'string') {
+      fuente['nombre'] = fuente['nombreCompleto'];
+    }
+
+    const datos: Record<string, unknown> = {};
+    const invalidos = new Set<string>();
+
+    if (typeof fuente['nombre'] === 'string') {
+      const nombre = fuente['nombre'].trim();
+      if (nombre.length >= 3) {
+        datos['nombre'] = nombre;
+      } else if (nombre) {
+        invalidos.add('nombre');
+      }
+    }
+
+    if (typeof fuente['cedula'] === 'string' || typeof fuente['cedula'] === 'number') {
+      const cedulaNormalizada = String(fuente['cedula']).replace(/\D/g, '');
+      if (/^\d{6,10}$/.test(cedulaNormalizada)) {
+        datos['cedula'] = cedulaNormalizada;
+      } else if (cedulaNormalizada || String(fuente['cedula']).trim()) {
+        invalidos.add('cedula');
+      }
+    }
+
+    if (typeof fuente['descripcion'] === 'string') {
+      const descripcion = fuente['descripcion'].trim();
+      if (!descripcion) {
+        // Ignorar vacío explícito
+      } else if (this.contarPalabras(descripcion) >= 20) {
+        datos['descripcion'] = descripcion;
+      } else {
+        invalidos.add('descripcion');
+      }
+    }
+
+    const ubicacionRaw = typeof fuente['ubicacion'] === 'string'
+      ? fuente['ubicacion'].trim()
+      : typeof fuente['direccion'] === 'string'
+        ? fuente['direccion'].trim()
+        : '';
+
+    if (ubicacionRaw) {
+      if (REGEX_TIPO_VIA.test(ubicacionRaw)) {
+        datos['direccion'] = ubicacionRaw;
+        datos['direccionConfirmada'] = true;
+      } else {
+        invalidos.add('ubicacion');
+      }
+    }
+
+    if (typeof fuente['barrio'] === 'string' && fuente['barrio'].trim()) {
+      datos['barrio'] = fuente['barrio'].trim();
+    }
+    if (typeof fuente['comuna'] === 'string' && fuente['comuna'].trim()) {
+      datos['comuna'] = fuente['comuna'].trim();
+    }
+    if (typeof fuente['solicitudAdicional'] === 'string' && fuente['solicitudAdicional'].trim()) {
+      datos['solicitudAdicional'] = fuente['solicitudAdicional'].trim();
+    }
+
+    const imagenes = this.normalizarListaTexto(fuente['imagenes']);
+    if (imagenes) datos['imagenes'] = imagenes;
+
+    const pdfs = this.normalizarListaTexto(fuente['pdfs']);
+    if (pdfs) datos['pdfs'] = pdfs;
+
+    if (typeof fuente['esAnonimo'] === 'boolean') {
+      datos['esAnonimo'] = fuente['esAnonimo'];
+    }
+    if (typeof fuente['esEspecial'] === 'boolean') {
+      datos['esEspecial'] = fuente['esEspecial'];
+    }
+    if (typeof fuente['dependencia'] === 'string' && fuente['dependencia'].trim()) {
+      datos['dependencia'] = this.normalizarDependenciaSalida(fuente['dependencia'], mensaje);
+    }
+
+    return { datos, camposInvalidos: Array.from(invalidos) };
+  }
+
+  private mensajeCorreccionPorCampo(camposInvalidos: string[]): string {
+    const prioridad = ['descripcion', 'ubicacion', 'nombre', 'cedula'];
+    const campo = prioridad.find((c) => camposInvalidos.includes(c)) ?? camposInvalidos[0];
+
+    switch (campo) {
+      case 'descripcion':
+        return 'Gracias. Para continuar, descríbeme el problema con más detalle (mínimo 20 palabras).';
+      case 'ubicacion':
+        return '¿Me compartes la dirección exacta con tipo de vía y número? Ejemplo: Calle 10 # 20-30.';
+      case 'nombre':
+        return '¿Me confirmas tu nombre completo? Debe tener al menos 3 caracteres.';
+      case 'cedula':
+        return '¿Me compartes tu cédula en formato numérico de 6 a 10 dígitos?';
+      default:
+        return CHATBOT_MSG_FALLBACK;
+    }
+  }
+
+  private esRespuestaVaciaOIncoherente(respuesta: string): boolean {
+    const r = respuesta.trim();
+    if (!r) return true;
+    if (!/[\p{L}\p{N}]/u.test(r)) return true;
+    if (/^(null|undefined|n\/a|sin respuesta|\{\}|\[\]|\.\.\.)$/i.test(r)) return true;
+    return false;
+  }
+
+  private normalizarRespuestaChatbot(
+    payload: Partial<RespuestaChatbot>,
+    datosConfirmados: Record<string, unknown>,
+    mensaje: string,
+  ): RespuestaChatbot {
+    const { datos, camposInvalidos } = this.sanitizarDatosExtraidos(payload.datosExtraidos, mensaje);
+    let respuesta = typeof payload.respuesta === 'string' ? payload.respuesta.trim() : '';
+    let etapaSiguiente = this.normalizarEtapaSiguiente(payload.etapaSiguiente, datosConfirmados);
+    let listaParaRadicar = payload.listaParaRadicar === true;
+
+    if (camposInvalidos.length > 0) {
+      respuesta = this.mensajeCorreccionPorCampo(camposInvalidos);
+      etapaSiguiente = 'recopilando';
+      listaParaRadicar = false;
+    }
+
+    if (this.esRespuestaVaciaOIncoherente(respuesta)) {
+      return this.fallback(datosConfirmados, 'respuesta vacía o incoherente', datos, etapaSiguiente);
+    }
+
+    return {
+      respuesta,
+      datosExtraidos: datos,
+      etapaSiguiente,
+      listaParaRadicar,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -452,26 +831,17 @@ JSON:`;
     const intentarConModelo = async (model: GenerativeModel): Promise<RespuestaChatbot> => {
       const result = await model.generateContent(prompt);
       const raw = result.response.text();
-      this.logger.debug(`Gemini raw: ${raw.substring(0, 200)}`);
+      this.logger.debug(`Gemini raw: ${raw.substring(0, 500)}`);
 
-      const jsonStr = this.extraerJson(raw);
-      if (!jsonStr) {
-        this.logger.warn(`Gemini no devolvió JSON. Raw: ${raw.substring(0, 200)}`);
-        return this.fallback(datosConfirmados);
+      const parse = this.parsearRespuestaChatbotRobusta(raw);
+      if (!parse.payload) {
+        this.logger.warn(`Error parseo JSON chatbot: ${parse.error ?? 'JSON inválido'}`);
+        return this.fallback(datosConfirmados, 'json inválido o ausente');
       }
 
-      const p = JSON.parse(jsonStr) as Partial<RespuestaChatbot>;
-      const datosExtraidos = ((p.datosExtraidos as Record<string, unknown>) ?? {});
-      if (typeof datosExtraidos.dependencia === 'string') {
-        datosExtraidos.dependencia = this.normalizarDependenciaSalida(datosExtraidos.dependencia, mensaje);
-      }
+      this.logger.debug(`Gemini JSON parseado: ${JSON.stringify(parse.payload).substring(0, 500)}`);
 
-      return {
-        respuesta:        p.respuesta ?? '¿Me repites eso?',
-        datosExtraidos,
-        etapaSiguiente:   p.etapaSiguiente ?? 'recopilando',
-        listaParaRadicar: p.listaParaRadicar ?? false,
-      };
+      return this.normalizarRespuestaChatbot(parse.payload, datosConfirmados, mensaje);
     };
 
     try {
@@ -484,19 +854,25 @@ JSON:`;
           return await intentarConModelo(this.modelChatbotFallback);
         } catch (err2) {
           this.logger.error(`Error Gemini chatbot fallback: ${(err2 as Error).message}`);
-          return this.fallback(datosConfirmados);
+          return this.fallback(datosConfirmados, 'error ejecutando modelo fallback');
         }
       }
       this.logger.error(`Error Gemini chatbot: ${msg}`);
-      return this.fallback(datosConfirmados);
+      return this.fallback(datosConfirmados, 'error ejecutando modelo primario');
     }
   }
 
-  private fallback(datos: Record<string, unknown>): RespuestaChatbot {
+  private fallback(
+    datos: Record<string, unknown>,
+    motivo: string,
+    datosExtraidos: Record<string, unknown> = {},
+    etapaSiguiente?: RespuestaChatbot['etapaSiguiente'],
+  ): RespuestaChatbot {
+    this.logger.warn(`Fallback activado chatbot: ${motivo}`);
     return {
-      respuesta:       'En este momento tenemos un error técnico y no podemos procesar tu denuncia. Por favor intenta nuevamente en unos minutos.',
-      datosExtraidos:  {},
-      etapaSiguiente:  (datos['etapa'] as RespuestaChatbot['etapaSiguiente']) ?? 'recopilando',
+      respuesta:       CHATBOT_MSG_FALLBACK,
+      datosExtraidos,
+      etapaSiguiente:  etapaSiguiente ?? this.normalizarEtapaSiguiente(undefined, datos),
       listaParaRadicar: false,
     };
   }
@@ -529,38 +905,72 @@ Problema: ${(datos.descripcion ?? '').substring(0, 300)} | Entidad: ${datos.depe
   async generarHechos(datos: {
     nombreCiudadano: string;
     esAnonimo: boolean;
+    ubicacion: string;
     direccion: string;
     barrio: string;
     comuna: string;
     descripcion: string;
-    dependencia: string;
+    dependenciaPrincipal: string;
+    dependenciaSecundaria?: string;
+    normativaAplicable: string;
   }): Promise<string> {
     const loc = [datos.barrio, datos.comuna].filter(Boolean).join(', ');
     const locStr = loc ? `, barrio ${datos.barrio}${datos.comuna ? `, ${datos.comuna}` : ''}` : '';
+    const dependenciaSecundariaTexto = datos.dependenciaSecundaria?.trim() || 'No aplica';
 
-    const prompt = `Redacta la sección HECHOS para un oficio oficial del concejal Andrés Felipe Tobón Villada dirigido a ${datos.dependencia}.
+    const ubicacionTexto = datos.ubicacion?.trim() || datos.direccion;
 
-SITUACIÓN A GESTIONAR:
-- Ubicación: ${datos.direccion}${locStr} de Medellín
-- Descripción: ${datos.descripcion}
+    const prompt = `Actúa como un abogado experto en derecho administrativo colombiano, especializado en redacción de documentos oficiales para entidades públicas.
 
-ESTRUCTURA OBLIGATORIA (3 párrafos separados por línea en blanco):
+Estás generando un oficio dentro del sistema DenunciasAT de la Alcaldía de Medellín.
 
-PÁRRAFO 1 — DESCRIPCIÓN DE LOS HECHOS:
-Inicia con "Este despacho ha podido establecer que" o similar. Describe objetivamente la situación, su ubicación y el tiempo que lleva sin atención si se menciona. NO incluyas el nombre del ciudadano.
+OBJETIVO
+Redactar un documento institucional claro, formal y jurídicamente correcto, basado en los hechos reportados por el ciudadano y las competencias de la entidad asignada.
 
-PÁRRAFO 2 — FUNDAMENTO NORMATIVO Y COMPETENCIA:
-Cita la norma colombiana más específica aplicable. Explica por qué es competencia de ${datos.dependencia} atender esta situación. Usa la estructura: "Conforme a [norma], corresponde a ${datos.dependencia}..."
+CONTEXTO DE ENTRADA
+descripcion: ${datos.descripcion}
+ubicacion: ${ubicacionTexto}${locStr ? `${locStr}` : ''}
+dependenciaPrincipal: ${datos.dependenciaPrincipal}
+dependenciaSecundaria: ${dependenciaSecundariaTexto}
+normativaAplicable: ${datos.normativaAplicable}
 
-PÁRRAFO 3 — IMPACTO Y URGENCIA:
-Describe el perjuicio o riesgo que genera la inacción para la comunidad. Menciona el deber de respuesta en los términos del artículo 30 de la Ley 1755 de 2015.
+USO DEL CONTEXTO JURIDICO
+La normativaAplicable es solo una guia de contexto.
+No cites leyes o articulos si no tienes certeza absoluta.
+No inventes normas.
+No uses numeracion de articulos sin seguridad.
+Usa la normativa unicamente para entender competencias y reforzar coherencia institucional.
+Si no es necesario citar normas, no las menciones.
 
-RESTRICCIONES:
-- Máximo 220 palabras totales
-- Solo texto plano, sin markdown ni títulos
-- Párrafos separados por salto de línea doble
-- Tono formal jurídico
-- NUNCA el nombre del denunciante`;
+LOGICA ADMINISTRATIVA
+La dependenciaPrincipal es la responsable del tramite.
+Si existe dependenciaSecundaria, incluye articulacion institucional clara.
+No asignes multiples responsables directos.
+No generes conflictos de competencia.
+
+ESTILO DE REDACCION
+Formal y administrativo colombiano.
+Claro, sin tecnicismos innecesarios.
+Preciso y sin redundancias.
+No usar lenguaje juridico complejo innecesario.
+No usar lenguaje informal.
+
+ESTRUCTURA DEL DOCUMENTO
+1. ASUNTO: resumen breve del caso.
+2. EXPOSICION DE LOS HECHOS: redactar los hechos de forma clara, ordenada y objetiva.
+3. SOLICITUD: indicar la accion que debe realizar la entidad.
+4. ARTICULACION: si aplica, incluir exactamente esta frase:
+"Se solicita adelantar las acciones correspondientes y, de ser necesario, articular con ${dependenciaSecundariaTexto} para la atencion integral de la situacion reportada."
+5. CIERRE: lenguaje institucional adecuado.
+
+PROHIBIDO
+Inventar normas o articulos.
+Exagerar los hechos.
+Hacer juicios de valor.
+Usar lenguaje emocional.
+Asumir informacion no dada.
+
+Redacta solo la seccion HECHOS en 3 parrafos separados por una linea en blanco. No agregues encabezados ni explicaciones. El nombre del denunciante nunca debe aparecer.`;
 
     try {
       const r = await this.modelLegal.generateContent(prompt);
@@ -572,14 +982,14 @@ RESTRICCIONES:
   }
 
   private hechosFallback(datos: {
-    direccion: string; barrio: string; comuna: string; descripcion: string; dependencia: string;
+    direccion: string; barrio: string; comuna: string; descripcion: string; dependenciaPrincipal: string;
   }): string {
     const loc = [datos.barrio, datos.comuna].filter(Boolean).join(', ');
-    return `Este despacho ha podido establecer que en la dirección ${datos.direccion}${loc ? `, ${loc}` : ''}, del municipio de Medellín, se presenta la siguiente situación que requiere atención urgente por parte de las autoridades competentes.
+    return `Este despacho ha podido establecer que en la dirección ${datos.direccion}${loc ? `, ${loc}` : ''}, del municipio de Medellín, se presenta la siguiente situacion que requiere atencion por parte de las autoridades competentes.
 
 ${datos.descripcion}
 
-De conformidad con lo establecido en el artículo 23 de la Constitución Política de Colombia, toda persona tiene derecho a presentar peticiones respetuosas a las autoridades por motivos de interés general o particular, y a obtener pronta resolución. En ese sentido, en virtud de lo dispuesto por el artículo 30 de la Ley 1755 de 2015, se pone en conocimiento de ${datos.dependencia} la situación descrita para que proceda conforme a sus competencias en un término no mayor a diez (10) días.`;
+En ese sentido, se pone en conocimiento de ${datos.dependenciaPrincipal} la situacion descrita para que proceda conforme a sus competencias y brinde una respuesta oportuna dentro de los terminos institucionales aplicables.`;
   }
 
   // ---------------------------------------------------------------------------
