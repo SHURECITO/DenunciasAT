@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { GeminiService } from '@app/ai';
+import { GeminiService, InferenciasService } from '@app/ai';
 import { ChatbotController } from './chatbot.controller';
 import { ChatbotService } from './chatbot.service';
 import { ConversacionService } from './conversacion.service';
@@ -13,6 +13,7 @@ import { RagApiService } from './rag-api.service';
     ConversacionService,
     DashboardApiService,
     RagApiService,
+    InferenciasService,
     GeminiService,
   ],
 })

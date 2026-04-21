@@ -179,76 +179,19 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **WebSockets dashboard (S29)**: Socket.IO en `dashboard-api` sobre el mismo puerto HTTP (host `8741` → contenedor `3000`), namespace `/eventos`, eventos `nueva_denuncia`, `cambio_estado`, `documento_listo`, `nuevo_mensaje`.
 - **RAG semántico (S30)**: `rag-service` (puerto `3006`) con tabla `dependencias_vectores` (pgvector 768D) y endpoints `POST /buscar`, `POST /clasificar`, `POST /reindexar` (internal key), más `GET /dependencias`/`GET /health`. Si Gemini no está disponible, activa fallback local (embeddings/clasificación) sin tumbar el servicio.
 
-## Infraestructura operacional
-
-- `infrastructure/scripts/backup.sh` — pg_dump diario, retención 30 días, alerta Telegram
-- `infrastructure/scripts/healthcheck.sh` — ping /health cada 5 min, alerta Telegram si cae
-
-## Links
-
-- Repo: https://github.com/SHURECITO/DenunciasAT
-
----
-
 ## Historial de sesiones (comprimido)
 
-**Sesiones 1–23 (2026-04-14/18) — comprimido:** Scaffold monorepo NestJS, dashboard-api (JWT, CRUD, SEQUENCE), frontend Next.js, Docker multi-stage, Evolution API (UUID, parche @lid), chatbot IA conversacional (Gemini, Redis, historial, deep merge, confirmación server-side, normalización `nombreCompleto`→`nombre`), document-service con adm-zip + Plantilla.docx + dependencias.json (20+ entidades), MinIO completo (`@app/storage`, whatsapp-service sube media inmediato, document-service sube .docx, dashboard-api descarga buffer directo, `DocumentLifecycleService` cron 3am limpia 5d post-CON_RESPUESTA). Fixes document-service sesión 22: namespaces preservados (regex `/<w:document[^>]*>/`), firma Mercurio con placeholders + tabla 4320×1440 DXA, `getImageDimensions`/`calcularDimensionesImagen` robustos, validación pre-upload (ZIP + xmlns:r + FIRMA_* + header/footerReference + sin nombre ciudadano). Sesión 23: reset completo (TRUNCATE + sequences + FLUSHDB + buckets), diagnóstico UTF-8 (no-bug, los `◆` venían del shell cp1252 de Windows), E2E limpio verificado.
+**Sesiones 1–30 (2026-04-14/19):** scaffold monorepo, dashboard-api + frontend, Docker/Evolution, chatbot IA conversacional, document-service + MinIO, hardening OOXML/firma/validaciones, mutex/@lid/upsert parcial, edición manual, seguridad (auth interna/SSRF/DTOs), notification-service, WebSockets dashboard y `rag-service` con pgvector/fallback.
 
-**Sesión 24 (2026-04-18) — 7 bugs + 4 mejoras IA/UX:** (detalles en "Patrones técnicos") mutex Redis WhatsApp, upsert parcial (no duplica), `@lid`>13dig, Content-Types imgs + docPr 100+, sin pie de foto, chat sort ASC, stats unnest CSV. IA: `clasificarDenunciaEstructurada` (multi-dep selectivo temp 0.15), sub-bloques SOLICITUD por dep, `filtrarSolicitudAdicional`. UX: `respuestasPorDependencia` JSONB + tabla "marcar respondida".
+**Sesión 31 (2026-04-21):** articulación institucional en casos mixtos (dependencia principal + secundaria opcional) integrada en clasificación y SOLICITUD del oficio.
 
-**Sesión 25 (2026-04-18) — Actualización de UI/Backend para mejor gestión manual:** 
-- JSON de dependencias actualizado con información oficial (Total: 47 dependencias).
-- **Backend**: Añadido campo `historialCambios` (JSONB) en la entidad `Denuncia`. Nuevos endpoints `GET /dependencias`, `PATCH /denuncias/:id/editar`, `POST /generar-desde-descripcion`.
-- **Frontend**: Nuevo modal para editar denuncia (modificar dependencias y regenerar documento vía webhook manual). Refactorización del formulario de creación manual (`NuevaDenunciaForm`), que ahora delega la clasificación de la dependencia a la IA de manera automática si el usuario marca "Generar documento oficial".
+**Sesión 32 (2026-04-20):** prompt jurídico avanzado y resolución previa de `normativaAplicable` para HECHOS.
 
-**Sesión 26 (2026-04-19) — Endurecimiento de seguridad predeploy (sin romper flujos):**
-- Auth interna segmentada de extremo a extremo (`x-internal-service` + claves por servicio): chatbot↔dashboard, document↔dashboard, dashboard→document, dashboard→whatsapp-qr.
-- Superficie de ataque reducida: endpoints destructivos internos acotados a parciales (`POST /denuncias/:id/cancelar-parcial`), eliminación total solo con JWT; generación documental interna movida a `POST /denuncias/:id/generar` con `EitherAuthGuard`.
-- SSRF mitigado: `MinioService.uploadFromUrl()` y fallback de imágenes en `document-builder` validan `ALLOWED_REMOTE_MEDIA_HOSTS`; descarga externa deshabilitada por defecto con `ALLOW_EXTERNAL_IMAGE_URLS=false`.
-- Hardening runtime/config: DTOs estrictos para generación manual/documental, `SEED_ADMIN_PASSWORD` obligatorio (sin password hardcodeado), Swagger condicional por `SWAGGER_ENABLED`, `helmet + ValidationPipe` en document-service, y contenedores backend ejecutando como usuario no-root.
+**Sesión 33 (2026-04-20):** enriquecimiento de `dependencias.vector.db.json` con `sector`/`normativa` y alta de Secretaría Privada.
 
-**Sesión 27 (2026-04-19) — Correcciones funcionales chatbot/documentos (QA manual):**
-- Normalización fuerte de dependencias: nuevo KB local con aliases + búsqueda vectorial dispersa (`libs/ai/src/dependencias-kb.ts`), catálogo oficial inyectado en prompts y post-procesamiento de salida IA para evitar entidades inventadas (ej. recreación/deporte → `INDER`).
-- Chatbot más robusto al radicar: confirmación server-side ampliada (`radicar/confirmar/autorizar`), fallback anti-loop de “problema técnico” en etapa final y pregunta explícita para confirmar identidad previa (nombre+cédula) antes de reutilizar datos.
-- Reutilización de identidad mejorada: `findDatosUsuarioPorTelefono()` prioriza registros no anónimos con cédula válida, evitando tomar denuncias antiguas incompletas o con cédula vacía.
-- Estabilidad de evidencia y .docx: whatsapp-service preserva extensión/MIME real al subir a MinIO; document-builder soporta esquema actual de `dependencias.json` (`nombreTitular/cargoTitular/entidadCompleta`) y omite imágenes en formato no soportado en lugar de dañar el documento.
+**Sesión 34 (2026-04-21):** motor central `InferenciasService` en chatbot/document-service antes de IA, con salida `{tipoCaso, principal/secundaria, normativaAplicable, requiereConfirmacion}`.
 
-**Sesión 28 (2026-04-19) — Flujo chatbot reordenado, fixes mutex/@lid/duplicados, notification-service, historial:**
-- **Flujo chatbot**: nuevo orden descripción→ubicación→evidencia→solicitud→nombre→cédula→confirmación. `SYSTEM_PROMPT_CHATBOT` y `MSG_BIENVENIDA` actualizados. Pendientes reordenados en Gemini.
-- **Mutex**: TTL 8s (era 15s), delay 2000ms (era 1500ms), lock liberado ANTES de drenar cola (fix “problema técnico” al confirmar).
-- **@lid resolver**: si número >13 dígitos, llama Evolution API `/chat/whatsappNumbers`; fallback 57+10 dígitos.
-- **Duplicados**: `radicarDenuncia()` usa `estado.parcialId` primero antes de buscar por teléfono.
-- **Logs historial mensajes**: mejorados con status y body de error.
-- **Tono cierre**: mensaje formal del concejal Andrés Felipe Tobón Villada.
-- **`historialCambios`**: entradas CREACION (al crear) y ESTADO (al cambiar estado) en `denuncias.service.ts`.
-- **notification-service** (puerto 3005): nuevo microservicio con `/notificar/respuesta` que llama Evolution API (3 reintentos con 5s). Integrado en docker-compose.yml y nest-cli.json. Dashboard-api lo llama fire-and-forget al pasar a CON_RESPUESTA. `UpdateEstadoDto` tiene campo `respuesta` opcional.
-- **Frontend historial**: sección “Historial de la denuncia” actualizada para mostrar CREACION/ESTADO correctamente.
-
-**Sesión 29 (2026-04-19) — WebSockets tiempo real dashboard:**
-- Backend: nuevo `EventsGateway` (namespace `/eventos`) y emisiones en `create()` (`nueva_denuncia`), `updateEstado()` (`cambio_estado`), `update()` cuando documento queda listo (`documento_listo`) y `POST /mensajes/:denunciaId` (`nuevo_mensaje`).
-- Frontend: cliente Socket.IO (`frontend/lib/socket.ts`), hook `useWebSocket`, listado principal en vivo sin recarga, detalle en vivo para documento/mensajes y toast global con `sonner`.
-- UI: indicador de conexión en Sidebar con estados conectado (verde), desconectado (rojo) y reconectando (amarillo). Compose frontend expone `NEXT_PUBLIC_WS_URL` por defecto `http://localhost:8741`.
-
-**Sesión 30 (2026-04-19) — rag-service con pgvector + Gemini/fallback:**
-- Nuevo microservicio `rag-service` (puerto interno `3006`) registrado en `nest-cli.json` y `docker-compose.yml`.
-- Esquema RAG en PostgreSQL con extensión `vector`, tabla `dependencias_vectores` y metadatos de índice (`rag_index_meta`) para reindexado por hash de `dependencias.json`.
-- Endpoints implementados: `POST /buscar`, `POST /clasificar`, `POST /reindexar` (con `x-internal-key`) y apoyo `GET /dependencias`, `GET /health`.
-- Integraciones: chatbot usa clasificación semántica vía RAG; dashboard-api expone proxy JWT para listado/reindex; frontend agrega panel de base de conocimiento con reindex y tabla de dependencias.
-- Resiliencia: si faltan créditos/API de Gemini, el servicio no cae; usa fallback local determinístico para embeddings/búsqueda/clasificación.
-
-**Sesión 31 (2026-04-21) — Articulación institucional en casos mixtos:**
-- `rag-service`: selección de `dependenciaPrincipal` + `dependenciaSecundaria` opcional (máximo una), con criterios de score cercano + temática distinta + señal dual real; log estructurado `caso_mixto` con scores.
-- `document-service`: se pasa la secundaria al builder y se agrega en SOLICITUD la frase: “Se solicita adelantar las acciones correspondientes y, de ser necesario, articular con [dependenciaSecundaria] para la atención integral de la situación reportada.”
-- Compatibilidad preservada: no se cambiaron endpoints ni DTOs de entrada; los nuevos campos en clasificación son opcionales.
-
-**Sesión 32 (2026-04-20) — Prompt jurídico avanzado con contexto RAG:**
-- `document-service` ahora resuelve `normativaAplicable` desde `infrastructure/config/normativa.juridica.json` usando dependencia principal/secundaria antes de llamar a Gemini.
-- `GeminiService.generarHechos()` reemplazó el prompt anterior por una versión jurídica avanzada que prohíbe citar normas sin certeza y usa el contexto solo como guía institucional.
-- El fallback de HECHOS se simplificó para evitar citas normativas inciertas y mantener redacción institucional general.
-
-**Sesión 33 (2026-04-20) — Catálogo vectorial enriquecido:**
-- `infrastructure/config/dependencias.vector.db.json` quedó enriquecido con `sector` y `normativa` en todas las metadata, sin tocar `vectorSparse` existentes.
-- Se añadió `Secretaría Privada` con sector `gobierno` y normativa asociada, preservando compatibilidad con el catálogo actual.
+**Sesión 35 (2026-04-20):** corrección semántica controlada de `dependencias.vector.db.json` sin tocar IDs/vectorSparse: DAGRD (Ley 1523 principal + 1551 complemento), Telemedellín (Ley 182/1341), Medio Ambiente (+Ley 1801 por `ruido`), Gerencia Étnica (+Ley 70 + Ley 21), Gerencia Diversidades Sexuales (+Ley 1482) y limpieza global de stopwords (`de`, `la`, `el`, `y`, `del`) en `keywords`.
 
 ---
 

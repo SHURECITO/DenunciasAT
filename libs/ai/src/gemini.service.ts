@@ -912,11 +912,14 @@ Problema: ${(datos.descripcion ?? '').substring(0, 300)} | Entidad: ${datos.depe
     descripcion: string;
     dependenciaPrincipal: string;
     dependenciaSecundaria?: string;
-    normativaAplicable: string;
+    normativaAplicable: string | { entradas?: Array<{ id: string; tipo: string; nombre: string; descripcion: string }> };
   }): Promise<string> {
     const loc = [datos.barrio, datos.comuna].filter(Boolean).join(', ');
     const locStr = loc ? `, barrio ${datos.barrio}${datos.comuna ? `, ${datos.comuna}` : ''}` : '';
     const dependenciaSecundariaTexto = datos.dependenciaSecundaria?.trim() || 'No aplica';
+    const normativaTexto = typeof datos.normativaAplicable === 'string'
+      ? datos.normativaAplicable
+      : JSON.stringify(datos.normativaAplicable?.entradas ?? []);
 
     const ubicacionTexto = datos.ubicacion?.trim() || datos.direccion;
 
@@ -932,7 +935,7 @@ descripcion: ${datos.descripcion}
 ubicacion: ${ubicacionTexto}${locStr ? `${locStr}` : ''}
 dependenciaPrincipal: ${datos.dependenciaPrincipal}
 dependenciaSecundaria: ${dependenciaSecundariaTexto}
-normativaAplicable: ${datos.normativaAplicable}
+normativaAplicable: ${normativaTexto}
 
 USO DEL CONTEXTO JURIDICO
 La normativaAplicable es solo una guia de contexto.

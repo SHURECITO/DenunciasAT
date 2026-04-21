@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GeminiService } from '@app/ai';
+import { GeminiService, InferenciasService } from '@app/ai';
 import { ConversacionService, DatosConfirmados, EstadoConversacionIA } from './conversacion.service';
 import { DashboardApiService } from './dashboard-api.service';
 import { RagApiService, RagTecnicoError } from './rag-api.service';
@@ -86,6 +86,7 @@ export class ChatbotService {
     private readonly conversacion: ConversacionService,
     private readonly dashboardApi: DashboardApiService,
     private readonly ragApi: RagApiService,
+    private readonly inferencias: InferenciasService,
     private readonly gemini: GeminiService,
   ) {}
 
@@ -408,6 +409,9 @@ export class ChatbotService {
     const datosAntesTurno = this.clonarDatosConfirmados(estado.datosConfirmados);
     const prioridadAntesTurno = this.obtenerPrioridadDinamica(datosAntesTurno);
 
+    // Motor determinista previo a IA: orienta dependencia antes del turno con Gemini.
+    this.aplicarInferenciaPreviaIA(estado, mensajeEfectivo, numero);
+
     // Llamar a Gemini — el historial no incluye el mensaje actual todavía
     const resultado = await this.gemini.procesarMensajeChatbot(
       estado.historial,
@@ -598,22 +602,31 @@ export class ChatbotService {
   ): Promise<void> {
     const d = estado.datosConfirmados;
     const descripcion = d.descripcion?.trim();
-    if (!descripcion) return;
+    const textoAnalisis = [descripcion, mensajeEfectivo].filter(Boolean).join(' ').trim();
+    if (!textoAnalisis) return;
 
     // Evita recalcular embeddings en cada turno cuando la descripción no cambió.
-    if (d.clasificacionRagTexto === descripcion) {
+    if (d.clasificacionRagTexto === textoAnalisis) {
       return;
     }
 
     const ubicacion = [d.direccion, d.barrio, d.comuna].filter(Boolean).join(', ') || undefined;
-    const clasificacion = await this.ragApi.clasificar(descripcion, ubicacion);
+    const clasificacion = await this.ragApi.clasificar(textoAnalisis, ubicacion);
     if (!clasificacion || !Array.isArray(clasificacion.dependencias) || clasificacion.dependencias.length === 0) {
       return;
     }
 
-    d.dependencia = clasificacion.dependencias.map((dep) => dep.nombre).join(', ');
+    const inferencia = this.inferencias.resolverCaso(textoAnalisis, {
+      ragResultado: clasificacion,
+      dependenciaActual: d.dependencia,
+      descripcionActual: descripcion,
+    });
+
+    d.dependencia = inferencia.dependenciaSecundaria
+      ? `${inferencia.dependenciaPrincipal}, ${inferencia.dependenciaSecundaria}`
+      : inferencia.dependenciaPrincipal;
     d.esEspecial = clasificacion.esEspecial;
-    d.clasificacionRagTexto = descripcion;
+    d.clasificacionRagTexto = textoAnalisis;
 
     if (clasificacion.esEspecial && resultado.etapaSiguiente !== 'especial_cerrado') {
       resultado.etapaSiguiente = 'especial_cerrado';
@@ -621,7 +634,34 @@ export class ChatbotService {
     }
 
     this.logger.log(
-      `[${numero}] Clasificación RAG aplicada: dependencia="${d.dependencia}", especial=${d.esEspecial}`,
+      `[${numero}] Clasificación RAG/inferencia aplicada: dependencia="${d.dependencia}", tipoCaso=${inferencia.tipoCaso}, requiereConfirmacion=${inferencia.requiereConfirmacion}, especial=${d.esEspecial}`,
+    );
+  }
+
+  private aplicarInferenciaPreviaIA(
+    estado: EstadoConversacionIA,
+    mensajeEfectivo: string,
+    numero: string,
+  ): void {
+    const d = estado.datosConfirmados;
+    const textoAnalisis = [d.descripcion, mensajeEfectivo].filter(Boolean).join(' ').trim();
+    if (!textoAnalisis) return;
+
+    const inferencia = this.inferencias.resolverCaso(textoAnalisis, {
+      dependenciaActual: d.dependencia,
+      descripcionActual: d.descripcion,
+    });
+
+    if (inferencia.tipoCaso === 'nulo') {
+      return;
+    }
+
+    d.dependencia = inferencia.dependenciaSecundaria
+      ? `${inferencia.dependenciaPrincipal}, ${inferencia.dependenciaSecundaria}`
+      : inferencia.dependenciaPrincipal;
+
+    this.logger.debug(
+      `[${numero}] Inferencia previa IA: dependencia="${d.dependencia}", tipoCaso=${inferencia.tipoCaso}, requiereConfirmacion=${inferencia.requiereConfirmacion}`,
     );
   }
 
