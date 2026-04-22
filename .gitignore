@@ -41,3 +41,7 @@ coverage/
 
 # Documentos generados (volumen Docker en producción)
 infrastructure/documentos/
+
+# SOLO credenciales GCP
+key.json
+*credentials*.json

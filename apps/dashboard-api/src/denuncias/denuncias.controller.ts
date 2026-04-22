@@ -205,7 +205,12 @@ export class DenunciasController {
 
     const objectName = denuncia.documentoUrl;
     try {
-      const buffer = await this.storage.downloadBuffer(this.bucketDocumentos, objectName);
+      const signedUrl = await this.storage.getSignedUrl(this.bucketDocumentos, objectName);
+      const response = await axios.get<ArrayBuffer>(signedUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+      });
+      const buffer = Buffer.from(response.data);
       const filename = `${denuncia.radicado}.docx`;
       res.set({
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

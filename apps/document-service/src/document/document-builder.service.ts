@@ -1,9 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { readFileSync, mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
-import axios from 'axios';
 import { GcsStorageService } from '@app/storage';
 import type { DenunciaData } from './dashboard-api.service';
 
@@ -160,19 +158,6 @@ const MAX_CX_EMU  = 5029200; // 5.5 pulgadas
 const MAX_CY_EMU  = 3657600; // 4.0 pulgadas
 const MIN_CX_EMU  = 1828800; // 2.0 pulgadas
 const EMU_PER_PX  = 9525;    // 96 DPI
-
-/** Descarga imagen desde URL externa (fallback para URLs no-MinIO), devuelve Buffer o null */
-async function downloadImageFromUrl(url: string): Promise<Buffer | null> {
-  try {
-    const res = await axios.get<ArrayBuffer>(url, {
-      responseType: 'arraybuffer',
-      timeout: 10000,
-    });
-    return Buffer.from(res.data);
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Parsea una URL GCS interna (gs://bucket/objectName)
@@ -341,40 +326,10 @@ function resolveDestinatario(dependencia: string): Destinatario {
 @Injectable()
 export class DocumentBuilderService {
   private readonly logger = new Logger(DocumentBuilderService.name);
-  private readonly allowExternalImageUrls: boolean;
-  private readonly allowedRemoteHosts: string[];
 
-  constructor(
-    private readonly storage: GcsStorageService,
-    private readonly config: ConfigService,
-  ) {
-    const raw = this.config.get<string>('ALLOW_EXTERNAL_IMAGE_URLS', 'false').toLowerCase();
-    this.allowExternalImageUrls = raw === 'true' || raw === '1' || raw === 'yes';
-    this.allowedRemoteHosts = this.config
-      .get<string>('ALLOWED_REMOTE_MEDIA_HOSTS', 'evolution-api')
-      .split(',')
-      .map((host) => host.trim().toLowerCase())
-      .filter(Boolean);
-  }
+  constructor(private readonly storage: GcsStorageService) {}
 
-  private isExternalHostAllowed(url: string): boolean {
-    let hostname: string;
-    try {
-      hostname = new URL(url).hostname.toLowerCase();
-    } catch {
-      return false;
-    }
-
-    return this.allowedRemoteHosts.some((allowed) => {
-      if (allowed.startsWith('*.')) {
-        const suffix = allowed.slice(2);
-        return hostname === suffix || hostname.endsWith(`.${suffix}`);
-      }
-      return hostname === allowed;
-    });
-  }
-
-  /** Descarga imagen desde GCS (si es URL gs://) o desde URL externa */
+  /** Descarga imagen desde GCS si es una referencia gs://. */
   private async fetchImageBuffer(url: string): Promise<Buffer | null> {
     const gcsRef = parseGcsUrl(url);
     if (gcsRef) {
@@ -386,17 +341,8 @@ export class DocumentBuilderService {
       }
     }
 
-    if (!this.allowExternalImageUrls) {
-      this.logger.warn('Imagen externa descartada por política de seguridad (ALLOW_EXTERNAL_IMAGE_URLS=false)');
-      return null;
-    }
-
-    if (!this.isExternalHostAllowed(url)) {
-      this.logger.warn('Imagen externa descartada: host no permitido por ALLOWED_REMOTE_MEDIA_HOSTS');
-      return null;
-    }
-
-    return downloadImageFromUrl(url);
+    this.logger.warn('Imagen externa descartada por politica de seguridad: solo se aceptan referencias gs://');
+    return null;
   }
 
   async construir(input: BuildInput): Promise<void> {

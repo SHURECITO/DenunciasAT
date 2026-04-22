@@ -302,7 +302,10 @@ export class WebhookController {
       if (gcsUrl) {
         mediaUrlFinal = gcsUrl;
       }
-      // Si falla GCS, se pasa la URL original como fallback (puede expirar, pero no rompe el flujo)
+      // Si falla GCS, no propagamos la URL original para evitar exponer media temporal externa.
+      if (!gcsUrl) {
+        mediaUrlFinal = undefined;
+      }
     }
 
     const mensaje: MensajeEncolado = {

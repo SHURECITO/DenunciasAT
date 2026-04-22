@@ -288,9 +288,8 @@ export class DocumentService {
     try {
       const denuncia = await this.dashboardApi.getDenuncia(denunciaId);
       if (denuncia.documentoUrl) {
-        const ruta = join(DOCS_DIR, denuncia.documentoUrl);
-        this.rutasGeneradas.set(denunciaId, ruta);
-        return ruta;
+        this.rutasGeneradas.set(denunciaId, denuncia.documentoUrl);
+        return denuncia.documentoUrl;
       }
     } catch {
       // ignorar

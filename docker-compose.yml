@@ -84,7 +84,6 @@ services:
       # GCS para servir .docx al frontend
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCS_BUCKET_DOCUMENTOS: ${GCS_BUCKET_DOCUMENTOS:-denunciasat-documentos}
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -174,7 +173,6 @@ services:
       # GCS para subir evidencias inmediatamente (las URLs de Evolution API expiran)
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCS_BUCKET_EVIDENCIAS: ${GCS_BUCKET_EVIDENCIAS:-denunciasat-evidencias}
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       ALLOWED_REMOTE_MEDIA_HOSTS: ${ALLOWED_REMOTE_MEDIA_HOSTS:-evolution-api}
     depends_on:
       evolution-api:
@@ -241,9 +239,7 @@ services:
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCS_BUCKET_EVIDENCIAS: ${GCS_BUCKET_EVIDENCIAS:-denunciasat-evidencias}
       GCS_BUCKET_DOCUMENTOS: ${GCS_BUCKET_DOCUMENTOS:-denunciasat-documentos}
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       ALLOWED_REMOTE_MEDIA_HOSTS: ${ALLOWED_REMOTE_MEDIA_HOSTS:-evolution-api}
-      ALLOW_EXTERNAL_IMAGE_URLS: ${ALLOW_EXTERNAL_IMAGE_URLS:-false}
     depends_on:
       dashboard-api:
         condition: service_healthy

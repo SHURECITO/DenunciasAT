@@ -12,8 +12,6 @@ export class GcsStorageService implements OnModuleInit {
   constructor(private readonly config: ConfigService) {
     this.storage = new Storage({
       projectId: this.config.get<string>('GCP_PROJECT_ID'),
-      // Si GOOGLE_APPLICATION_CREDENTIALS está definido, el SDK lo usa automáticamente.
-      // En producción con Workload Identity, no se requiere archivo de credenciales.
     });
 
     this.allowedRemoteHosts = this.config
@@ -126,14 +124,36 @@ export class GcsStorageService implements OnModuleInit {
     }
   }
 
-  /** Genera una URL firmada para acceso temporal (GET) al objeto. */
-  async getPresignedUrl(bucketName: string, objectName: string, expirySeconds = 3600): Promise<string> {
-    return this.withRetry(async () => {
-      const [url] = await this.bucket(bucketName).file(objectName).getSignedUrl({
-        action: 'read',
-        expires: Date.now() + expirySeconds * 1000,
-      });
+  private async createSignedReadUrl(bucketName: string, filename: string, expiresMs: number): Promise<string> {
+    try {
+      const url = await this.withRetry(async () => {
+        const bucket = this.storage.bucket(bucketName);
+        const file = bucket.file(filename);
+
+        const [signedUrl] = await file.getSignedUrl({
+          version: 'v4',
+          action: 'read',
+          expires: Date.now() + expiresMs,
+        });
+
+        return signedUrl;
+      }, `getSignedUrl(${bucketName}/${filename})`);
+
+      this.logger.log(`Signed URL generada para ${filename}`);
       return url;
-    }, `getPresignedUrl(${bucketName}/${objectName})`);
+    } catch (err) {
+      this.logger.error(`No se pudo generar signed URL para ${bucketName}/${filename}: ${(err as Error).message}`);
+      throw new Error('No se puede generar signed URL. Verificar IAM y ADC.');
+    }
+  }
+
+  /** Genera una Signed URL v4 de lectura por 15 minutos usando ADC/IAM. */
+  async getSignedUrl(bucketName: string, filename: string): Promise<string> {
+    return this.createSignedReadUrl(bucketName, filename, 15 * 60 * 1000);
+  }
+
+  /** Mantiene compatibilidad con llamadas anteriores a URL prefirmada. */
+  async getPresignedUrl(bucketName: string, objectName: string, expirySeconds = 3600): Promise<string> {
+    return this.createSignedReadUrl(bucketName, objectName, expirySeconds * 1000);
   }
 }

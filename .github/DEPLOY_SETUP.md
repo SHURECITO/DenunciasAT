@@ -71,7 +71,37 @@ gcloud iam service-accounts add-iam-policy-binding \
 gcloud auth configure-docker us-central1-docker.pkg.dev
 ```
 
-### 5. .env en la VM
+### 5. GCS privado con Signed URLs
+No usar `key.json`. Los servicios deben correr con ADC y un service account asignado.
+
+```bash
+# Ejecutar una sola vez en el proyecto GCP
+RUNTIME_SA="denunciasat-runtime"
+gcloud services enable iamcredentials.googleapis.com
+
+# Permisos del service account runtime para objetos y firma IAM
+gcloud storage buckets add-iam-policy-binding gs://denunciasat-evidencias \
+  --member="serviceAccount:${RUNTIME_SA}@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
+gcloud storage buckets add-iam-policy-binding gs://denunciasat-documentos \
+  --member="serviceAccount:${RUNTIME_SA}@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
+
+gcloud iam service-accounts add-iam-policy-binding \
+  "${RUNTIME_SA}@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+  --member="serviceAccount:${RUNTIME_SA}@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator"
+
+# Quitar acceso publico si existia
+gcloud storage buckets remove-iam-policy-binding gs://denunciasat-evidencias \
+  --member=allUsers \
+  --role=roles/storage.objectViewer
+gcloud storage buckets remove-iam-policy-binding gs://denunciasat-documentos \
+  --member=allUsers \
+  --role=roles/storage.objectViewer
+```
+
+### 6. .env en la VM
 El archivo `.env` debe existir en `/opt/denunciasat/.env` con todos los secretos reales.
 Se puede poblar desde Secret Manager con el script `setup-secrets.sh`.
 

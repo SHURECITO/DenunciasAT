@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-## Instrucciones para Claude Code
+## Instrucciones para Codex
 - Leer archivos antes de modificar. No reescribir si se puede editar.
 - Código en inglés, comentarios y commits en español.
 - No añadir features fuera del alcance pedido.

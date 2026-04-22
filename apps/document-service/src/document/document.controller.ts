@@ -14,6 +14,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'crypto';
 import { Response } from 'express';
+import axios from 'axios';
 import { GcsStorageService } from '@app/storage';
 import { DocumentService } from './document.service';
 import { GenerarDesdeDescripcionDto } from './dto/generar-desde-descripcion.dto';
@@ -103,7 +104,12 @@ export class DocumentController {
       throw new NotFoundException('Documento no generado todavía');
     }
     try {
-      const buffer = await this.storage.downloadBuffer(this.bucketDocumentos, objectName);
+      const signedUrl = await this.storage.getSignedUrl(this.bucketDocumentos, objectName);
+      const response = await axios.get<ArrayBuffer>(signedUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+      });
+      const buffer = Buffer.from(response.data);
       res.set({
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Disposition': `attachment; filename="${objectName}"`,
