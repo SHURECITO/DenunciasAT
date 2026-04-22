@@ -192,6 +192,8 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 **Sesión 34 (2026-04-21):** motor central `InferenciasService` en chatbot/document-service antes de IA, con salida `{tipoCaso, principal/secundaria, normativaAplicable, requiereConfirmacion}`.
 
 **Sesión 35 (2026-04-20):** corrección semántica controlada de `dependencias.vector.db.json` sin tocar IDs/vectorSparse: DAGRD (Ley 1523 principal + 1551 complemento), Telemedellín (Ley 182/1341), Medio Ambiente (+Ley 1801 por `ruido`), Gerencia Étnica (+Ley 70 + Ley 21), Gerencia Diversidades Sexuales (+Ley 1482) y limpieza global de stopwords (`de`, `la`, `el`, `y`, `del`) en `keywords`.
+**Sesión 36 (2026-04-20):** capa de admisibilidad en `InferenciasService` (`evaluarAdmisibilidad`) con salida estructurada + logging `{inputUsuario,tipoCaso,confianza,motivoAdmisibilidad,decisionFinal}`; integración en chatbot para bloquear/solicitar más info antes de avanzar o radicar y en document-service para generar .docx solo cuando `esAdmisible=true`.
+**Sesión 37 (2026-04-21):** preparación para despliegue real en GCP: eliminada credencial hardcodeada en `rag.service.ts` (fallback DB_PASSWORD), healthchecks en todos los Dockerfiles, `docker-compose.prod.yml` con imágenes de Artifact Registry, `.github/workflows/deploy.yml` (build→push→SSH deploy→verify), `JsonLogger` JSON en `libs/common` activado en producción en todos los `main.ts`, scripts `deploy.sh` y `setup-secrets.sh`, `.dockerignore` mejorado, `.env.example` con vars GCP.
 
 ---
 

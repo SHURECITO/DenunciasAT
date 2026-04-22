@@ -16,6 +16,9 @@ RUN npx nest build document-service
 FROM node:20-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
+
+RUN apk add --no-cache curl
+
 COPY --from=deps /app/node_modules ./node_modules
 # Copiar dist completo para preservar rutas de libs/ai compilado
 COPY --from=build /app/dist ./dist
@@ -27,5 +30,10 @@ RUN mkdir -p /app/infrastructure/documentos
 RUN chown -R node:node /app
 
 USER node
+
+EXPOSE 3004
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:3004/health || exit 1
 
 CMD ["node", "dist/apps/document-service/src/main"]

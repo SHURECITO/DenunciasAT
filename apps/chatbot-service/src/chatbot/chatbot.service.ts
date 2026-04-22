@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GeminiService, InferenciasService } from '@app/ai';
+import { GeminiService, InferenciasService, ResultadoAdmisibilidad } from '@app/ai';
 import { ConversacionService, DatosConfirmados, EstadoConversacionIA } from './conversacion.service';
 import { DashboardApiService } from './dashboard-api.service';
 import { RagApiService, RagTecnicoError } from './rag-api.service';
@@ -20,6 +20,9 @@ const MSG_PERDIDO =
 
 const MSG_ERROR_TECNICO =
   'En este momento tenemos un error técnico y no podemos procesar tu denuncia. Por favor intenta nuevamente en unos minutos.';
+
+const MSG_IMPROCEDENTE_BLOQUEO =
+  'Este tipo de solicitud corresponde a procesos de planeación a gran escala y no puede gestionarse como denuncia ciudadana. Sin embargo, puedo orientarte sobre otros canales.';
 
 const esCedulaValida = (cedula?: string): boolean => {
   if (!cedula) return false;
@@ -412,6 +415,23 @@ export class ChatbotService {
     // Motor determinista previo a IA: orienta dependencia antes del turno con Gemini.
     this.aplicarInferenciaPreviaIA(estado, mensajeEfectivo, numero);
 
+    // Bloqueo temprano para solicitudes improcedentes antes de generar respuesta con IA.
+    const admisibilidadPrevia = this.evaluarAdmisibilidadActual(estado, mensajeEfectivo, numero);
+    if (admisibilidadPrevia.bloquearRadicacion) {
+      const respuestaBloqueo = admisibilidadPrevia.mensajeUsuario || MSG_IMPROCEDENTE_BLOQUEO;
+      const timestamp = new Date().toISOString();
+      estado.historial.push(
+        { rol: 'user', contenido: mensajeEfectivo, timestamp },
+        { rol: 'assistant', contenido: respuestaBloqueo, timestamp: new Date().toISOString() },
+      );
+      estado.datosConfirmados.etapa = 'recopilando';
+      await this.conversacion.setEstado(numero, estado);
+
+      const delayBloqueo = Math.min(2000 + respuestaBloqueo.length * 40, 8000);
+      await new Promise((r) => setTimeout(r, delayBloqueo));
+      return respuestaBloqueo;
+    }
+
     // Llamar a Gemini — el historial no incluye el mensaje actual todavía
     const resultado = await this.gemini.procesarMensajeChatbot(
       estado.historial,
@@ -442,6 +462,23 @@ export class ChatbotService {
 
       this.logger.error(`[${numero}] Error inesperado en clasificación RAG: ${(err as Error).message}`);
       return this.responderErrorTecnico(estado, numero, mensajeEfectivo);
+    }
+
+    // Evaluación de admisibilidad tras inferencia y antes de continuar flujo conversacional.
+    const admisibilidad = this.evaluarAdmisibilidadActual(estado, mensajeEfectivo, numero);
+    if (admisibilidad.bloquearRadicacion || admisibilidad.requiereMasInfo) {
+      const respuestaAdmisibilidad = admisibilidad.mensajeUsuario || MSG_IMPROCEDENTE_BLOQUEO;
+      const timestamp = new Date().toISOString();
+      estado.historial.push(
+        { rol: 'user', contenido: mensajeEfectivo, timestamp },
+        { rol: 'assistant', contenido: respuestaAdmisibilidad, timestamp: new Date().toISOString() },
+      );
+      estado.datosConfirmados.etapa = 'recopilando';
+      await this.conversacion.setEstado(numero, estado);
+
+      const delayAdmisibilidad = Math.min(2000 + respuestaAdmisibilidad.length * 40, 8000);
+      await new Promise((r) => setTimeout(r, delayAdmisibilidad));
+      return respuestaAdmisibilidad;
     }
 
     // Actualizar etapa — 'finalizado' solo lo setea radicarDenuncia() al confirmar el radicado.
@@ -665,8 +702,50 @@ export class ChatbotService {
     );
   }
 
+  private evaluarAdmisibilidadActual(
+    estado: EstadoConversacionIA,
+    mensajeEfectivo: string,
+    numero: string,
+  ): ResultadoAdmisibilidad {
+    const d = estado.datosConfirmados;
+    const textoAnalisis = [d.descripcion, mensajeEfectivo].filter(Boolean).join(' ').trim();
+
+    const inferencia = this.inferencias.resolverCaso(textoAnalisis, {
+      dependenciaActual: d.dependencia,
+      descripcionActual: d.descripcion,
+    });
+
+    const admisibilidad = this.inferencias.evaluarAdmisibilidad({
+      inputUsuario: mensajeEfectivo,
+      descripcion: d.descripcion ?? mensajeEfectivo,
+      ubicacion: [d.direccion, d.barrio, d.comuna].filter(Boolean).join(', '),
+      direccion: d.direccion,
+      barrio: d.barrio,
+      comuna: d.comuna,
+      tipoCaso: inferencia.tipoCaso,
+      confianza: inferencia.confianza,
+      dependenciaPrincipal: inferencia.dependenciaPrincipal,
+      dependenciaSecundaria: inferencia.dependenciaSecundaria,
+    });
+
+    this.logger.log(
+      `[${numero}] Admisibilidad evaluada: motivo=${admisibilidad.motivo}, requiereMasInfo=${admisibilidad.requiereMasInfo}, bloquear=${admisibilidad.bloquearRadicacion}`,
+    );
+
+    return admisibilidad;
+  }
+
   private async radicarDenuncia(estado: EstadoConversacionIA, numero: string): Promise<string> {
     const d = estado.datosConfirmados;
+
+    const admisibilidad = this.evaluarAdmisibilidadActual(estado, d.descripcion ?? '', numero);
+    if (!admisibilidad.esAdmisible) {
+      this.logger.warn(
+        `[${numero}] Radicación bloqueada por admisibilidad: motivo=${admisibilidad.motivo}, bloquear=${admisibilidad.bloquearRadicacion}`,
+      );
+      d.etapa = 'recopilando';
+      return admisibilidad.mensajeUsuario || MSG_IMPROCEDENTE_BLOQUEO;
+    }
 
     // BUG 1: esAnonimo es true ÚNICAMENTE si Gemini lo seteó explícitamente
     const esAnonimo = d.esAnonimo === true;

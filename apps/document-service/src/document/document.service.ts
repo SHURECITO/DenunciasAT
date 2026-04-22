@@ -55,6 +55,27 @@ export class DocumentService {
         dependenciaActual: dependencia,
         descripcionActual: denuncia.descripcion,
       });
+      const admisibilidad = this.inferencias.evaluarAdmisibilidad({
+        inputUsuario: denuncia.descripcion,
+        descripcion: denuncia.descripcion,
+        ubicacion: denuncia.ubicacion,
+        direccion: denuncia.ubicacion,
+        barrio: denuncia.barrio ?? undefined,
+        comuna: denuncia.comuna ?? undefined,
+        tipoCaso: inferencia.tipoCaso,
+        confianza: inferencia.confianza,
+        dependenciaPrincipal: inferencia.dependenciaPrincipal,
+        dependenciaSecundaria: inferencia.dependenciaSecundaria,
+      });
+
+      if (!admisibilidad.esAdmisible) {
+        this.logger.warn(
+          `Denuncia #${denunciaId} no admisible para documento: motivo=${admisibilidad.motivo}, bloquear=${admisibilidad.bloquearRadicacion}`,
+        );
+        await this.dashboardApi.notificarDocumentoError(denunciaId);
+        return;
+      }
+
       const dependenciaPrincipal = inferencia.dependenciaPrincipal;
       const dependenciaSecundaria = inferencia.dependenciaSecundaria;
       const hayMultiple = !!dependenciaSecundaria;
@@ -158,11 +179,31 @@ export class DocumentService {
     generarDocumento: boolean;
   }): Promise<{ dependenciaDetectada: string | null; documentoGenerado: boolean }> {
     let dependenciaDetectada = 'Alcaldía de Medellín';
+    let documentoGenerado = dto.generarDocumento;
     
     if (dto.generarDocumento) {
       const inferencia = this.inferencias.resolverCaso(dto.descripcion, {
         descripcionActual: dto.descripcion,
       });
+      const admisibilidad = this.inferencias.evaluarAdmisibilidad({
+        inputUsuario: dto.descripcion,
+        descripcion: dto.descripcion,
+        ubicacion: dto.ubicacion,
+        direccion: dto.ubicacion,
+        barrio: dto.barrio,
+        tipoCaso: inferencia.tipoCaso,
+        confianza: inferencia.confianza,
+        dependenciaPrincipal: inferencia.dependenciaPrincipal,
+        dependenciaSecundaria: inferencia.dependenciaSecundaria,
+      });
+
+      if (!admisibilidad.esAdmisible) {
+        this.logger.warn(
+          `Denuncia #${dto.denunciaId} no admisible para generación manual: motivo=${admisibilidad.motivo}, bloquear=${admisibilidad.bloquearRadicacion}`,
+        );
+        documentoGenerado = false;
+      }
+
       if (inferencia.tipoCaso !== 'nulo') {
         dependenciaDetectada = inferencia.dependenciaSecundaria
           ? `${inferencia.dependenciaPrincipal}, ${inferencia.dependenciaSecundaria}`
@@ -186,18 +227,20 @@ export class DocumentService {
         await this.dashboardApi.updateDenuncia(dto.denunciaId, { 
           dependenciaAsignada: dependenciaDetectada,
           documentoGeneradoOk: false,
-          documentoPendiente: true
+          documentoPendiente: documentoGenerado
         });
       } catch (e) {
         this.logger.warn(`No se pudo actualizar dependencia para denuncia ${dto.denunciaId}`);
       }
       
-      this.generarDocumento(dto.denunciaId).catch(() => {});
+      if (documentoGenerado) {
+        this.generarDocumento(dto.denunciaId).catch(() => {});
+      }
     }
 
     return {
       dependenciaDetectada,
-      documentoGenerado: dto.generarDocumento
+      documentoGenerado
     };
   }
 

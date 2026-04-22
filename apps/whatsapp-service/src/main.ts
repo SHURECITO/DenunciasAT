@@ -2,11 +2,13 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { JsonLogger } from '@app/common';
 
 async function bootstrap() {
+  const isProd = process.env.NODE_ENV === 'production';
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
-    logger: ['error', 'warn', 'log'],
+    logger: isProd ? new JsonLogger('whatsapp-service') : ['error', 'warn', 'log'],
   });
 
   app.use(helmet());

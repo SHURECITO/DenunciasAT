@@ -179,10 +179,10 @@ export class RagService implements OnModuleInit, OnModuleDestroy {
   private clasificacionGeminiDisponible = true;
 
   constructor(private readonly config: ConfigService) {
-    const databaseUrl = this.config.get<string>(
-      'DATABASE_URL',
-      'postgresql://denunciasat:denunciasat2026@postgres:5432/denunciasat',
-    );
+    const databaseUrl = this.config.get<string>('DATABASE_URL');
+    if (!databaseUrl) {
+      throw new Error('FATAL: DATABASE_URL no configurada en rag-service');
+    }
 
     this.pool = new Pool({
       connectionString: databaseUrl,

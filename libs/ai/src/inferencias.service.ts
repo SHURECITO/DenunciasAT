@@ -64,6 +64,7 @@ interface DependenciaScore {
 
 export interface ResultadoInferencia {
   tipoCaso: TipoCaso;
+  confianza: number;
   dependenciaPrincipal: string;
   dependenciaSecundaria?: string;
   esCasoMixto: boolean;
@@ -73,6 +74,29 @@ export interface ResultadoInferencia {
     entradas: Array<{ id: string; tipo: string; nombre: string; descripcion: string }>;
   };
   requiereConfirmacion: boolean;
+}
+
+export type MotivoAdmisibilidad = 'valido' | 'incompleto' | 'ambiguo' | 'improcedente';
+
+export interface CasoInferidoAdmisibilidad {
+  inputUsuario: string;
+  descripcion?: string;
+  ubicacion?: string;
+  direccion?: string;
+  barrio?: string;
+  comuna?: string;
+  tipoCaso: TipoCaso;
+  confianza: number;
+  dependenciaPrincipal?: string;
+  dependenciaSecundaria?: string;
+}
+
+export interface ResultadoAdmisibilidad {
+  esAdmisible: boolean;
+  motivo: MotivoAdmisibilidad;
+  requiereMasInfo: boolean;
+  mensajeUsuario: string;
+  bloquearRadicacion: boolean;
 }
 
 const DEPS_VECTOR_PATH = join(process.cwd(), 'infrastructure', 'config', 'dependencias.vector.db.json');
@@ -109,17 +133,97 @@ export class InferenciasService {
     const principal = ordenadas[0]?.nombre ?? 'Secretaría de Gobierno y Gestión del Gabinete';
     const secundaria = this.seleccionarSecundaria(ordenadas);
     const tipoCaso = this.calcularTipoCaso(ordenadas);
+    const confianza = this.calcularConfianza(ordenadas, tipoCaso);
     const esCasoMixto = !!secundaria;
-    const requiereConfirmacion = tipoCaso !== 'fuerte' || (ordenadas[0]?.score ?? 0) < 1.25;
+    const requiereConfirmacion = tipoCaso !== 'fuerte' || confianza < 0.75;
 
     return {
       tipoCaso,
+      confianza,
       dependenciaPrincipal: principal,
       dependenciaSecundaria: secundaria,
       esCasoMixto,
       normativaAplicable: this.obtenerNormativaAplicable(principal, secundaria),
       requiereConfirmacion,
     };
+  }
+
+  evaluarAdmisibilidad(casoInferido: CasoInferidoAdmisibilidad): ResultadoAdmisibilidad {
+    const descripcionBase = (casoInferido.descripcion?.trim() || casoInferido.inputUsuario?.trim() || '');
+    const descripcionNorm = this.normalizar(descripcionBase);
+    const ubicacionTexto = [
+      casoInferido.ubicacion,
+      casoInferido.direccion,
+      casoInferido.barrio,
+      casoInferido.comuna,
+    ].filter((v): v is string => typeof v === 'string' && v.trim().length > 0).join(' ');
+    const ubicacionNorm = this.normalizar(ubicacionTexto);
+
+    if (this.esSolicitudDesproporcionada(descripcionNorm)) {
+      return this.decisionAdmisibilidad(
+        casoInferido,
+        'improcedente',
+        false,
+        true,
+        'Este tipo de solicitud corresponde a procesos de planeación a gran escala y no puede gestionarse como denuncia ciudadana. Sin embargo, puedo orientarte sobre otros canales.',
+      );
+    }
+
+    if (this.mencionaEntidadExterna(descripcionNorm)) {
+      return this.decisionAdmisibilidad(
+        casoInferido,
+        'improcedente',
+        false,
+        true,
+        'La situación reportada no corresponde a gestión distrital directa en este canal. Puedo orientarte para continuar por la ruta institucional adecuada.',
+      );
+    }
+
+    const descripcionSuficiente = this.esDescripcionSuficiente(descripcionNorm);
+    const ubicacionSuficiente = this.tieneUbicacionConcreta(casoInferido, ubicacionNorm);
+
+    if (!descripcionSuficiente || !ubicacionSuficiente) {
+      return this.decisionAdmisibilidad(
+        casoInferido,
+        'incompleto',
+        true,
+        false,
+        '¿Podrías indicarme qué tipo de problema estás presentando y en qué lugar exacto ocurre?',
+      );
+    }
+
+    if (!this.esDependenciaInstitucional(casoInferido.dependenciaPrincipal)) {
+      return this.decisionAdmisibilidad(
+        casoInferido,
+        'improcedente',
+        false,
+        true,
+        'La situación descrita no evidencia una competencia distrital clara para radicación en este canal.',
+      );
+    }
+
+    const confianza = Number.isFinite(casoInferido.confianza) ? casoInferido.confianza : 0;
+
+    if (casoInferido.tipoCaso === 'nulo') {
+      const motivo: MotivoAdmisibilidad = this.esDescripcionAmbigua(descripcionNorm) ? 'ambiguo' : 'incompleto';
+      const mensaje = motivo === 'ambiguo'
+        ? '¿El problema es de infraestructura, seguridad, servicios públicos u otro tipo?'
+        : '¿Podrías indicarme qué tipo de problema estás presentando y en qué lugar exacto ocurre?';
+
+      return this.decisionAdmisibilidad(casoInferido, motivo, true, false, mensaje);
+    }
+
+    if (this.esDescripcionAmbigua(descripcionNorm) || confianza < 0.7) {
+      return this.decisionAdmisibilidad(
+        casoInferido,
+        'ambiguo',
+        true,
+        false,
+        '¿El problema es de infraestructura, seguridad, servicios públicos u otro tipo?',
+      );
+    }
+
+    return this.decisionAdmisibilidad(casoInferido, 'valido', false, false, 'Continuemos con tu denuncia.');
   }
 
   obtenerNormativaAplicable(dependenciaPrincipal: string, dependenciaSecundaria?: string): {
@@ -256,6 +360,149 @@ export class InferenciasService {
     if (principal.score >= 1.5) return 'fuerte';
     if (principal.score >= 0.7) return 'medio';
     return 'nulo';
+  }
+
+  private calcularConfianza(ordenadas: DependenciaScore[], tipoCaso: TipoCaso): number {
+    const principal = ordenadas[0];
+    if (!principal) return 0;
+
+    const secundaria = ordenadas[1]?.score ?? 0;
+    const base = Math.min(principal.score / 2.2, 1);
+    const separacion = Math.max((principal.score - secundaria) / Math.max(principal.score, 0.0001), 0);
+    const ajusteTipo = tipoCaso === 'fuerte' ? 0.1 : tipoCaso === 'medio' ? 0 : -0.2;
+    const confianza = Math.max(0, Math.min(1, base * 0.7 + separacion * 0.3 + ajusteTipo));
+
+    return Number(confianza.toFixed(2));
+  }
+
+  private decisionAdmisibilidad(
+    casoInferido: CasoInferidoAdmisibilidad,
+    motivo: MotivoAdmisibilidad,
+    requiereMasInfo: boolean,
+    bloquearRadicacion: boolean,
+    mensajeUsuario: string,
+  ): ResultadoAdmisibilidad {
+    const resultado: ResultadoAdmisibilidad = {
+      esAdmisible: motivo === 'valido',
+      motivo,
+      requiereMasInfo,
+      mensajeUsuario,
+      bloquearRadicacion,
+    };
+
+    const decisionFinal = bloquearRadicacion
+      ? 'bloquear_radicacion'
+      : requiereMasInfo
+        ? 'solicitar_mas_info'
+        : 'continuar';
+
+    this.logger.log(
+      `[ADMISIBILIDAD] ${JSON.stringify({
+        inputUsuario: casoInferido.inputUsuario,
+        tipoCaso: casoInferido.tipoCaso,
+        confianza: Number((casoInferido.confianza ?? 0).toFixed(2)),
+        motivoAdmisibilidad: motivo,
+        decisionFinal,
+      })}`,
+    );
+
+    return resultado;
+  }
+
+  private esDescripcionSuficiente(descripcionNorm: string): boolean {
+    if (!descripcionNorm) return false;
+    const palabras = descripcionNorm.split(/\s+/).filter(Boolean);
+    if (palabras.length < 5) return false;
+    if (this.esDescripcionGenerica(descripcionNorm)) return false;
+    return true;
+  }
+
+  private esDescripcionAmbigua(descripcionNorm: string): boolean {
+    if (!descripcionNorm) return true;
+
+    const vagos = [
+      'situacion',
+      'problema',
+      'cosas malas',
+      'todo esta mal',
+      'algo raro',
+      'inconveniente',
+      'tema',
+    ];
+    const accionables = [
+      'hueco', 'basura', 'ruido', 'semaforo', 'inundacion', 'deslizamiento',
+      'arbol', 'luz', 'agua', 'gas', 'anden', 'transito', 'alcantarillado',
+      'extorsion', 'amenaza', 'escombro', 'quebrada', 'fotomulta',
+    ];
+
+    const contieneVago = vagos.some((v) => descripcionNorm.includes(v));
+    const contieneAccionable = accionables.some((a) => descripcionNorm.includes(a));
+
+    return contieneVago && !contieneAccionable;
+  }
+
+  private esDescripcionGenerica(descripcionNorm: string): boolean {
+    const genericas = [
+      'hay un problema',
+      'algo raro pasa',
+      'situacion',
+      'todo esta mal',
+      'cosas malas',
+    ];
+    return genericas.some((g) => descripcionNorm === g || descripcionNorm.startsWith(`${g} `));
+  }
+
+  private tieneUbicacionConcreta(casoInferido: CasoInferidoAdmisibilidad, ubicacionNorm: string): boolean {
+    if (casoInferido.barrio?.trim()) return true;
+    if (casoInferido.comuna?.trim()) return true;
+
+    const direccionNorm = this.normalizar(casoInferido.direccion ?? '');
+    const tieneVia = /\b(calle|carrera|avenida|diagonal|transversal|autopista|circular|cl|cra|kr|tv)\b/.test(direccionNorm);
+    const tieneNumero = /\d/.test(direccionNorm);
+    if (tieneVia && tieneNumero) return true;
+
+    if (!ubicacionNorm) return false;
+    if (/\b(barrio|comuna|sector|vereda|corregimiento|frente a|cerca de)\b/.test(ubicacionNorm)) return true;
+    if (/\d/.test(ubicacionNorm) && ubicacionNorm.split(/\s+/).length >= 2) return true;
+
+    return false;
+  }
+
+  private esSolicitudDesproporcionada(textoNorm: string): boolean {
+    if (!textoNorm) return false;
+    const macro = [
+      'construir metro',
+      'construir metrocable',
+      'nueva linea de metro',
+      'obra estructural mayor',
+      'macroobra',
+      'megaproyecto',
+      'politica publica macro',
+      'plan maestro',
+      'cambiar el plan de desarrollo',
+    ];
+    return macro.some((m) => textoNorm.includes(m));
+  }
+
+  private mencionaEntidadExterna(textoNorm: string): boolean {
+    if (!textoNorm) return false;
+    const entidadesExternas = [
+      'fiscalia',
+      'procuraduria',
+      'defensoria',
+      'juzgado',
+      'rama judicial',
+      'policia nacional',
+      'ejercito',
+    ];
+    return entidadesExternas.some((e) => textoNorm.includes(e));
+  }
+
+  private esDependenciaInstitucional(dependenciaPrincipal?: string): boolean {
+    if (!dependenciaPrincipal?.trim()) return false;
+    return this.getDependencias().some(
+      (d) => this.normalizar(d.nombre) === this.normalizar(dependenciaPrincipal),
+    );
   }
 
   private addScore(
