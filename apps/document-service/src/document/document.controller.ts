@@ -14,7 +14,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'crypto';
 import { Response } from 'express';
-import { MinioService } from '@app/storage';
+import { GcsStorageService } from '@app/storage';
 import { DocumentService } from './document.service';
 import { GenerarDesdeDescripcionDto } from './dto/generar-desde-descripcion.dto';
 
@@ -33,13 +33,13 @@ export class DocumentController {
 
   constructor(
     private readonly documentService: DocumentService,
-    private readonly minio: MinioService,
+    private readonly storage: GcsStorageService,
     private readonly config: ConfigService,
   ) {
     const scoped = this.config.get<string>('DASHBOARD_TO_DOCUMENT_KEY', '').trim();
     const fallback = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '').trim();
     this.internalKey = scoped || fallback;
-    this.bucketDocumentos = this.config.get<string>('MINIO_BUCKET_DOCUMENTOS', 'denunciasat-documentos');
+    this.bucketDocumentos = this.config.get<string>('GCS_BUCKET_DOCUMENTOS', 'denunciasat-documentos');
   }
 
   private secureCompare(a: string, b: string): boolean {
@@ -89,7 +89,7 @@ export class DocumentController {
     return this.documentService.generarDesdeDescripcion(dto);
   }
 
-  /** Descarga el .docx generado desde MinIO */
+  /** Descarga el .docx generado desde GCS */
   @Get('documento/:denunciaId')
   async descargar(
     @Param('denunciaId', ParseIntPipe) denunciaId: number,
@@ -103,7 +103,7 @@ export class DocumentController {
       throw new NotFoundException('Documento no generado todavía');
     }
     try {
-      const buffer = await this.minio.downloadBuffer(this.bucketDocumentos, objectName);
+      const buffer = await this.storage.downloadBuffer(this.bucketDocumentos, objectName);
       res.set({
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Disposition': `attachment; filename="${objectName}"`,

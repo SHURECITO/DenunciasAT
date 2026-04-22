@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { MinioService } from './minio.service';
+import { GcsStorageService } from './gcs-storage.service';
 
 @Module({
-  providers: [MinioService],
-  exports: [MinioService],
+  providers: [GcsStorageService],
+  exports: [GcsStorageService],
 })
 export class StorageModule {}

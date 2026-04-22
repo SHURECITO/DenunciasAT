@@ -4,7 +4,7 @@ import { readFileSync, mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import axios from 'axios';
-import { MinioService } from '@app/storage';
+import { GcsStorageService } from '@app/storage';
 import type { DenunciaData } from './dashboard-api.service';
 
 import AdmZip = require('adm-zip');
@@ -175,21 +175,18 @@ async function downloadImageFromUrl(url: string): Promise<Buffer | null> {
 }
 
 /**
- * Parsea una URL interna de MinIO (http://minio:9000/bucket/objectName)
- * y devuelve { bucket, objectName } o null si no es una URL de MinIO.
+ * Parsea una URL GCS interna (gs://bucket/objectName)
+ * y devuelve { bucket, objectName } o null si no es una URL gs://.
  */
-function parseMinioUrl(url: string): { bucket: string; objectName: string } | null {
+function parseGcsUrl(url: string): { bucket: string; objectName: string } | null {
   try {
-    const parsed = new URL(url);
-    // Reconocer cualquier host que contenga "minio" o sea localhost con puerto 9000
-    if (!parsed.hostname.includes('minio') && !(parsed.hostname === 'localhost' && parsed.port === '9000')) {
-      return null;
-    }
-    // pathname: /bucket/objectName... (primer segmento es el bucket)
-    const parts = parsed.pathname.slice(1).split('/');
-    if (parts.length < 2) return null;
-    const bucket     = parts[0];
-    const objectName = parts.slice(1).join('/');
+    if (!url.startsWith('gs://')) return null;
+    const withoutScheme = url.slice('gs://'.length);
+    const slashIdx = withoutScheme.indexOf('/');
+    if (slashIdx === -1) return null;
+    const bucket     = withoutScheme.slice(0, slashIdx);
+    const objectName = withoutScheme.slice(slashIdx + 1);
+    if (!bucket || !objectName) return null;
     return { bucket, objectName };
   } catch {
     return null;
@@ -348,7 +345,7 @@ export class DocumentBuilderService {
   private readonly allowedRemoteHosts: string[];
 
   constructor(
-    private readonly minio: MinioService,
+    private readonly storage: GcsStorageService,
     private readonly config: ConfigService,
   ) {
     const raw = this.config.get<string>('ALLOW_EXTERNAL_IMAGE_URLS', 'false').toLowerCase();
@@ -377,14 +374,14 @@ export class DocumentBuilderService {
     });
   }
 
-  /** Descarga imagen desde MinIO (si es URL interna) o desde URL externa */
+  /** Descarga imagen desde GCS (si es URL gs://) o desde URL externa */
   private async fetchImageBuffer(url: string): Promise<Buffer | null> {
-    const minioRef = parseMinioUrl(url);
-    if (minioRef) {
+    const gcsRef = parseGcsUrl(url);
+    if (gcsRef) {
       try {
-        return await this.minio.downloadBuffer(minioRef.bucket, minioRef.objectName);
+        return await this.storage.downloadBuffer(gcsRef.bucket, gcsRef.objectName);
       } catch (err) {
-        this.logger.warn(`No se pudo descargar imagen de MinIO (${minioRef.bucket}/${minioRef.objectName}): ${(err as Error).message}`);
+        this.logger.warn(`No se pudo descargar imagen de GCS (${gcsRef.bucket}/${gcsRef.objectName}): ${(err as Error).message}`);
         return null;
       }
     }

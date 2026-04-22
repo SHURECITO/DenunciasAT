@@ -20,6 +20,7 @@ import axios from 'axios';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EitherAuthGuard } from '../auth/guards/either-auth.guard';
 import { SkipJwt } from '../auth/decorators/skip-jwt.decorator';
+import { GcsStorageService } from '@app/storage';
 import { DenunciasService } from './denuncias.service';
 import { CreateDenunciaDto } from './dto/create-denuncia.dto';
 import { CreateIncompletaDto } from './dto/create-incompleta.dto';
@@ -40,9 +41,10 @@ export class DenunciasController {
 
   constructor(
     private readonly denunciasService: DenunciasService,
+    private readonly storage: GcsStorageService,
     private readonly config: ConfigService,
   ) {
-    this.bucketDocumentos = this.config.get<string>('MINIO_BUCKET_DOCUMENTOS', 'denunciasat-documentos');
+    this.bucketDocumentos = this.config.get<string>('GCS_BUCKET_DOCUMENTOS', 'denunciasat-documentos');
     const scoped = this.config.get<string>('DASHBOARD_TO_DOCUMENT_KEY', '').trim();
     const fallback = this.config.get<string>('DASHBOARD_API_INTERNAL_KEY', '').trim();
     this.dashboardToDocumentKey = scoped || fallback;
@@ -203,14 +205,7 @@ export class DenunciasController {
 
     const objectName = denuncia.documentoUrl;
     try {
-      // Usamos el downloader via http porque no tenemos MinioService expuesto fácilmente o hacemos una peticion
-      const docStorageUrl = this.config.get<string>('MINIO_ENDPOINT', 'minio');
-      const docStoragePort = this.config.get<string>('MINIO_PORT', '9000');
-      const minioUrl = `http://${docStorageUrl}:${docStoragePort}/${this.bucketDocumentos}/${objectName}`;
-      
-      const fileRes = await axios.get(minioUrl, { responseType: 'arraybuffer' });
-      const buffer = fileRes.data;
-      
+      const buffer = await this.storage.downloadBuffer(this.bucketDocumentos, objectName);
       const filename = `${denuncia.radicado}.docx`;
       res.set({
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

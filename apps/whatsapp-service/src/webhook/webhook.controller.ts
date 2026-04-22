@@ -14,7 +14,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { Request } from 'express';
 import Redis from 'ioredis';
 import axios from 'axios';
-import { MinioService } from '@app/storage';
+import { GcsStorageService } from '@app/storage';
 import { EvolutionService } from './evolution.service';
 import { ChatbotClientService } from './chatbot-client.service';
 
@@ -44,11 +44,11 @@ export class WebhookController {
   constructor(
     private readonly evolutionService: EvolutionService,
     private readonly chatbotClientService: ChatbotClientService,
-    private readonly minioService: MinioService,
+    private readonly storageService: GcsStorageService,
     private readonly config: ConfigService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
   ) {
-    this.bucketEvidencias = this.config.get<string>('MINIO_BUCKET_EVIDENCIAS', 'denunciasat-evidencias');
+    this.bucketEvidencias = this.config.get<string>('GCS_BUCKET_EVIDENCIAS', 'denunciasat-evidencias');
     this.webhookHmacSecret = this.config.get<string>('WHATSAPP_WEBHOOK_HMAC_SECRET', '').trim();
   }
 
@@ -178,8 +178,8 @@ export class WebhookController {
     return { ext: 'jpg', contentType: 'image/jpeg' };
   }
 
-  /** Descarga media desde Evolution API y la sube a MinIO. Devuelve la URL interna de MinIO. */
-  private async persistMediaToMinio(
+  /** Descarga media desde Evolution API y la sube a GCS. Devuelve la URL pública del objeto. */
+  private async persistMediaToStorage(
     mediaUrl: string,
     numero: string,
     ext: string,
@@ -189,20 +189,18 @@ export class WebhookController {
       const timestamp  = Date.now();
       const objectName = `${numero}/${timestamp}-${randomUUID()}.${ext}`;
 
-      await this.minioService.uploadFromUrl(
+      await this.storageService.uploadFromUrl(
         this.bucketEvidencias,
         objectName,
         mediaUrl,
         contentType,
       );
 
-      const minioEndpoint = this.config.get<string>('MINIO_ENDPOINT', 'minio');
-      const minioPort     = this.config.get<string>('MINIO_PORT', '9000');
-      const endpoint = minioEndpoint.startsWith('http') ? minioEndpoint : `http://${minioEndpoint}:${minioPort}`;
-      return `${endpoint}/${this.bucketEvidencias}/${objectName}`;
+      // URL GCS formato gs:// interna — los servicios la usarán vía downloadBuffer()
+      return `gs://${this.bucketEvidencias}/${objectName}`;
     } catch (err) {
       this.logger.warn(
-        `Error subiendo media a MinIO para ${this.maskPhone(numero)}: ${(err as Error).message}`,
+        `Error subiendo media a GCS para ${this.maskPhone(numero)}: ${(err as Error).message}`,
       );
       return null;
     }
@@ -294,17 +292,17 @@ export class WebhookController {
     // Ignorar si no hay texto Y no es un tipo de media soportado
     if (!contenido && !esMediaSoportada) return { ok: true };
 
-    // Subir media a MinIO inmediatamente antes de que expire la URL de Evolution API.
+    // Subir media a GCS inmediatamente antes de que expire la URL de Evolution API.
     // Hacemos esto ANTES del lock/cola porque la URL original expira en segundos.
     let mediaUrlFinal = mediaUrl;
     if (esMediaSoportada && mediaUrl) {
       const mimeType = data.message?.imageMessage?.mimetype ?? data.message?.documentMessage?.mimetype;
       const { ext, contentType } = this.inferMediaInfo(messageType, mimeType, mediaUrl);
-      const minioUrl = await this.persistMediaToMinio(mediaUrl, numero, ext, contentType);
-      if (minioUrl) {
-        mediaUrlFinal = minioUrl;
+      const gcsUrl = await this.persistMediaToStorage(mediaUrl, numero, ext, contentType);
+      if (gcsUrl) {
+        mediaUrlFinal = gcsUrl;
       }
-      // Si falla MinIO, se pasa la URL original como fallback (puede expirar, pero no rompe el flujo)
+      // Si falla GCS, se pasa la URL original como fallback (puede expirar, pero no rompe el flujo)
     }
 
     const mensaje: MensajeEncolado = {

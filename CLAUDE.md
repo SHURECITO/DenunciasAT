@@ -144,10 +144,9 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 | `FRONTEND_URL` | Origen CORS | `http://localhost:8742` |
 | `DASHBOARD_API_INTERNAL_KEY` | Auth interna chatbot→API | String random |
 | `GEMINI_API_KEY` | API Key Google Gemini | Obtener en AI Studio |
-| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | Credenciales root servidor MinIO | igual que ACCESS/SECRET en dev |
-| `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | Credenciales cliente MinIO | String aleatorio |
-| `MINIO_BUCKET_EVIDENCIAS` | Bucket imágenes chatbot | `denunciasat-evidencias` |
-| `MINIO_BUCKET_DOCUMENTOS` | Bucket .docx generados | `denunciasat-documentos` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Ruta JSON service account (dev) | Vacío en prod (Workload Identity) |
+| `GCS_BUCKET_EVIDENCIAS` | Bucket imágenes chatbot en GCS | `denunciasat-evidencias` |
+| `GCS_BUCKET_DOCUMENTOS` | Bucket .docx generados en GCS | `denunciasat-documentos` |
 
 ## Patrones técnicos establecidos
 
@@ -160,11 +159,11 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 - **document-service arquitectura**: adm-zip + Plantilla.docx (en `infrastructure/templates/`) → inyecta body XML preservando header/footer del membrete
 - **dependencias.json**: `infrastructure/config/dependencias.json` — 20+ entidades → `{titulo, nombre, cargo, entidad}`
 - **Firma Mercurio**: el .docx NO lleva el nombre del concejal hardcodeado; usa placeholders `FIRMA_NOMBRE`/`FIRMA_CARGO` (Arial 11, izquierda) + tabla de 4320×1440 DXA con borde inferior para el espacio de firma + `Radicó: ` (Arial 9 cursiva #666666). Mercurio reemplaza los placeholders al firmar.
-- **MinIO**: `http://minio:9000` (interno), consola `http://localhost:9001`. Buckets: `denunciasat-evidencias`/`denunciasat-documentos`. `minio-init` los crea al arrancar. Sin `documentos_data` volume.
-- **imagenesEvidencia**: whatsapp-service sube a MinIO inmediato (URL Evolution expira). Formato `http://minio:9000/bucket/{numero}/{ts}-{uuid}.jpg`. document-builder detecta `minio` en hostname → MinioService.
-- **document-service flujo MinIO**: genera .docx temporal → uploadBuffer → elimina local → PATCH documentoUrl = `${radicado}.docx`
-- **dashboard-api .docx**: descarga buffer de MinIO directamente (no proxy). DocumentLifecycleService cron `0 3 * * *` limpia .docx 5 días post-CON_RESPUESTA.
-- **libs/storage**: `@app/storage` → `MinioService` (6 métodos, backoff 1s/2s/4s)
+- **GCS**: `@google-cloud/storage`. Buckets: `denunciasat-evidencias`/`denunciasat-documentos`. Se crean previamente en GCP (no hay init-container).
+- **imagenesEvidencia**: whatsapp-service sube a GCS inmediato (URL Evolution expira). Formato interno `gs://bucket/{numero}/{ts}-{uuid}.jpg`. document-builder detecta `gs://` → `GcsStorageService.downloadBuffer()`.
+- **document-service flujo GCS**: genera .docx temporal → uploadBuffer → elimina local → PATCH documentoUrl = `${radicado}.docx`
+- **dashboard-api .docx**: descarga buffer de GCS directamente vía `GcsStorageService.downloadBuffer()`. DocumentLifecycleService cron `0 3 * * *` limpia .docx 5 días post-CON_RESPUESTA.
+- **libs/storage**: `@app/storage` → `GcsStorageService` (6 métodos, backoff 1s/2s/4s)
 - **Gemini legal**: `generarHechos()` (3 párr., sin nombre ciudadano, cita normativa) + `generarAsunto()` (verbo infinitivo mayúsculas, máx 12 palabras)
 - **document-builder — namespaces/sectPr**: opening tag `<w:document>` y `sectPr` se copian EXACTO de la plantilla (regex `/<w:document[^>]*>/`, rId10=header/rId11=footer). Hardcodear solo `xmlns:w` rompe el membrete.
 - **document-builder — imágenes**: `getImageDimensions()` (JPEG SOF + PNG IHDR, default 3000×2000 si falla) + `calcularDimensionesImagen()` (MAX 5029200×3657600 EMU, MIN 1828800 EMU, 9525 EMU/px). Extensión por magic bytes.
@@ -194,6 +193,8 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 **Sesión 35 (2026-04-20):** corrección semántica controlada de `dependencias.vector.db.json` sin tocar IDs/vectorSparse: DAGRD (Ley 1523 principal + 1551 complemento), Telemedellín (Ley 182/1341), Medio Ambiente (+Ley 1801 por `ruido`), Gerencia Étnica (+Ley 70 + Ley 21), Gerencia Diversidades Sexuales (+Ley 1482) y limpieza global de stopwords (`de`, `la`, `el`, `y`, `del`) en `keywords`.
 **Sesión 36 (2026-04-20):** capa de admisibilidad en `InferenciasService` (`evaluarAdmisibilidad`) con salida estructurada + logging `{inputUsuario,tipoCaso,confianza,motivoAdmisibilidad,decisionFinal}`; integración en chatbot para bloquear/solicitar más info antes de avanzar o radicar y en document-service para generar .docx solo cuando `esAdmisible=true`.
 **Sesión 37 (2026-04-21):** preparación para despliegue real en GCP: eliminada credencial hardcodeada en `rag.service.ts` (fallback DB_PASSWORD), healthchecks en todos los Dockerfiles, `docker-compose.prod.yml` con imágenes de Artifact Registry, `.github/workflows/deploy.yml` (build→push→SSH deploy→verify), `JsonLogger` JSON en `libs/common` activado en producción en todos los `main.ts`, scripts `deploy.sh` y `setup-secrets.sh`, `.dockerignore` mejorado, `.env.example` con vars GCP.
+
+**Sesión 38 (2026-04-21):** migración completa de MinIO → Google Cloud Storage: `libs/storage` reemplazado por `GcsStorageService` (`@google-cloud/storage`), URLs internas cambiadas de `http://minio:9000/bucket/obj` a `gs://bucket/obj`, servicios `minio` y `minio-init` eliminados de ambos docker-compose, variables `MINIO_*` → `GCS_*`, `scripts/test-gcs.ts` añadido.
 
 ---
 

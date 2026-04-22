@@ -3,7 +3,7 @@ import { join } from 'path';
 import { readFile, unlink } from 'fs/promises';
 import { ConfigService } from '@nestjs/config';
 import { GeminiService, InferenciasService } from '@app/ai';
-import { MinioService } from '@app/storage';
+import { GcsStorageService } from '@app/storage';
 import { DashboardApiService, DenunciaData } from './dashboard-api.service';
 import { DocumentBuilderService, DependenciaSolicitud } from './document-builder.service';
 
@@ -25,10 +25,10 @@ export class DocumentService {
     private readonly builder: DocumentBuilderService,
     private readonly inferencias: InferenciasService,
     private readonly gemini: GeminiService,
-    private readonly minio: MinioService,
+    private readonly storage: GcsStorageService,
     private readonly config: ConfigService,
   ) {
-    this.bucketDocumentos = this.config.get<string>('MINIO_BUCKET_DOCUMENTOS', 'denunciasat-documentos');
+    this.bucketDocumentos = this.config.get<string>('GCS_BUCKET_DOCUMENTOS', 'denunciasat-documentos');
   }
 
   async generarDocumento(denunciaId: number): Promise<void> {
@@ -155,7 +155,7 @@ export class DocumentService {
       }
 
       // Subir .docx a MinIO y eliminar archivo temporal local
-      await this.minio.uploadBuffer(this.bucketDocumentos, objectName, docxBuffer, DOCX_CONTENT_TYPE);
+      await this.storage.uploadBuffer(this.bucketDocumentos, objectName, docxBuffer, DOCX_CONTENT_TYPE);
       await unlink(rutaArchivo).catch((err) =>
         this.logger.warn(`No se pudo eliminar archivo temporal ${rutaArchivo}: ${(err as Error).message}`),
       );
@@ -163,7 +163,7 @@ export class DocumentService {
       // Notificar a dashboard-api con el object name (bucket implícito en la config)
       this.rutasGeneradas.set(denunciaId, objectName);
       await this.dashboardApi.notificarDocumentoOk(denunciaId, objectName);
-      this.logger.log(`Documento generado y subido a MinIO: ${this.bucketDocumentos}/${objectName}`);
+      this.logger.log(`Documento generado y subido a GCS: ${this.bucketDocumentos}/${objectName}`);
     } catch (err) {
       this.logger.error(`Error generando documento para denuncia #${denunciaId}:`, err);
       await this.dashboardApi.notificarDocumentoError(denunciaId);
