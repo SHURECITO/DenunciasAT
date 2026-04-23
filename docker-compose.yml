@@ -295,6 +295,9 @@ services:
     build:
       context: frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-http://localhost:8741}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8741}
     restart: unless-stopped
     # Puerto externo no estándar — cambiar si es necesario
     ports:
@@ -306,7 +309,7 @@ services:
       # URL interna (servidor Next.js → API dentro de la red Docker)
       NEXT_PUBLIC_API_URL: http://dashboard-api:3000
       # URL pública usada por el navegador para WebSocket del dashboard-api
-      NEXT_PUBLIC_WS_URL: http://34.46.115.185:8741
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-http://localhost:8741}
     depends_on:
       dashboard-api:
         condition: service_healthy

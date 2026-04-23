@@ -627,8 +627,8 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
         <ModalEditarDenuncia
           denuncia={denuncia}
           onClose={() => setShowModalEditar(false)}
-          onSaved={(updated) => {
-            setDenuncia(updated);
+          onSaved={(updated, regenerando) => {
+            setDenuncia(regenerando ? { ...updated, documentoPendiente: true, documentoGeneradoOk: false } : updated);
             setShowModalEditar(false);
           }}
         />

@@ -111,6 +111,9 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/frontend:${{ steps.meta.outputs.tag }}
             ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/frontend:latest
+          build-args: |
+            NEXT_PUBLIC_WS_URL=${{ secrets.NEXT_PUBLIC_WS_URL }}
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
 
   deploy-vm:
     name: Deploy VM
@@ -137,9 +140,9 @@ jobs:
             gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
             export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
             export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
-            docker compose pull
-            docker compose up -d --remove-orphans
-            docker compose ps
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml ps
 
   verify:
     name: Verify

@@ -26,7 +26,7 @@ export default function ModalEditarDenuncia({ denuncia, onClose, onSaved }: Prop
   const [ubicacion, setUbicacion] = useState(denuncia.ubicacion || '');
   const [barrio, setBarrio] = useState(denuncia.barrio || '');
   const [comuna, setComuna] = useState(denuncia.comuna || '');
-  const [solicitudAdicional, setSolicitudAdicional] = useState((denuncia as unknown as { solicitudAdicional?: string }).solicitudAdicional || '');
+  const [solicitudAdicional, setSolicitudAdicional] = useState(denuncia.solicitudAdicional ?? '');
   
   const [nombreCiudadano, setNombreCiudadano] = useState(denuncia.nombreCiudadano || '');
   const [cedula, setCedula] = useState(denuncia.cedula || '');

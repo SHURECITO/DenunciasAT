@@ -58,6 +58,8 @@ function buildDenunciaFromEvent(data: NuevaDenunciaEvent): Denuncia {
     comuna: null,
     descripcionResumen: null,
     esAnonimo: false,
+    solicitudAdicional: null,
+    imagenesEvidencia: null,
     respuestasPorDependencia: [],
     fechaCreacion: data.fechaCreacion ?? now,
     fechaActualizacion: data.fechaCreacion ?? now,

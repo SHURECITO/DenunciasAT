@@ -34,6 +34,8 @@ export interface Denuncia {
   comuna: string | null;
   descripcionResumen: string | null;
   esAnonimo: boolean;
+  solicitudAdicional: string | null;
+  imagenesEvidencia: string | null;
   respuestasPorDependencia: RespuestaDependencia[];
   fechaCreacion: string;
   fechaActualizacion: string;

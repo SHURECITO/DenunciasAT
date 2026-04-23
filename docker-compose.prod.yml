@@ -313,7 +313,10 @@ services:
       HOSTNAME: "0.0.0.0"
       PORT: "3001"
       NODE_ENV: production
+      # Usada por el servidor Next.js para llamadas server-side (dentro de Docker)
       NEXT_PUBLIC_API_URL: http://dashboard-api:3000
+      # Nota: NEXT_PUBLIC_WS_URL se bake-a en el bundle cliente en build time (ver Dockerfile)
+      # Esta variable de runtime es ignorada por el navegador pero sirve como referencia
       NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL}
     depends_on:
       dashboard-api:

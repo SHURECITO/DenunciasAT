@@ -9,6 +9,13 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Variables NEXT_PUBLIC_* deben estar en build time (se inlinean en el bundle cliente)
+ARG NEXT_PUBLIC_WS_URL
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN npm run build
 
 ## ── Stage 3: runner ────────────────────────────────────────────────────────

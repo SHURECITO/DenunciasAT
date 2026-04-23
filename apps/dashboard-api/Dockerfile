@@ -24,6 +24,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
+COPY infrastructure/config/dependencias.json ./infrastructure/config/dependencias.json
 RUN chown -R node:node /app
 
 USER node

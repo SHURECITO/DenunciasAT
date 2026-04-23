@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ message: 'No autenticado' }, { status: 401 });
   }
 
-  const res = await fetch(`${API_URL}/dependencias`, {
+  const res = await fetch(`${API_URL}/denuncias/dependencias`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

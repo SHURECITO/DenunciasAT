@@ -192,6 +192,8 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 
 **Sesión 39 (2026-04-22):** GCS privado con ADC + IAM Service Account Credentials API: Signed URLs v4 de 15 min, sin `key.json`/`GOOGLE_APPLICATION_CREDENTIALS`, sin fallback a URLs públicas y `scripts/test-gcs.ts` validando upload/signed URL/fetch/delete.
 
+**Sesión 40 (2026-04-23):** auditoría y estabilización del sistema completo: (1) añadidos `solicitudAdicional` e `imagenesEvidencia` a interfaz `Denuncia` en `frontend/lib/api.ts` y eliminado cast `as unknown as` en `ModalEditarDenuncia.tsx`; (2) CI/CD deploy corregido con `-f docker-compose.prod.yml`; (3) frontend Dockerfile recibe `ARG NEXT_PUBLIC_WS_URL`/`ARG NEXT_PUBLIC_API_URL` en build time (variables de cliente se inlinean en bundle); (4) build-args añadidos al paso CI del frontend; (5) endpoint `GET /health` creado en Next.js (`app/health/route.ts`); (6) callback `onSaved` en `DenunciaDetalle` actualiza `documentoPendiente:true` cuando `regenerando=true`.
+
 ---
 
 > Al terminar cada sesión: marcar fases, comprimir historial si supera 200 líneas.
