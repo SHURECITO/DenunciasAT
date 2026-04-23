@@ -594,7 +594,6 @@ export class ChatbotService {
       prioridadDespuesTurno !== 'none' &&
       !hayDatosNuevos &&
       resultado.etapaSiguiente !== 'especial_cerrado' &&
-      resultado.etapaSiguiente !== 'cancelado' &&
       !resultado.listaParaRadicar &&
       ((estado.intentosFallidos ?? 0) >= 2 || estancado);
 
