@@ -1,168 +1,151 @@
 name: Deploy DenunciasAT
 
 on:
-push:
-branches:
-- main
-workflow_dispatch:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 env:
-GCP_REGION: ${{ secrets.GCP_REGION }}
-GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev
+  GCP_REGION: ${{ secrets.GCP_REGION }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev
 
 jobs:
-build-and-push:
-name: Build & Push imágenes
-runs-on: ubuntu-latest
-permissions:
-contents: read
-id-token: write
+  build-and-push:
+    name: Build & Push imágenes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
 
-```
-outputs:
-  image_tag: ${{ steps.meta.outputs.tag }}
+      - name: Determinar tag
+        id: meta
+        run: |
+          TAG=${GITHUB_SHA::8}
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-steps:
-  - name: Checkout código
-    uses: actions/checkout@v4
+      - name: Auth GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-  - name: Determinar tag
-    id: meta
-    run: |
-      TAG=${GITHUB_SHA::8}
-      echo "tag=${TAG}" >> $GITHUB_OUTPUT
+      - name: Configurar Docker
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
-  - name: Auth GCP
-    uses: google-github-actions/auth@v2
-    with:
-      workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-      service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-  - name: Configurar Docker
-    run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+      - name: Build dashboard-api
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/dashboard-api/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/dashboard-api:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/dashboard-api:latest
 
-  - name: Buildx
-    uses: docker/setup-buildx-action@v3
+      - name: Build chatbot-service
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/chatbot-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/chatbot-service:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/chatbot-service:latest
 
-  # ========================
-  # BUILD SERVICES
-  # ========================
+      - name: Build whatsapp-service
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/whatsapp-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/whatsapp-service:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/whatsapp-service:latest
 
-  - name: Build dashboard-api
-    uses: docker/build-push-action@v5
-    with:
-      context: .
-      file: apps/dashboard-api/Dockerfile
-      push: true
-      tags: |
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/dashboard-api:${{ steps.meta.outputs.tag }}
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/dashboard-api:latest
+      - name: Build document-service
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/document-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/document-service:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/document-service:latest
 
-  - name: Build chatbot-service
-    uses: docker/build-push-action@v5
-    with:
-      context: .
-      file: apps/chatbot-service/Dockerfile
-      push: true
-      tags: |
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/chatbot-service:${{ steps.meta.outputs.tag }}
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/chatbot-service:latest
+      - name: Build notification-service
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/notification-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/notification-service:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/notification-service:latest
 
-  - name: Build whatsapp-service
-    uses: docker/build-push-action@v5
-    with:
-      context: .
-      file: apps/whatsapp-service/Dockerfile
-      push: true
-      tags: |
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/whatsapp-service:${{ steps.meta.outputs.tag }}
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/whatsapp-service:latest
+      - name: Build rag-service
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/rag-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/rag-service:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/rag-service:latest
 
-  - name: Build document-service
-    uses: docker/build-push-action@v5
-    with:
-      context: .
-      file: apps/document-service/Dockerfile
-      push: true
-      tags: |
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/document-service:${{ steps.meta.outputs.tag }}
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/document-service:latest
+      - name: Build frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/frontend:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/frontend:latest
 
-  - name: Build notification-service
-    uses: docker/build-push-action@v5
-    with:
-      context: .
-      file: apps/notification-service/Dockerfile
-      push: true
-      tags: |
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/notification-service:${{ steps.meta.outputs.tag }}
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/notification-service:latest
+  deploy-vm:
+    name: Deploy VM
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Auth GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-  - name: Build rag-service
-    uses: docker/build-push-action@v5
-    with:
-      context: .
-      file: apps/rag-service/Dockerfile
-      push: true
-      tags: |
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/rag-service:${{ steps.meta.outputs.tag }}
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/rag-service:latest
+      - name: Deploy via SSH
+        uses: google-github-actions/ssh-compute@v1
+        with:
+          instance_name: ${{ secrets.GCP_VM_INSTANCE }}
+          zone: ${{ secrets.GCP_VM_ZONE }}
+          ssh_private_key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+          command: |
+            cd /opt/denunciasat
+            gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+            export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
+            export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker compose ps
 
-  - name: Build frontend
-    uses: docker/build-push-action@v5
-    with:
-      context: frontend
-      file: frontend/Dockerfile
-      push: true
-      tags: |
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/frontend:${{ steps.meta.outputs.tag }}
-        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/frontend:latest
-```
-
-deploy-vm:
-name: Deploy VM
-needs: build-and-push
-runs-on: ubuntu-latest
-permissions:
-contents: read
-id-token: write
-
-```
-steps:
-  - name: Auth GCP
-    uses: google-github-actions/auth@v2
-    with:
-      workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-      service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-  - name: Deploy via SSH
-    uses: google-github-actions/ssh-compute@v1
-    with:
-      instance_name: ${{ secrets.GCP_VM_INSTANCE }}
-      zone: ${{ secrets.GCP_VM_ZONE }}
-      ssh_private_key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
-      command: |
-        cd /opt/denunciasat
-
-        gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
-
-        export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
-        export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
-
-        docker compose pull
-        docker compose up -d --remove-orphans
-
-        docker compose ps
-```
-
-verify:
-name: Verify
-needs: deploy-vm
-runs-on: ubuntu-latest
-
-```
-steps:
-  - run: |
-      curl -f ${{ secrets.APP_PUBLIC_URL }}/health
-```
+  verify:
+    name: Verify
+    needs: deploy-vm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Healthcheck
+        run: |
+          curl -f ${{ secrets.APP_PUBLIC_URL }}/health
