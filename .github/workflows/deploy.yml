@@ -49,8 +49,8 @@ jobs:
           file: apps/dashboard-api/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/dashboard-api:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/dashboard-api:latest
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/dashboard-api:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/dashboard-api:latest
 
       - name: Build chatbot-service
         uses: docker/build-push-action@v5
@@ -59,8 +59,8 @@ jobs:
           file: apps/chatbot-service/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/chatbot-service:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/chatbot-service:latest
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/chatbot-service:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/chatbot-service:latest
 
       - name: Build whatsapp-service
         uses: docker/build-push-action@v5
@@ -69,8 +69,8 @@ jobs:
           file: apps/whatsapp-service/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/whatsapp-service:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/whatsapp-service:latest
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/whatsapp-service:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/whatsapp-service:latest
 
       - name: Build document-service
         uses: docker/build-push-action@v5
@@ -79,8 +79,8 @@ jobs:
           file: apps/document-service/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/document-service:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/document-service:latest
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/document-service:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/document-service:latest
 
       - name: Build notification-service
         uses: docker/build-push-action@v5
@@ -89,8 +89,8 @@ jobs:
           file: apps/notification-service/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/notification-service:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/notification-service:latest
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/notification-service:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/notification-service:latest
 
       - name: Build rag-service
         uses: docker/build-push-action@v5
@@ -99,8 +99,8 @@ jobs:
           file: apps/rag-service/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/rag-service:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/rag-service:latest
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/rag-service:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/rag-service:latest
 
       - name: Build frontend
         uses: docker/build-push-action@v5
@@ -109,8 +109,8 @@ jobs:
           file: frontend/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/frontend:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/frontend:latest
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/frontend:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/frontend:latest
 
   deploy-vm:
     name: Deploy VM
