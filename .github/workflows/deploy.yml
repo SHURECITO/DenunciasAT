@@ -1,242 +1,168 @@
 name: Deploy DenunciasAT
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Tag de la imagen Docker (default: SHA corto)"
-        required: false
-        default: ""
+push:
+branches:
+- main
+workflow_dispatch:
 
 env:
-  GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
-  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-  REGISTRY: ${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev
-  REPO: denunciasat
+GCP_REGION: ${{ secrets.GCP_REGION }}
+GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev
 
 jobs:
-  # ─────────────────────────────────────────────────────────────
-  # Job 1: Build y push de todas las imágenes a Artifact Registry
-  # ─────────────────────────────────────────────────────────────
-  build-and-push:
-    name: Build & Push imágenes
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+build-and-push:
+name: Build & Push imágenes
+runs-on: ubuntu-latest
+permissions:
+contents: read
+id-token: write
 
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tag }}
+```
+outputs:
+  image_tag: ${{ steps.meta.outputs.tag }}
 
-    steps:
-      - name: Checkout código
-        uses: actions/checkout@v4
+steps:
+  - name: Checkout código
+    uses: actions/checkout@v4
 
-      - name: Determinar tag de imagen
-        id: meta
-        run: |
-          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
-            TAG="${{ github.event.inputs.image_tag }}"
-          else
-            TAG="${{ github.sha }}"
-            TAG="${TAG:0:8}"
-          fi
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "Usando tag: ${TAG}"
+  - name: Determinar tag
+    id: meta
+    run: |
+      TAG=${GITHUB_SHA::8}
+      echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-      - name: Autenticar en GCP (Workload Identity)
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+  - name: Auth GCP
+    uses: google-github-actions/auth@v2
+    with:
+      workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Configurar Docker para Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+  - name: Configurar Docker
+    run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+  - name: Buildx
+    uses: docker/setup-buildx-action@v3
 
-      # ── Servicios NestJS (monorepo compartido) ──
-      - name: Build dashboard-api
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/dashboard-api/Dockerfile
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/dashboard-api:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/dashboard-api:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/dashboard-api:cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/dashboard-api:cache,mode=max
+  # ========================
+  # BUILD SERVICES
+  # ========================
 
-      - name: Build chatbot-service
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/chatbot-service/Dockerfile
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/chatbot-service:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/chatbot-service:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/chatbot-service:cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/chatbot-service:cache,mode=max
+  - name: Build dashboard-api
+    uses: docker/build-push-action@v5
+    with:
+      context: .
+      file: apps/dashboard-api/Dockerfile
+      push: true
+      tags: |
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/dashboard-api:${{ steps.meta.outputs.tag }}
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/dashboard-api:latest
 
-      - name: Build whatsapp-service
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/whatsapp-service/Dockerfile
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/whatsapp-service:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/whatsapp-service:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/whatsapp-service:cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/whatsapp-service:cache,mode=max
+  - name: Build chatbot-service
+    uses: docker/build-push-action@v5
+    with:
+      context: .
+      file: apps/chatbot-service/Dockerfile
+      push: true
+      tags: |
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/chatbot-service:${{ steps.meta.outputs.tag }}
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/chatbot-service:latest
 
-      - name: Build document-service
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/document-service/Dockerfile
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/document-service:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/document-service:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/document-service:cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/document-service:cache,mode=max
+  - name: Build whatsapp-service
+    uses: docker/build-push-action@v5
+    with:
+      context: .
+      file: apps/whatsapp-service/Dockerfile
+      push: true
+      tags: |
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/whatsapp-service:${{ steps.meta.outputs.tag }}
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/whatsapp-service:latest
 
-      - name: Build notification-service
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/notification-service/Dockerfile
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/notification-service:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/notification-service:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/notification-service:cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/notification-service:cache,mode=max
+  - name: Build document-service
+    uses: docker/build-push-action@v5
+    with:
+      context: .
+      file: apps/document-service/Dockerfile
+      push: true
+      tags: |
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/document-service:${{ steps.meta.outputs.tag }}
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/document-service:latest
 
-      - name: Build rag-service
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/rag-service/Dockerfile
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/rag-service:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/rag-service:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/rag-service:cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/rag-service:cache,mode=max
+  - name: Build notification-service
+    uses: docker/build-push-action@v5
+    with:
+      context: .
+      file: apps/notification-service/Dockerfile
+      push: true
+      tags: |
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/notification-service:${{ steps.meta.outputs.tag }}
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/notification-service:latest
 
-      - name: Build frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: frontend
-          file: frontend/Dockerfile
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/frontend:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/frontend:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/frontend:cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPO }}/frontend:cache,mode=max
+  - name: Build rag-service
+    uses: docker/build-push-action@v5
+    with:
+      context: .
+      file: apps/rag-service/Dockerfile
+      push: true
+      tags: |
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/rag-service:${{ steps.meta.outputs.tag }}
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/rag-service:latest
 
-  # ─────────────────────────────────────────────────────────────
-  # Job 2: Deploy en VM vía SSH
-  # ─────────────────────────────────────────────────────────────
-  deploy-vm:
-    name: Deploy a VM GCP
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    environment: production
+  - name: Build frontend
+    uses: docker/build-push-action@v5
+    with:
+      context: frontend
+      file: frontend/Dockerfile
+      push: true
+      tags: |
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/frontend:${{ steps.meta.outputs.tag }}
+        ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/frontend:latest
+```
 
-    steps:
-      - name: Checkout código
-        uses: actions/checkout@v4
+deploy-vm:
+name: Deploy VM
+needs: build-and-push
+runs-on: ubuntu-latest
+permissions:
+contents: read
+id-token: write
 
-      - name: Autenticar en GCP
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+```
+steps:
+  - name: Auth GCP
+    uses: google-github-actions/auth@v2
+    with:
+      workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Copiar docker-compose.prod.yml a VM
-        uses: google-github-actions/ssh-compute@v1
-        with:
-          instance_name: ${{ secrets.GCP_VM_INSTANCE }}
-          zone: ${{ secrets.GCP_VM_ZONE }}
-          ssh_private_key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
-          command: |
-            mkdir -p /opt/denunciasat
+  - name: Deploy via SSH
+    uses: google-github-actions/ssh-compute@v1
+    with:
+      instance_name: ${{ secrets.GCP_VM_INSTANCE }}
+      zone: ${{ secrets.GCP_VM_ZONE }}
+      ssh_private_key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+      command: |
+        cd /opt/denunciasat
 
-      - name: Subir docker-compose.prod.yml
-        run: |
-          gcloud compute scp \
-            docker-compose.prod.yml \
-            ${{ secrets.GCP_VM_INSTANCE }}:/opt/denunciasat/docker-compose.prod.yml \
-            --zone=${{ secrets.GCP_VM_ZONE }}
+        gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
-      - name: Deploy en VM
-        uses: google-github-actions/ssh-compute@v1
-        with:
-          instance_name: ${{ secrets.GCP_VM_INSTANCE }}
-          zone: ${{ secrets.GCP_VM_ZONE }}
-          ssh_private_key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
-          command: |
-            set -e
-            cd /opt/denunciasat
+        export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
+        export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
 
-            # Autenticar Docker con Artifact Registry desde la VM
-            gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+        docker compose pull
+        docker compose up -d --remove-orphans
 
-            # Exportar tag para que docker compose lo use
-            export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
-            export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
-            export GCP_REGION=${{ env.GCP_REGION }}
+        docker compose ps
+```
 
-            # Actualizar y levantar servicios (pull + up sin rebuild)
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+verify:
+name: Verify
+needs: deploy-vm
+runs-on: ubuntu-latest
 
-            # Esperar y verificar servicios críticos
-            sleep 15
-            docker compose -f docker-compose.prod.yml ps
-            curl -sf http://localhost:8741/health || (echo "API no responde" && exit 1)
-
-            # Limpiar imágenes antiguas
-            docker image prune -f --filter "until=72h"
-
-            echo "Deploy completado — tag: ${IMAGE_TAG}"
-
-  # ─────────────────────────────────────────────────────────────
-  # Job 3: Verificación post-deploy
-  # ─────────────────────────────────────────────────────────────
-  verify:
-    name: Verificar deploy
-    needs: deploy-vm
-    runs-on: ubuntu-latest
-    environment: production
-
-    steps:
-      - name: Healthcheck externo
-        run: |
-          MAX_RETRIES=5
-          WAIT=10
-          for i in $(seq 1 $MAX_RETRIES); do
-            HTTP=$(curl -sf -o /dev/null -w "%{http_code}" \
-              ${{ secrets.APP_PUBLIC_URL }}/health 2>/dev/null || echo "000")
-            if [ "$HTTP" = "200" ]; then
-              echo "Healthcheck OK (intento ${i})"
-              exit 0
-            fi
-            echo "Intento ${i}/${MAX_RETRIES} — HTTP ${HTTP}, esperando ${WAIT}s..."
-            sleep $WAIT
-          done
-          echo "ERROR: API no responde después de ${MAX_RETRIES} intentos"
-          exit 1
+```
+steps:
+  - run: |
+      curl -f ${{ secrets.APP_PUBLIC_URL }}/health
+```
