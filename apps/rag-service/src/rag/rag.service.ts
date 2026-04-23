@@ -39,7 +39,7 @@ interface EvaluacionRegla {
   dependencias: string[];
 }
 
-interface CandidatoBusqueda {
+export interface CandidatoBusqueda {
   nombre: string;
   similitud: number;
   metadata: Record<string, unknown>;
