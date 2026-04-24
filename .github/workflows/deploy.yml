@@ -216,9 +216,9 @@ jobs:
             gcloud auth configure-docker ${{ env.REGISTRY }} --quiet &&
             export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }} &&
             export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }} &&
-            docker compose -f docker-compose.prod.yml pull &&
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans &&
-            docker compose -f docker-compose.prod.yml ps"
+            docker-compose -f docker-compose.prod.yml pull &&
+            docker-compose -f docker-compose.prod.yml up -d --remove-orphans &&
+            docker-compose -f docker-compose.prod.yml ps"
 
   # ── Verificación post-despliegue ───────────────────────────────────────────
   verify:
