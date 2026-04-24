@@ -245,7 +245,9 @@ export class WebhookController {
     if (event === 'qrcode.updated') {
       const base64 = payload.data?.qrcode?.base64 as string | undefined;
       if (base64) {
-        await this.redis.setex(REDIS_QR_KEY, QR_TTL_SEGUNDOS, base64);
+        await this.redis.setex(REDIS_QR_KEY, QR_TTL_SEGUNDOS, base64).catch((err: Error) => {
+          this.logger.warn(`No se pudo guardar QR en Redis: ${err.message}`);
+        });
         this.logger.debug(`QR actualizado en Redis [clave=${REDIS_QR_KEY}]`);
       } else {
         this.logger.warn('qrcode.updated recibido sin base64');
@@ -289,8 +291,8 @@ export class WebhookController {
 
     const esMediaSoportada = ['imageMessage', 'documentMessage'].includes(messageType);
 
-    // Ignorar si no hay texto Y no es un tipo de media soportado
-    if (!contenido && !esMediaSoportada) return { ok: true };
+    // Ignorar si no hay texto Y no hay media aprovechable
+    if (!contenido && (!esMediaSoportada || !mediaUrl)) return { ok: true };
 
     // Subir media a GCS inmediatamente antes de que expire la URL de Evolution API.
     // Hacemos esto ANTES del lock/cola porque la URL original expira en segundos.
@@ -317,32 +319,66 @@ export class WebhookController {
     };
 
     // Mutex por número: si ya hay un mensaje procesándose, encolar el actual y retornar.
-    // Esto evita respuestas duplicadas cuando el ciudadano envía varios mensajes a la vez.
+    // Todas las operaciones Redis están protegidas: si Redis no está disponible, se procesa
+    // el mensaje igualmente (sin mutex) antes de fallar silenciosamente.
     const lockKey  = `lock:${numero}`;
     const queueKey = `queue:${numero}`;
-    const yaProcesando = await this.redis.get(lockKey);
-    if (yaProcesando) {
-      await this.redis.lpush(queueKey, JSON.stringify(mensaje));
+
+    let redisDisponible = true;
+    let yaProcesando: string | null = null;
+    try {
+      yaProcesando = await this.redis.get(lockKey);
+    } catch (err) {
+      this.logger.warn(`[${this.maskPhone(numero)}] Redis.get falló — procesando sin mutex: ${(err as Error).message}`);
+      redisDisponible = false;
+    }
+
+    if (redisDisponible && yaProcesando) {
+      try {
+        await this.redis.lpush(queueKey, JSON.stringify(mensaje));
+      } catch (err) {
+        this.logger.warn(`[${this.maskPhone(numero)}] Redis.lpush falló — ignorando encolamiento: ${(err as Error).message}`);
+      }
       return { ok: true };
     }
 
-    await this.redis.set(lockKey, '1', 'EX', LOCK_TTL_SEGUNDOS);
+    if (redisDisponible) {
+      try {
+        await this.redis.set(lockKey, '1', 'EX', LOCK_TTL_SEGUNDOS);
+      } catch (err) {
+        this.logger.warn(`[${this.maskPhone(numero)}] Redis.set (lock) falló — continuando sin lock: ${(err as Error).message}`);
+        redisDisponible = false;
+      }
+    }
 
-    // Recolectar mensajes encolados mientras se procesa el principal
+    // Procesar el mensaje principal + drenar la cola
     const colaPendiente: MensajeEncolado[] = [];
     try {
       await this.procesarMensaje(mensaje);
 
-      let rawPendiente: string | null;
-      while ((rawPendiente = await this.redis.rpop(queueKey))) {
-        colaPendiente.push(JSON.parse(rawPendiente) as MensajeEncolado);
+      if (redisDisponible) {
+        try {
+          let rawPendiente: string | null;
+          while ((rawPendiente = await this.redis.rpop(queueKey))) {
+            try {
+              colaPendiente.push(JSON.parse(rawPendiente) as MensajeEncolado);
+            } catch {
+              // JSON corrupto en la cola — descartar el mensaje en lugar de crashear
+              this.logger.warn(`[${this.maskPhone(numero)}] Mensaje con JSON inválido en cola descartado`);
+            }
+          }
+        } catch (err) {
+          this.logger.warn(`[${this.maskPhone(numero)}] Redis.rpop falló — cola ignorada: ${(err as Error).message}`);
+        }
       }
     } finally {
-      // Liberar el lock ANTES de procesar la cola pendiente
-      await this.redis.del(lockKey);
+      if (redisDisponible) {
+        await this.redis.del(lockKey).catch((err: Error) => {
+          this.logger.warn(`[${this.maskPhone(numero)}] Redis.del (lock) falló: ${err.message}`);
+        });
+      }
     }
 
-    // Drenar la cola ya con el lock liberado
     for (const msgPendiente of colaPendiente) {
       await new Promise((r) => setTimeout(r, COLA_DELAY_MS));
       await this.procesarMensaje(msgPendiente);

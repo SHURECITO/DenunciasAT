@@ -31,36 +31,32 @@ export class EvolutionService {
 
     const url = `${this.baseUrl}/message/sendText/${this.instance}`;
     const body = { number, text };
+    const headers = { apikey: this.apiKey, 'Content-Type': 'application/json' };
 
     this.logger.debug(
       `Enviando mensaje a Evolution (numero=${this.maskNumber(number)}, endpoint=${url}, textoLen=${text.length})`,
     );
 
-    try {
-      const response = await axios.post(url, body, {
-        headers: {
-          apikey: this.apiKey,
-          'Content-Type': 'application/json',
-        },
-      });
-      this.logger.debug(`Mensaje enviado a Evolution (status=${response.status})`);
-    } catch (err) {
-      const error = err as AxiosError;
-      this.logger.warn(
-        `Error Evolution intento 1 (status=${error.response?.status ?? 'unknown'}, numero=${this.maskNumber(number)})`,
-      );
-
-      // Retry único después de 2 segundos
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      this.logger.warn(`Reintentando envío a Evolution (numero=${this.maskNumber(number)})`);
-
-      const retryResponse = await axios.post(url, body, {
-        headers: {
-          apikey: this.apiKey,
-          'Content-Type': 'application/json',
-        },
-      });
-      this.logger.debug(`Mensaje enviado a Evolution en retry (status=${retryResponse.status})`);
+    for (let intento = 1; intento <= 3; intento++) {
+      try {
+        const response = await axios.post(url, body, { headers, timeout: 10_000 });
+        this.logger.debug(`Mensaje enviado a Evolution en intento ${intento} (status=${response.status})`);
+        return;
+      } catch (err) {
+        const error = err as AxiosError;
+        this.logger.warn(
+          `Error Evolution intento ${intento}/3 (status=${error.response?.status ?? 'timeout/network'}, numero=${this.maskNumber(number)}): ${error.message}`,
+        );
+        if (intento < 3) {
+          await new Promise((r) => setTimeout(r, intento * 2000));
+        }
+      }
     }
+
+    // Todos los intentos fallaron — loguear y continuar sin propagar la excepción.
+    // El ciudadano no recibe respuesta en este mensaje, pero el webhook no crashea.
+    this.logger.error(
+      `No se pudo enviar mensaje a Evolution tras 3 intentos (numero=${this.maskNumber(number)}, textoLen=${text.length})`,
+    );
   }
 }

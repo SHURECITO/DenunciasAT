@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GeminiService, InferenciasService, ResultadoAdmisibilidad } from '@app/ai';
+import { GeminiService, InferenciasService, ResultadoAdmisibilidad, RespuestaChatbot } from '@app/ai';
 import { ConversacionService, DatosConfirmados, EstadoConversacionIA } from './conversacion.service';
 import { DashboardApiService } from './dashboard-api.service';
 import { RagApiService, RagTecnicoError } from './rag-api.service';
@@ -112,7 +112,14 @@ export class ChatbotService {
     };
 
     if (esNombreValido(extraidos.nombre)) {
-      merged.nombre = extraidos.nombre!.trim();
+      const nombreNorm = extraidos.nombre!.trim().toLowerCase();
+      if (nombreNorm === 'anonimo' || nombreNorm === 'anónimo' || nombreNorm === 'anonymous') {
+        // Gemini envió nombre='anonimo' en lugar de esAnonimo:true — normalizar aquí
+        merged.esAnonimo = true;
+        merged.nombre = undefined;
+      } else {
+        merged.nombre = extraidos.nombre!.trim();
+      }
     }
 
     if (typeof extraidos.esAnonimo === 'boolean') {
@@ -433,11 +440,22 @@ export class ChatbotService {
     }
 
     // Llamar a Gemini — el historial no incluye el mensaje actual todavía
-    const resultado = await this.gemini.procesarMensajeChatbot(
-      estado.historial,
-      estado.datosConfirmados as unknown as Record<string, unknown>,
-      mensajeEfectivo,
-    );
+    let resultado: RespuestaChatbot;
+    try {
+      resultado = await Promise.race<RespuestaChatbot>([
+        this.gemini.procesarMensajeChatbot(
+          estado.historial,
+          estado.datosConfirmados as unknown as Record<string, unknown>,
+          mensajeEfectivo,
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Gemini timeout tras 15 s')), 15_000),
+        ),
+      ]);
+    } catch (err) {
+      this.logger.error(`[${numero}] Gemini no disponible: ${(err as Error).message}`);
+      return this.responderErrorTecnico(estado, numero, mensajeEfectivo);
+    }
 
     // Deep merge: arrays se concatenan, el resto se sobrescribe
     if (resultado.datosExtraidos && Object.keys(resultado.datosExtraidos).length > 0) {
@@ -619,13 +637,18 @@ export class ChatbotService {
     numero: string,
     mensajeEfectivo: string,
   ): Promise<string> {
+    estado.intentosFallidos = (estado.intentosFallidos ?? 0) + 1;
     const timestamp = new Date().toISOString();
+    const respuesta =
+      estado.intentosFallidos >= 3
+        ? 'Estoy teniendo problemas técnicos persistentes 😔 Por favor comunícate directamente con el despacho del concejal Andrés Tobón. Puedes escribir *reiniciar* para comenzar de nuevo cuando el servicio esté disponible.'
+        : MSG_ERROR_TECNICO;
     estado.historial.push(
       { rol: 'user', contenido: mensajeEfectivo, timestamp },
-      { rol: 'assistant', contenido: MSG_ERROR_TECNICO, timestamp: new Date().toISOString() },
+      { rol: 'assistant', contenido: respuesta, timestamp: new Date().toISOString() },
     );
     await this.conversacion.setEstado(numero, estado);
-    return MSG_ERROR_TECNICO;
+    return respuesta;
   }
 
   private async actualizarClasificacionConRag(
@@ -746,7 +769,13 @@ export class ChatbotService {
       return admisibilidad.mensajeUsuario || MSG_IMPROCEDENTE_BLOQUEO;
     }
 
-    // BUG 1: esAnonimo es true ÚNICAMENTE si Gemini lo seteó explícitamente
+    // Normalizar anonimato: cubre el caso en que Gemini envió nombre='anonimo' sin el flag
+    const nombreNormRad = (d.nombre ?? '').toLowerCase().trim();
+    if (nombreNormRad === 'anonimo' || nombreNormRad === 'anónimo') {
+      d.esAnonimo = true;
+      d.nombre = undefined;
+      d.cedula = 'ANONIMO';
+    }
     const esAnonimo = d.esAnonimo === true;
     const nombreFinal = esAnonimo ? 'Anónimo' : capitalizarNombre(d.nombre ?? 'Sin nombre');
 
@@ -846,6 +875,8 @@ export class ChatbotService {
         } else {
           this.logger.log(`[${numero}] Historial guardado correctamente (${estado.historial.length} mensajes)`);
         }
+      }).catch((err: unknown) => {
+        this.logger.error(`[${numero}] Error inesperado guardando historial: ${(err as Error).message}`);
       });
 
       return (
@@ -866,6 +897,11 @@ export class ChatbotService {
 
   private async cerrarCasoEspecial(estado: EstadoConversacionIA, numero: string): Promise<string> {
     const d = estado.datosConfirmados;
+    const nombreNormEsp = (d.nombre ?? '').toLowerCase().trim();
+    if (nombreNormEsp === 'anonimo' || nombreNormEsp === 'anónimo') {
+      d.esAnonimo = true;
+      d.nombre = undefined;
+    }
     const esAnonimo = d.esAnonimo === true;
     const nombreFinal = esAnonimo ? 'Anónimo' : capitalizarNombre(d.nombre ?? 'Sin nombre');
 
@@ -894,6 +930,11 @@ export class ChatbotService {
       d.etapa = 'especial_cerrado';
     } catch (err) {
       this.logger.error(`[${numero}] Error creando denuncia especial:`, err);
+      d.etapa = 'recopilando';
+      return (
+        'Tuve un problema técnico al registrar tu caso 😔 ' +
+        'Por favor intenta de nuevo en unos minutos o comunícate directamente con el despacho.'
+      );
     }
 
     return (
@@ -934,7 +975,7 @@ export class ChatbotService {
     if (!d.nombre || !d.telefono) return;
 
     try {
-      const { id } = await this.dashboardApi.upsertParcial({
+      const respParcial = await this.dashboardApi.upsertParcial({
         nombreCiudadano: capitalizarNombre(d.nombre),
         telefono: numero,
         cedula: d.esAnonimo === true ? 'ANONIMO' : d.cedula,
@@ -943,8 +984,12 @@ export class ChatbotService {
         direccion: d.direccion,
         descripcion: d.descripcion,
       });
-      estado.parcialId = id;
-      this.logger.log(`[${numero}] Parcial guardado/actualizado, id=${id}`);
+      if (typeof respParcial?.id === 'number') {
+        estado.parcialId = respParcial.id;
+        this.logger.log(`[${numero}] Parcial guardado/actualizado, id=${respParcial.id}`);
+      } else {
+        this.logger.warn(`[${numero}] upsertParcial respondió sin id válido, parcialId no asignado`);
+      }
     } catch (err) {
       this.logger.warn(`[${numero}] Error guardando parcial: ${(err as Error).message}`);
     }

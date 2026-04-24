@@ -45,7 +45,11 @@ describe('ChatbotClientService', () => {
 
       expect(mockedAxios.post).toHaveBeenCalledWith(
         'http://chatbot-service:3002/procesar',
-        { numero: '573001234567', mensaje: 'Hola', tipo: 'conversation' },
+        { numero: '573001234567', mensaje: 'Hola', tipo: 'conversation', mediaUrl: undefined },
+        {
+          headers: { 'x-internal-key': '', 'x-internal-service': 'whatsapp' },
+          timeout: 15000,
+        },
       );
       expect(resultado).toEqual(respuestaEsperada);
     });

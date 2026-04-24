@@ -1,9 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { WebhookController } from './webhook.controller';
 import { EvolutionService } from './evolution.service';
 import { ChatbotClientService } from './chatbot-client.service';
+import { GcsStorageService } from '@app/storage';
 
 const REDIS_CLIENT = 'REDIS_CLIENT';
+
+// Req stub sin HMAC — webhookHmacSecret estará vacío en tests, así que la validación se omite
+const fakeReq = { rawBody: undefined } as any;
 
 describe('WebhookController', () => {
   let controller: WebhookController;
@@ -27,6 +32,16 @@ describe('WebhookController', () => {
             procesar: jest.fn().mockResolvedValue({ respuesta: 'Respuesta del bot' }),
           },
         },
+        {
+          provide: GcsStorageService,
+          useValue: { uploadFromUrl: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockImplementation((key: string, def?: string) => def ?? ''),
+          },
+        },
         { provide: REDIS_CLIENT, useValue: redisMock },
       ],
     }).compile();
@@ -46,7 +61,7 @@ describe('WebhookController', () => {
         data: { qrcode: { base64: qrBase64 } },
       };
 
-      const resultado = await controller.handleWebhook(payload);
+      const resultado = await controller.handleWebhook(payload, fakeReq, undefined, undefined);
 
       expect(redisMock.setex).toHaveBeenCalledWith(
         'evolution:qr',
@@ -62,7 +77,7 @@ describe('WebhookController', () => {
         data: { qrcode: {} },
       };
 
-      const resultado = await controller.handleWebhook(payload);
+      const resultado = await controller.handleWebhook(payload, fakeReq, undefined, undefined);
 
       expect(redisMock.setex).not.toHaveBeenCalled();
       expect(resultado).toEqual({ ok: true });
@@ -75,14 +90,14 @@ describe('WebhookController', () => {
     it('debe ignorar connection.update y retornar ok', async () => {
       const payload = { event: 'connection.update', data: {} };
 
-      const resultado = await controller.handleWebhook(payload);
+      const resultado = await controller.handleWebhook(payload, fakeReq, undefined, undefined);
 
       expect(chatbotClientService.procesar).not.toHaveBeenCalled();
       expect(resultado).toEqual({ ok: true });
     });
 
     it('debe ignorar eventos desconocidos', async () => {
-      const resultado = await controller.handleWebhook({ event: 'otro.evento' });
+      const resultado = await controller.handleWebhook({ event: 'otro.evento' }, fakeReq, undefined, undefined);
 
       expect(chatbotClientService.procesar).not.toHaveBeenCalled();
       expect(resultado).toEqual({ ok: true });
@@ -98,7 +113,7 @@ describe('WebhookController', () => {
         },
       };
 
-      const resultado = await controller.handleWebhook(payload);
+      const resultado = await controller.handleWebhook(payload, fakeReq, undefined, undefined);
 
       expect(chatbotClientService.procesar).not.toHaveBeenCalled();
       expect(resultado).toEqual({ ok: true });
@@ -114,7 +129,7 @@ describe('WebhookController', () => {
         },
       };
 
-      const resultado = await controller.handleWebhook(payload);
+      const resultado = await controller.handleWebhook(payload, fakeReq, undefined, undefined);
 
       expect(chatbotClientService.procesar).not.toHaveBeenCalled();
       expect(resultado).toEqual({ ok: true });
@@ -136,12 +151,13 @@ describe('WebhookController', () => {
     it('debe procesar mensaje y enviar respuesta (JID @s.whatsapp.net)', async () => {
       const payload = buildPayload('573001234567@s.whatsapp.net', 'Hola');
 
-      const resultado = await controller.handleWebhook(payload);
+      const resultado = await controller.handleWebhook(payload, fakeReq, undefined, undefined);
 
       expect(chatbotClientService.procesar).toHaveBeenCalledWith(
         '573001234567',
         'Hola',
         'conversation',
+        undefined,
       );
       expect(evolutionService.sendText).toHaveBeenCalledWith(
         '573001234567@s.whatsapp.net',
@@ -151,15 +167,16 @@ describe('WebhookController', () => {
     });
 
     it('debe extraer número limpio para el chatbot al recibir @lid JID', async () => {
-      const payload = buildPayload('181011514171514@lid', 'Hola');
+      // 13 dígitos: no supera el umbral (>13) que activa resolverNumeroLid vía Evolution API
+      const payload = buildPayload('5730012345678@lid', 'Hola');
 
-      await controller.handleWebhook(payload);
+      await controller.handleWebhook(payload, fakeReq, undefined, undefined);
 
-      // El número limpio va al chatbot
       expect(chatbotClientService.procesar).toHaveBeenCalledWith(
-        '181011514171514',
+        '5730012345678',
         'Hola',
         'conversation',
+        undefined,
       );
     });
 
@@ -173,12 +190,13 @@ describe('WebhookController', () => {
         },
       };
 
-      await controller.handleWebhook(payload);
+      await controller.handleWebhook(payload, fakeReq, undefined, undefined);
 
       expect(chatbotClientService.procesar).toHaveBeenCalledWith(
         '573001234567',
         'Texto largo',
         'extendedTextMessage',
+        undefined,
       );
     });
 
@@ -188,7 +206,7 @@ describe('WebhookController', () => {
       });
       const payload = buildPayload('573001234567@s.whatsapp.net', 'Hola');
 
-      await controller.handleWebhook(payload);
+      await controller.handleWebhook(payload, fakeReq, undefined, undefined);
 
       expect(evolutionService.sendText).not.toHaveBeenCalled();
     });
@@ -199,8 +217,7 @@ describe('WebhookController', () => {
       );
       const payload = buildPayload('573001234567@s.whatsapp.net', 'Hola');
 
-      // No debe lanzar excepción
-      const resultado = await controller.handleWebhook(payload);
+      const resultado = await controller.handleWebhook(payload, fakeReq, undefined, undefined);
 
       expect(resultado).toEqual({ ok: true });
     });
@@ -211,7 +228,7 @@ describe('WebhookController', () => {
       );
       const payload = buildPayload('573001234567@s.whatsapp.net', 'Hola');
 
-      const resultado = await controller.handleWebhook(payload);
+      const resultado = await controller.handleWebhook(payload, fakeReq, undefined, undefined);
 
       expect(resultado).toEqual({ ok: true });
     });

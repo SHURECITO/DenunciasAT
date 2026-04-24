@@ -2,6 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 
+// Timeout máximo para llamadas HTTP al dashboard-api — evita bloqueos indefinidos
+const HTTP_TIMEOUT_MS = 10_000;
+
 interface CreateDenunciaPayload {
   nombreCiudadano: string;
   cedula: string;
@@ -83,7 +86,7 @@ export class DashboardApiService {
     const res = await axios.post<{ id: number; radicado: string }>(
       `${this.baseUrl}/denuncias`,
       payload,
-      { headers: this.headers },
+      { headers: this.headers, timeout: HTTP_TIMEOUT_MS },
     );
     return res.data;
   }
@@ -92,7 +95,7 @@ export class DashboardApiService {
     const res = await axios.post<{ id: number; radicado: string }>(
       `${this.baseUrl}/denuncias/parcial`,
       payload,
-      { headers: this.headers },
+      { headers: this.headers, timeout: HTTP_TIMEOUT_MS },
     );
     return res.data;
   }
@@ -101,7 +104,7 @@ export class DashboardApiService {
     try {
       const res = await axios.get<{ nombreCiudadano: string; cedula: string; esAnonimo: boolean } | null>(
         `${this.baseUrl}/denuncias/usuario/${telefono}`,
-        { headers: this.headers },
+        { headers: this.headers, timeout: HTTP_TIMEOUT_MS },
       );
       return res.data ?? null;
     } catch {
@@ -118,7 +121,7 @@ export class DashboardApiService {
     try {
       const res = await axios.get<ParcialExistente | null>(
         `${this.baseUrl}/denuncias/parcial/telefono/${telefono}`,
-        { headers: this.headers },
+        { headers: this.headers, timeout: HTTP_TIMEOUT_MS },
       );
       return res.data ?? null;
     } catch {
@@ -137,7 +140,7 @@ export class DashboardApiService {
     const res = await axios.patch<{ id: number; radicado: string }>(
       `${this.baseUrl}/denuncias/${id}`,
       { ...payload, incompleta: false },
-      { headers: this.headers },
+      { headers: this.headers, timeout: HTTP_TIMEOUT_MS },
     );
     return { id: res.data.id, radicado: res.data.radicado };
   }
@@ -146,15 +149,19 @@ export class DashboardApiService {
     await axios.post(
       `${this.baseUrl}/mensajes/${denunciaId}`,
       payload,
-      { headers: this.headers },
+      { headers: this.headers, timeout: HTTP_TIMEOUT_MS },
     );
   }
 
   async eliminarDenuncia(id: number): Promise<void> {
     try {
-      await axios.post(`${this.baseUrl}/denuncias/${id}/cancelar-parcial`, {}, { headers: this.headers });
+      await axios.post(
+        `${this.baseUrl}/denuncias/${id}/cancelar-parcial`,
+        {},
+        { headers: this.headers, timeout: HTTP_TIMEOUT_MS },
+      );
     } catch (err) {
-      if ((err as any).response?.status !== 404) {
+      if ((err as { response?: { status: number } }).response?.status !== 404) {
         throw err;
       }
     }
@@ -164,7 +171,7 @@ export class DashboardApiService {
     await axios.post(
       `${this.baseUrl}/denuncias/${denunciaId}/generar`,
       {},
-      { headers: this.headers },
+      { headers: this.headers, timeout: HTTP_TIMEOUT_MS },
     );
   }
 }

@@ -48,6 +48,10 @@ export class DocumentService {
       return;
     }
 
+    // Declarado fuera del try para que el bloque finally pueda limpiar el archivo temporal
+    let rutaArchivo: string | null = null;
+    let archivoSubido = false;
+
     try {
       const dependencia = denuncia.dependenciaAsignada ?? 'la entidad competente';
       const resumen     = denuncia.descripcionResumen ?? denuncia.descripcion.substring(0, 200);
@@ -131,7 +135,7 @@ export class DocumentService {
       }
 
       // Construir el .docx en disco temporal
-      const rutaArchivo  = join(DOCS_DIR, `${denuncia.radicado}.docx`);
+      rutaArchivo        = join(DOCS_DIR, `${denuncia.radicado}.docx`);
       const objectName   = `${denuncia.radicado}.docx`;
       await this.builder.construir({
         denuncia,
@@ -149,16 +153,13 @@ export class DocumentService {
       const validacion  = this.validarDocx(docxBuffer, denuncia);
       if (!validacion.ok) {
         this.logger.error(`Documento inválido para denuncia #${denunciaId}: ${validacion.reason}`);
-        await unlink(rutaArchivo).catch(() => undefined);
         await this.dashboardApi.notificarDocumentoError(denunciaId);
-        return;
+        return; // finally se encarga de eliminar rutaArchivo
       }
 
-      // Subir .docx a MinIO y eliminar archivo temporal local
+      // Subir .docx a GCS
       await this.storage.uploadBuffer(this.bucketDocumentos, objectName, docxBuffer, DOCX_CONTENT_TYPE);
-      await unlink(rutaArchivo).catch((err) =>
-        this.logger.warn(`No se pudo eliminar archivo temporal ${rutaArchivo}: ${(err as Error).message}`),
-      );
+      archivoSubido = true;
 
       // Notificar a dashboard-api con el object name (bucket implícito en la config)
       this.rutasGeneradas.set(denunciaId, objectName);
@@ -167,6 +168,18 @@ export class DocumentService {
     } catch (err) {
       this.logger.error(`Error generando documento para denuncia #${denunciaId}:`, err);
       await this.dashboardApi.notificarDocumentoError(denunciaId);
+    } finally {
+      // Eliminar archivo temporal siempre, tanto en éxito como en error
+      if (rutaArchivo) {
+        await unlink(rutaArchivo).catch((e) => {
+          if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+            this.logger.warn(`No se pudo eliminar archivo temporal ${rutaArchivo}: ${(e as Error).message}`);
+          }
+        });
+        if (archivoSubido) {
+          this.logger.debug(`Archivo temporal eliminado tras subida exitosa: ${rutaArchivo}`);
+        }
+      }
     }
   }
 

@@ -34,7 +34,7 @@ describe('EvolutionService', () => {
 
   describe('sendText', () => {
     it('debe enviar texto al endpoint correcto de Evolution API', async () => {
-      mockedAxios.post = jest.fn().mockResolvedValue({ data: { key: { id: 'abc' } } });
+      mockedAxios.post = jest.fn().mockResolvedValue({ data: { key: { id: 'abc' } }, status: 200 });
 
       await service.sendText('573001234567@s.whatsapp.net', 'Hola mundo');
 
@@ -46,12 +46,13 @@ describe('EvolutionService', () => {
             apikey: 'test-api-key',
             'Content-Type': 'application/json',
           },
+          timeout: 10_000,
         },
       );
     });
 
     it('debe eliminar el sufijo @s.whatsapp.net del número', async () => {
-      mockedAxios.post = jest.fn().mockResolvedValue({ data: {} });
+      mockedAxios.post = jest.fn().mockResolvedValue({ data: {}, status: 200 });
 
       await service.sendText('573001234567@s.whatsapp.net', 'test');
 
@@ -59,26 +60,26 @@ describe('EvolutionService', () => {
       expect(callArgs[1].number).toBe('573001234567');
     });
 
-    it('debe eliminar el sufijo @lid del número', async () => {
-      mockedAxios.post = jest.fn().mockResolvedValue({ data: {} });
+    it('debe pasar el JID @lid completo a Evolution API', async () => {
+      mockedAxios.post = jest.fn().mockResolvedValue({ data: {}, status: 200 });
 
       await service.sendText('181011514171514@lid', 'test');
 
       const callArgs = (mockedAxios.post as jest.Mock).mock.calls[0];
-      expect(callArgs[1].number).toBe('181011514171514');
+      expect(callArgs[1].number).toBe('181011514171514@lid');
     });
 
-    it('debe eliminar el sufijo @g.us (grupos)', async () => {
-      mockedAxios.post = jest.fn().mockResolvedValue({ data: {} });
+    it('debe pasar el JID @g.us completo a Evolution API', async () => {
+      mockedAxios.post = jest.fn().mockResolvedValue({ data: {}, status: 200 });
 
       await service.sendText('120363123456@g.us', 'test');
 
       const callArgs = (mockedAxios.post as jest.Mock).mock.calls[0];
-      expect(callArgs[1].number).toBe('120363123456');
+      expect(callArgs[1].number).toBe('120363123456@g.us');
     });
 
     it('debe dejar pasar número sin sufijo JID', async () => {
-      mockedAxios.post = jest.fn().mockResolvedValue({ data: {} });
+      mockedAxios.post = jest.fn().mockResolvedValue({ data: {}, status: 200 });
 
       await service.sendText('573001234567', 'test');
 
@@ -86,12 +87,12 @@ describe('EvolutionService', () => {
       expect(callArgs[1].number).toBe('573001234567');
     });
 
-    it('debe propagar el error si Evolution API retorna error', async () => {
+    it('no debe propagar el error si Evolution API falla en todos los intentos', async () => {
       mockedAxios.post = jest.fn().mockRejectedValue(new Error('Network error'));
 
-      await expect(service.sendText('573001234567', 'test')).rejects.toThrow(
-        'Network error',
-      );
-    });
+      // No debe rechazar — el servicio absorbe el error tras 3 reintentos
+      await expect(service.sendText('573001234567', 'test')).resolves.toBeUndefined();
+      expect(mockedAxios.post).toHaveBeenCalledTimes(3);
+    }, 30_000);
   });
 });

@@ -12,8 +12,31 @@ env:
   REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev
 
 jobs:
+  test:
+    name: Verificar tipos y tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Verificar tipos TypeScript
+        run: npx tsc --noEmit --project tsconfig.json
+
+      - name: Ejecutar tests (whatsapp-service)
+        run: npx jest --testPathPattern="apps/whatsapp-service" --passWithNoTests --forceExit
+
   build-and-push:
     name: Build & Push imágenes
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -149,6 +172,18 @@ jobs:
     needs: deploy-vm
     runs-on: ubuntu-latest
     steps:
-      - name: Healthcheck
+      - name: Esperar estabilización de servicios
+        run: sleep 20
+
+      - name: Healthcheck dashboard-api
         run: |
-          curl -f ${{ secrets.APP_PUBLIC_URL }}/health
+          for i in 1 2 3 4 5; do
+            if curl -sf ${{ secrets.APP_PUBLIC_URL }}/health; then
+              echo "dashboard-api OK"
+              exit 0
+            fi
+            echo "Intento $i fallido — esperando 10s..."
+            sleep 10
+          done
+          echo "dashboard-api no respondió tras 5 intentos"
+          exit 1
