@@ -45,3 +45,9 @@ infrastructure/documentos/
 # SOLO credenciales GCP
 key.json
 *credentials*.json
+
+github-deploy-key
+github-deploy-key.pub
+
+clean-key
+clean-key.pub
