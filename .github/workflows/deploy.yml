@@ -179,12 +179,12 @@ jobs:
       - name: Verificar secretos de deploy
         run: |
           ERRORS=0
-          if [ -z "$INSTANCE" ]; then
-            echo "::error::Secreto GCP_VM_INSTANCE no configurado"
+          if [ -z "$VM_USER" ]; then
+            echo "::error::Secreto GCP_VM_USER no configurado"
             ERRORS=$((ERRORS+1))
           fi
-          if [ -z "$ZONE" ]; then
-            echo "::error::Secreto GCP_VM_ZONE no configurado"
+          if [ -z "$VM_HOST" ]; then
+            echo "::error::Secreto GCP_VM_HOST no configurado"
             ERRORS=$((ERRORS+1))
           fi
           if [ -z "$SSH_KEY" ]; then
@@ -194,31 +194,29 @@ jobs:
           [ "$ERRORS" -gt 0 ] && exit 1
           echo "Secretos de deploy presentes — continuando"
         env:
-          INSTANCE: ${{ secrets.GCP_VM_INSTANCE }}
-          ZONE: ${{ secrets.GCP_VM_ZONE }}
+          VM_USER: ${{ secrets.GCP_VM_USER }}
+          VM_HOST: ${{ secrets.GCP_VM_HOST }}
           SSH_KEY: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
 
-      - name: Auth GCP
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Deploy via SSH (direct)
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GCP_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
 
-      - name: Deploy via SSH
-        uses: google-github-actions/ssh-compute@v1
-        with:
-          instance_name: ${{ secrets.GCP_VM_INSTANCE }}
-          zone: ${{ secrets.GCP_VM_ZONE }}
-          ssh_private_key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
-          command: >
-            bash -c "set -euo pipefail &&
-            cd /opt/denunciasat &&
-            gcloud auth configure-docker ${{ env.REGISTRY }} --quiet &&
-            export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }} &&
-            export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }} &&
-            docker-compose -f docker-compose.prod.yml pull &&
-            docker-compose -f docker-compose.prod.yml up -d --remove-orphans &&
-            docker-compose -f docker-compose.prod.yml ps"
+          ssh -o StrictHostKeyChecking=no ${{ secrets.GCP_VM_USER }}@${{ secrets.GCP_VM_HOST }} << 'EOF'
+            set -e
+            cd /opt/denunciasat
+
+            gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+            export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
+            export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
+
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml ps
+          EOF
 
   # ── Verificación post-despliegue ───────────────────────────────────────────
   verify:
