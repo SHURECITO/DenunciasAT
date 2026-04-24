@@ -34,7 +34,7 @@ jobs:
         run: npx tsc --noEmit --project tsconfig.json
 
       - name: Ejecutar tests (whatsapp-service)
-        run: npx jest --testPathPattern="apps/whatsapp-service" --passWithNoTests --forceExit
+        run: npx jest --testPathPatterns="apps/whatsapp-service" --passWithNoTests --forceExit
 
   # ── Build del frontend (valida TS + JSX + rutas API) ───────────────────────
   frontend-build:
