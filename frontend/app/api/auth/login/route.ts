@@ -28,7 +28,8 @@ export async function POST(req: NextRequest) {
   const response = NextResponse.json({ ok: true });
   response.cookies.set('token', data.access_token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    // HTTP deployment — activar cuando se configure TLS en el proxy
+    secure: process.env.COOKIE_SECURE === 'true',
     sameSite: 'strict',
     path: '/',
     maxAge: 60 * 60 * 8, // 8h
