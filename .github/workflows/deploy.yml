@@ -210,15 +210,15 @@ jobs:
           instance_name: ${{ secrets.GCP_VM_INSTANCE }}
           zone: ${{ secrets.GCP_VM_ZONE }}
           ssh_private_key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
-          command: |
-            set -euo pipefail
+          command: |-
+            bash -c 'set -euo pipefail
             cd /opt/denunciasat
             gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
             export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
             export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            docker compose -f docker-compose.prod.yml ps
+            docker compose -f docker-compose.prod.yml ps'
 
   # ── Verificación post-despliegue ───────────────────────────────────────────
   verify:
