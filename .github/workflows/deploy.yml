@@ -176,6 +176,28 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - name: Verificar secretos de deploy
+        run: |
+          ERRORS=0
+          if [ -z "$INSTANCE" ]; then
+            echo "::error::Secreto GCP_VM_INSTANCE no configurado"
+            ERRORS=$((ERRORS+1))
+          fi
+          if [ -z "$ZONE" ]; then
+            echo "::error::Secreto GCP_VM_ZONE no configurado"
+            ERRORS=$((ERRORS+1))
+          fi
+          if [ -z "$SSH_KEY" ]; then
+            echo "::error::Secreto GCP_SSH_PRIVATE_KEY no configurado"
+            ERRORS=$((ERRORS+1))
+          fi
+          [ "$ERRORS" -gt 0 ] && exit 1
+          echo "Secretos de deploy presentes — continuando"
+        env:
+          INSTANCE: ${{ secrets.GCP_VM_INSTANCE }}
+          ZONE: ${{ secrets.GCP_VM_ZONE }}
+          SSH_KEY: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+
       - name: Auth GCP
         uses: google-github-actions/auth@v2
         with:
