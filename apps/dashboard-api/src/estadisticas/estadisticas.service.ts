@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
 import { Response } from 'express';
 import * as ExcelJS from 'exceljs';
@@ -7,6 +7,8 @@ const PDFDocument = require('pdfkit') as typeof import('pdfkit');
 
 @Injectable()
 export class EstadisticasService implements OnModuleInit {
+  private readonly logger = new Logger(EstadisticasService.name);
+
   constructor(private readonly dataSource: DataSource) {}
 
   async onModuleInit() {
@@ -30,7 +32,7 @@ export class EstadisticasService implements OnModuleInit {
       `);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn('Vistas materializadas (ya existen o error menor):', msg);
+      this.logger.warn(`Vistas materializadas (ya existen o error menor): ${msg}`);
     } finally {
       await runner.release();
     }

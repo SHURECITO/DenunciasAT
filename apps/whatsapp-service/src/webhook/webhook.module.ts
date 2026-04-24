@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { StorageModule } from '@app/storage';
@@ -29,9 +29,10 @@ import { ChatbotClientService } from './chatbot-client.service';
             return targetErrors.some((e) => err.message.includes(e));
           },
         });
+        const redisLogger = new Logger('RedisClient');
         client.on('error', (err) => {
           // No propagar — el webhook no debe caer por Redis
-          console.error(`[REDIS_CLIENT] Redis error: ${err.message}`);
+          redisLogger.error(`Redis error: ${err.message}`);
         });
         return client;
       },

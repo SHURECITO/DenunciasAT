@@ -12,8 +12,9 @@ env:
   REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev
 
 jobs:
-  test:
-    name: Verificar tipos y tests
+  # ── Verificación de tipos e integración del backend ────────────────────────
+  backend-check:
+    name: Backend — tipos y tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout código
@@ -24,6 +25,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Instalar dependencias
         run: npm ci
@@ -34,9 +36,36 @@ jobs:
       - name: Ejecutar tests (whatsapp-service)
         run: npx jest --testPathPattern="apps/whatsapp-service" --passWithNoTests --forceExit
 
+  # ── Build del frontend (valida TS + JSX + rutas API) ───────────────────────
+  frontend-build:
+    name: Frontend — build y tipos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build Next.js
+        working-directory: frontend
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8741
+          NEXT_PUBLIC_WS_URL: http://localhost:8741
+
+  # ── Build y push de imágenes Docker ────────────────────────────────────────
   build-and-push:
     name: Build & Push imágenes
-    needs: test
+    needs: [backend-check, frontend-build]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -138,6 +167,7 @@ jobs:
             NEXT_PUBLIC_WS_URL=${{ secrets.NEXT_PUBLIC_WS_URL }}
             NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
 
+  # ── Despliegue en la VM ─────────────────────────────────────────────────────
   deploy-vm:
     name: Deploy VM
     needs: build-and-push
@@ -159,6 +189,7 @@ jobs:
           zone: ${{ secrets.GCP_VM_ZONE }}
           ssh_private_key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
           command: |
+            set -euo pipefail
             cd /opt/denunciasat
             gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
             export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
@@ -167,23 +198,22 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker compose -f docker-compose.prod.yml ps
 
+  # ── Verificación post-despliegue ───────────────────────────────────────────
   verify:
     name: Verify
     needs: deploy-vm
     runs-on: ubuntu-latest
     steps:
-      - name: Esperar estabilización de servicios
-        run: sleep 20
-
-      - name: Healthcheck dashboard-api
+      - name: Healthcheck dashboard-api con reintentos
         run: |
-          for i in 1 2 3 4 5; do
-            if curl -sf ${{ secrets.APP_PUBLIC_URL }}/health; then
+          for i in $(seq 1 8); do
+            echo "Intento $i/8..."
+            if curl -sf --max-time 10 "${{ secrets.APP_PUBLIC_URL }}/health"; then
               echo "dashboard-api OK"
               exit 0
             fi
-            echo "Intento $i fallido — esperando 10s..."
-            sleep 10
+            echo "Intento $i fallido — esperando 15s..."
+            sleep 15
           done
-          echo "dashboard-api no respondió tras 5 intentos"
+          echo "::error::dashboard-api no respondió tras 8 intentos (2 min)"
           exit 1

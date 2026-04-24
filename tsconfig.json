@@ -29,5 +29,6 @@
       "@app/storage": ["libs/storage/src"],
       "@app/storage/*": ["libs/storage/src/*"]
     }
-  }
+  },
+  "exclude": ["frontend", "node_modules", "dist"]
 }
