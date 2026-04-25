@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import DenunciaEstadoBadge from '@/components/DenunciaEstadoBadge';
 import ChatPanel from '@/components/ChatPanel';
 import ModalEditarDenuncia from '@/components/ModalEditarDenuncia';
+import ModalFeedback from '@/components/ModalFeedback';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { type Denuncia, type DenunciaEstado, type Mensaje, type RespuestaDependencia } from '@/lib/api';
 
@@ -47,6 +48,20 @@ interface NuevoMensajeEvent {
   mensaje: Mensaje;
 }
 
+interface FeedbackEntry {
+  id: string;
+  dependenciaOriginal: string;
+  dependenciaCorregida: string | null;
+  dependenciaCorrecta: boolean;
+  calidadHechos: number;
+  comentarioHechos: string | null;
+  asuntoCorrect: boolean;
+  asuntoCorregido: string | null;
+  feedbackLibre: string | null;
+  fechaCreacion: string;
+  usuario: { nombre: string; email: string } | null;
+}
+
 export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) {
   const router = useRouter();
   const [denuncia, setDenuncia] = useState(initial);
@@ -55,6 +70,10 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showModalEditar, setShowModalEditar] = useState(false);
+  const [showModalFeedback, setShowModalFeedback] = useState(false);
+  const [activeTab, setActiveTab] = useState<'info' | 'feedback'>('info');
+  const [feedbackList, setFeedbackList] = useState<FeedbackEntry[]>([]);
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
   const [reintentandoDoc, setReintentandoDoc] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -223,13 +242,17 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
   }
 
   async function toggleDocumento() {
+    if (!denuncia.documentoRevisado) {
+      setShowModalFeedback(true);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       const res = await fetch(`/api/denuncias/${denuncia.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentoRevisado: !denuncia.documentoRevisado }),
+        body: JSON.stringify({ documentoRevisado: false }),
       });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const updated: Denuncia = await res.json();
@@ -238,6 +261,20 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
       setError(e instanceof Error ? e.message : 'Error al actualizar');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadFeedback() {
+    setLoadingFeedback(true);
+    try {
+      const res = await fetch(`/api/feedback/denuncia/${denuncia.id}`);
+      if (!res.ok) return;
+      const data: FeedbackEntry[] = await res.json();
+      setFeedbackList(data);
+    } catch {
+      // silencioso
+    } finally {
+      setLoadingFeedback(false);
     }
   }
 
@@ -415,6 +452,104 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
 
         {/* Columna derecha — 40% */}
         <div className="flex w-2/5 flex-col gap-5">
+          {/* Tabs */}
+          <div className="flex gap-1 rounded-xl border border-gray-200 bg-white p-1">
+            <button
+              onClick={() => setActiveTab('info')}
+              className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                activeTab === 'info'
+                  ? 'bg-blue-700 text-white'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Gestión
+            </button>
+            <button
+              onClick={() => { setActiveTab('feedback'); loadFeedback(); }}
+              className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                activeTab === 'feedback'
+                  ? 'bg-blue-700 text-white'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Historial de feedback
+            </button>
+          </div>
+
+          {activeTab === 'feedback' && (
+            <section className="rounded-xl border border-gray-200 bg-white p-6">
+              {loadingFeedback ? (
+                <p className="text-sm text-gray-400">Cargando…</p>
+              ) : feedbackList.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">
+                  Aún no hay feedback registrado para esta denuncia.
+                </p>
+              ) : (
+                <div className="space-y-5">
+                  {feedbackList.map((fb) => (
+                    <div key={fb.id} className="border-l-2 border-blue-200 pl-4 text-sm">
+                      <p className="text-xs text-gray-400 mb-1">
+                        {new Date(fb.fechaCreacion).toLocaleString('es-CO')}
+                        {fb.usuario && (
+                          <span className="ml-1 font-medium text-gray-600">
+                            — {fb.usuario.nombre}
+                          </span>
+                        )}
+                      </p>
+                      <div className="space-y-1 text-gray-700">
+                        <p>
+                          <span className="text-xs text-gray-400">Dependencia:</span>{' '}
+                          {fb.dependenciaCorrecta ? (
+                            <span className="text-green-600 font-medium">✓ Correcta</span>
+                          ) : (
+                            <span>
+                              <span className="line-through text-red-400 text-xs mr-1">
+                                {fb.dependenciaOriginal}
+                              </span>
+                              <span className="text-amber-700 font-medium">
+                                → {fb.dependenciaCorregida}
+                              </span>
+                            </span>
+                          )}
+                        </p>
+                        <p className="flex items-center gap-1">
+                          <span className="text-xs text-gray-400">HECHOS:</span>
+                          <span className="text-amber-400">
+                            {'★'.repeat(fb.calidadHechos)}
+                            <span className="text-gray-200">
+                              {'★'.repeat(5 - fb.calidadHechos)}
+                            </span>
+                          </span>
+                          <span className="text-xs text-gray-500">({fb.calidadHechos}/5)</span>
+                        </p>
+                        {fb.comentarioHechos && (
+                          <p className="text-xs text-gray-500 italic">"{fb.comentarioHechos}"</p>
+                        )}
+                        <p>
+                          <span className="text-xs text-gray-400">ASUNTO:</span>{' '}
+                          {fb.asuntoCorrect ? (
+                            <span className="text-green-600 font-medium">✓ Correcto</span>
+                          ) : (
+                            <span className="text-amber-700 font-medium">
+                              Corregido: {fb.asuntoCorregido ?? '—'}
+                            </span>
+                          )}
+                        </p>
+                        {fb.feedbackLibre && (
+                          <p className="text-xs text-gray-500 bg-gray-50 rounded p-2 mt-1">
+                            {fb.feedbackLibre}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeTab === 'info' && (
+          <>
           {/* Acciones */}
           <section className="rounded-xl border border-gray-200 bg-white p-6">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
@@ -620,9 +755,11 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
               </div>
             </section>
           )}
+          </>
+          )}
         </div>
       </div>
-      
+
       {showModalEditar && (
         <ModalEditarDenuncia
           denuncia={denuncia}
@@ -630,6 +767,17 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
           onSaved={(updated, regenerando) => {
             setDenuncia(regenerando ? { ...updated, documentoPendiente: true, documentoGeneradoOk: false } : updated);
             setShowModalEditar(false);
+          }}
+        />
+      )}
+
+      {showModalFeedback && (
+        <ModalFeedback
+          denuncia={denuncia}
+          onClose={() => setShowModalFeedback(false)}
+          onDone={(updated) => {
+            setDenuncia(updated);
+            setShowModalFeedback(false);
           }}
         />
       )}

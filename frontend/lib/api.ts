@@ -238,6 +238,32 @@ export async function exportarExcel(desde?: string, hasta?: string): Promise<voi
   URL.revokeObjectURL(href);
 }
 
+// ── Feedback ──────────────────────────────────────────────────────────────────
+
+export interface FeedbackDenuncia {
+  id: string;
+  denunciaId: number;
+  usuarioId: number;
+  dependenciaOriginal: string;
+  dependenciaCorregida: string | null;
+  dependenciaCorrecta: boolean;
+  calidadHechos: number;
+  comentarioHechos: string | null;
+  asuntoCorrect: boolean;
+  asuntoCorregido: string | null;
+  feedbackLibre: string | null;
+  fechaCreacion: string;
+  usuario?: { nombre: string; email: string };
+}
+
+export interface FeedbackStats {
+  totalFeedbacks: number;
+  porcentajeDependenciaCorrecta: number;
+  promedioCalidadHechos: number;
+  porcentajeAsuntoCorrect: number;
+  dependenciasConMasCorrecciones: { dependencia: string; total: number }[];
+}
+
 export async function exportarPdf(desde?: string, hasta?: string): Promise<void> {
   const q = new URLSearchParams();
   if (desde) q.set('desde', desde);

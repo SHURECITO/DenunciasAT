@@ -18,6 +18,14 @@ import type {
   ResumenEstadisticas,
 } from '@/lib/api';
 
+interface FeedbackStats {
+  totalFeedbacks: number;
+  porcentajeDependenciaCorrecta: number;
+  promedioCalidadHechos: number;
+  porcentajeAsuntoCorrect: number;
+  dependenciasConMasCorrecciones: { dependencia: string; total: number }[];
+}
+
 async function descargar(tipo: 'excel' | 'pdf', desde?: string, hasta?: string) {
   const q = new URLSearchParams();
   if (desde) q.set('desde', desde);
@@ -109,6 +117,7 @@ export default function EstadisticasClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [descargando, setDescargando] = useState<'excel' | 'pdf' | null>(null);
+  const [feedbackStats, setFeedbackStats] = useState<FeedbackStats | null>(null);
 
   const { desde: desdeCalc, hasta: hastaCalc } =
     tipoPeriodo !== 'personalizado'
@@ -127,14 +136,16 @@ export default function EstadisticasClient() {
       if (hastaCalc) q.set('hasta', hastaCalc);
       const qs = q.size ? '?' + q : '';
 
-      const [r, dep, per] = await Promise.all([
+      const [r, dep, per, fb] = await Promise.all([
         fetch(`/api/estadisticas/resumen${qs}`).then((r) => r.json()),
         fetch(`/api/estadisticas/por-dependencia${qs}`).then((r) => r.json()),
         fetch(`/api/estadisticas/por-periodo${qs}&agrupacion=${agrupacion}`).then((r) => r.json()),
+        fetch('/api/feedback/stats').then((r) => r.json()).catch(() => null),
       ]);
       setResumen(r);
       setPorDep(Array.isArray(dep) ? dep : []);
       setPorPeriodo(Array.isArray(per) ? per : []);
+      setFeedbackStats(fb ?? null);
     } catch {
       setError('No se pudieron cargar las estadísticas. Verifica que el servidor esté activo.');
     } finally {
@@ -468,6 +479,85 @@ export default function EstadisticasClient() {
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* ── SECCIÓN 3: Precisión de la IA ───────────────────────────── */}
+          <div>
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Precisión de la IA
+            </h2>
+            <div className="rounded-xl border border-gray-200 bg-white p-6">
+              {!feedbackStats || feedbackStats.totalFeedbacks === 0 ? (
+                <p className="text-sm text-gray-400">
+                  Aún no hay revisiones registradas. Aparecerán aquí cuando el abogado complete el formulario de revisión.
+                </p>
+              ) : (
+                <>
+                  <p className="mb-5 text-xs text-gray-400">
+                    Basado en {feedbackStats.totalFeedbacks} revisión{feedbackStats.totalFeedbacks !== 1 ? 'es' : ''}
+                  </p>
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-blue-700">
+                        {feedbackStats.porcentajeDependenciaCorrecta}%
+                      </p>
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Dependencias correctas
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-amber-600">
+                        {feedbackStats.promedioCalidadHechos.toFixed(1)}
+                        <span className="text-base font-normal text-gray-400"> / 5</span>
+                      </p>
+                      <div className="mt-1 flex justify-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <span
+                            key={s}
+                            className={
+                              s <= Math.round(feedbackStats.promedioCalidadHechos)
+                                ? 'text-amber-400'
+                                : 'text-gray-200'
+                            }
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Calidad HECHOS
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-green-600">
+                        {feedbackStats.porcentajeAsuntoCorrect}%
+                      </p>
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        ASUNTO apropiado
+                      </p>
+                    </div>
+                  </div>
+
+                  {feedbackStats.dependenciasConMasCorrecciones.length > 0 && (
+                    <div className="mt-6 border-t border-gray-100 pt-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Dependencias con más correcciones
+                      </p>
+                      <div className="space-y-1">
+                        {feedbackStats.dependenciasConMasCorrecciones.map((d) => (
+                          <div key={d.dependencia} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-700 truncate max-w-[280px]">{d.dependencia}</span>
+                            <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                              {d.total} corrección{d.total !== 1 ? 'es' : ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </>

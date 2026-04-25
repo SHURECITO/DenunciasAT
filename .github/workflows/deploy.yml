@@ -208,6 +208,68 @@ jobs:
             set -e
             cd /opt/denunciasat
 
+            # Generar .env desde GitHub Secrets — sobrescribe cualquier versión manual en la VM
+            cat > .env << 'ENVEOF'
+          # Base de datos
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_SYNC=false
+
+          # Autenticación
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          JWT_EXPIRES_IN=8h
+          SEED_ENABLED=false
+          SEED_ADMIN_PASSWORD=${{ secrets.SEED_ADMIN_PASSWORD }}
+
+          # IA
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+
+          # GCP / GCS
+          GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION=${{ secrets.GCP_REGION }}
+          GCS_BUCKET_EVIDENCIAS=${{ secrets.GCS_BUCKET_EVIDENCIAS }}
+          GCS_BUCKET_DOCUMENTOS=${{ secrets.GCS_BUCKET_DOCUMENTOS }}
+
+          # Evolution API / WhatsApp
+          EVOLUTION_API_KEY=${{ secrets.EVOLUTION_API_KEY }}
+          EVOLUTION_INSTANCE_NAME=${{ secrets.EVOLUTION_INSTANCE_NAME }}
+          EVOLUTION_API_URL=http://evolution-api:8080
+
+          # Claves internas entre servicios
+          DASHBOARD_API_INTERNAL_KEY=${{ secrets.DASHBOARD_API_INTERNAL_KEY }}
+          CHATBOT_API_INTERNAL_KEY=${{ secrets.CHATBOT_API_INTERNAL_KEY }}
+          DOCUMENT_API_INTERNAL_KEY=${{ secrets.DOCUMENT_API_INTERNAL_KEY }}
+          WHATSAPP_QR_INTERNAL_KEY=${{ secrets.WHATSAPP_QR_INTERNAL_KEY }}
+          DASHBOARD_TO_DOCUMENT_KEY=${{ secrets.DASHBOARD_TO_DOCUMENT_KEY }}
+          WHATSAPP_TO_CHATBOT_KEY=${{ secrets.WHATSAPP_TO_CHATBOT_KEY }}
+          WHATSAPP_WEBHOOK_HMAC_SECRET=${{ secrets.WHATSAPP_WEBHOOK_HMAC_SECRET }}
+
+          # Frontend / URLs públicas
+          FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+          NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_WS_URL=${{ secrets.NEXT_PUBLIC_WS_URL }}
+
+          # Notificaciones
+          ADMIN_WHATSAPP_NUMBER=${{ secrets.ADMIN_WHATSAPP_NUMBER }}
+
+          # URLs internas de servicios (Docker networking — no modificar)
+          DASHBOARD_API_URL=http://dashboard-api:3000
+          CHATBOT_SERVICE_URL=http://chatbot-service:3002
+          WHATSAPP_SERVICE_URL=http://whatsapp-service:3003
+          DOCUMENT_SERVICE_URL=http://document-service:3004
+          NOTIFICATION_SERVICE_URL=http://notification-service:3005
+          RAG_SERVICE_URL=http://rag-service:3006
+          ALLOWED_REMOTE_MEDIA_HOSTS=evolution-api
+
+          # Puertos expuestos al host
+          API_PORT=8741
+          FRONTEND_PORT=8742
+          ENVEOF
+            chmod 600 .env
+
             gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
             # Instalar docker compose plugin si no está disponible
@@ -228,6 +290,10 @@ jobs:
             export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
 
             docker compose -f docker-compose.prod.yml pull
+
+            # Limpiar red stale de docker compose v1 si existe (etiquetas incompatibles con v2)
+            docker network rm denunciasat_network 2>/dev/null || true
+
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker compose -f docker-compose.prod.yml ps
           EOF
