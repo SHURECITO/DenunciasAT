@@ -212,8 +212,12 @@ jobs:
 
             # Instalar docker compose plugin si no está disponible
             if ! docker compose version &>/dev/null 2>&1; then
-              sudo apt-get update -qq
-              sudo apt-get install -y -qq docker-compose-plugin
+              COMPOSE_VERSION="v2.24.6"
+              COMPOSE_DIR="${DOCKER_CLI_PLUGINS_HOME:-$HOME/.docker/cli-plugins}"
+              mkdir -p "$COMPOSE_DIR"
+              curl -SL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+                -o "$COMPOSE_DIR/docker-compose"
+              chmod +x "$COMPOSE_DIR/docker-compose"
             fi
 
             # Diagnóstico: versiones de Docker y Compose plugin
