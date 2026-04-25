@@ -523,7 +523,7 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
                           <span className="text-xs text-gray-500">({fb.calidadHechos}/5)</span>
                         </p>
                         {fb.comentarioHechos && (
-                          <p className="text-xs text-gray-500 italic">"{fb.comentarioHechos}"</p>
+                          <p className="text-xs text-gray-500 italic">&quot;{fb.comentarioHechos}&quot;</p>
                         )}
                         <p>
                           <span className="text-xs text-gray-400">ASUNTO:</span>{' '}
