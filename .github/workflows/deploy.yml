@@ -210,6 +210,12 @@ jobs:
 
             gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
+            # Instalar docker compose plugin si no está disponible
+            if ! docker compose version &>/dev/null 2>&1; then
+              sudo apt-get update -qq
+              sudo apt-get install -y -qq docker-compose-plugin
+            fi
+
             # Diagnóstico: versiones de Docker y Compose plugin
             docker version
             docker compose version
