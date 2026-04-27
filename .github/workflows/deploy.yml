@@ -208,6 +208,11 @@ jobs:
             set -e
             cd /opt/denunciasat
 
+            # TEMPORAL: Extender partición y sistema de archivos al nuevo tamaño del disco
+            # Eliminar este bloque después del primer deploy exitoso
+            sudo growpart /dev/sda 1 2>/dev/null || true
+            sudo resize2fs /dev/sda1 2>/dev/null || true
+
             # Generar .env desde GitHub Secrets — sobrescribe cualquier versión manual en la VM
             cat > .env << 'ENVEOF'
           # Base de datos
@@ -295,6 +300,10 @@ jobs:
 
             export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
             export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
+
+            # Limpiar imágenes y capas Docker sin uso para liberar espacio en disco
+            docker image prune -af 2>/dev/null || true
+            docker builder prune -af 2>/dev/null || true
 
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
