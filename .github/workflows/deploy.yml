@@ -208,11 +208,6 @@ jobs:
             set -e
             cd /opt/denunciasat
 
-            # TEMPORAL: Extender partición y sistema de archivos al nuevo tamaño del disco
-            # Eliminar este bloque después del primer deploy exitoso
-            sudo growpart /dev/sda 1 2>/dev/null || true
-            sudo resize2fs /dev/sda1 2>/dev/null || true
-
             # Generar .env desde GitHub Secrets — sobrescribe cualquier versión manual en la VM
             cat > .env << 'ENVEOF'
           # Base de datos
@@ -275,8 +270,6 @@ jobs:
           ENVEOF
             chmod 600 .env
 
-            gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
-
             # Instalar docker compose plugin si no está disponible
             if ! docker compose version &>/dev/null 2>&1; then
               COMPOSE_VERSION="v2.24.6"
@@ -300,6 +293,8 @@ jobs:
 
             export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
             export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
+
+            gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
             # Limpiar imágenes y capas Docker sin uso para liberar espacio en disco
             docker image prune -af 2>/dev/null || true
