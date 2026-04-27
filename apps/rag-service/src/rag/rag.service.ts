@@ -6,7 +6,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { Pool } from 'pg';
 import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
@@ -173,8 +173,7 @@ export class RagService implements OnModuleInit, OnModuleDestroy {
   private readonly jerarquiaPorDependencia: Map<string, number>;
   private readonly areasPorDependencia: Map<string, string[]>;
 
-  private readonly embeddingModel: GenerativeModel | null;
-  private readonly clasificacionModel: GenerativeModel | null;
+  private readonly ai: GoogleGenAI | null;
   private embeddingGeminiDisponible = true;
   private clasificacionGeminiDisponible = true;
 
@@ -196,26 +195,25 @@ export class RagService implements OnModuleInit, OnModuleDestroy {
     this.jerarquiaPorDependencia = guia.jerarquiaPorDependencia;
     this.areasPorDependencia = guia.areasPorDependencia;
 
-    const geminiApiKey = this.config.get<string>('GEMINI_API_KEY', '').trim();
-    if (!geminiApiKey) {
-      this.logger.warn('GEMINI_API_KEY no configurada. Se deshabilita indexación y clasificación semántica.');
-      this.embeddingModel = null;
-      this.clasificacionModel = null;
+    // Autenticación vía ADC (@google/genai Vertex AI mode) — sin API key
+    const project  = this.config.get<string>('GCP_PROJECT_ID', '');
+    const location = this.config.get<string>('GCP_REGION', 'us-central1');
+    if (!project) {
+      this.logger.warn('GCP_PROJECT_ID no configurada. Se deshabilita indexación y clasificación semántica.');
+      this.ai = null;
       this.embeddingGeminiDisponible = false;
       this.clasificacionGeminiDisponible = false;
       return;
     }
 
-    const gemini = new GoogleGenerativeAI(geminiApiKey);
-    this.embeddingModel = gemini.getGenerativeModel({ model: 'text-embedding-004' });
-    this.clasificacionModel = gemini.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    this.ai = new GoogleGenAI({ vertexai: true, project, location });
   }
 
   async onModuleInit() {
     try {
       await this.ensureSchema();
 
-      if (!this.embeddingModel || !this.embeddingGeminiDisponible) {
+      if (!this.ai || !this.embeddingGeminiDisponible) {
         this.logger.warn('RAG inicializado sin Gemini disponible. Clasificación semántica temporalmente deshabilitada.');
         return;
       }
@@ -244,13 +242,13 @@ export class RagService implements OnModuleInit, OnModuleDestroy {
   }
 
   private assertEmbeddingDisponible() {
-    if (!this.embeddingModel || !this.embeddingGeminiDisponible) {
+    if (!this.ai || !this.embeddingGeminiDisponible) {
       this.throwGeminiUnavailable();
     }
   }
 
   private assertClasificacionDisponible() {
-    if (!this.clasificacionModel || !this.clasificacionGeminiDisponible) {
+    if (!this.ai || !this.clasificacionGeminiDisponible) {
       this.throwGeminiUnavailable();
     }
   }
@@ -258,8 +256,7 @@ export class RagService implements OnModuleInit, OnModuleDestroy {
   async health() {
     const [{ ok }] = (await this.pool.query<{ ok: number }>('SELECT 1 AS ok')).rows;
     const iaDisponible =
-      !!this.embeddingModel &&
-      !!this.clasificacionModel &&
+      !!this.ai &&
       this.embeddingGeminiDisponible &&
       this.clasificacionGeminiDisponible;
 
@@ -446,8 +443,11 @@ Responde SOLO con JSON:
 
     this.assertClasificacionDisponible();
     try {
-      const result = await this.clasificacionModel.generateContent(prompt);
-      const raw = result.response.text();
+      const result = await this.ai!.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: prompt,
+      });
+      const raw = result.text ?? '';
       const parsed = this.parseJson<Partial<ClasificacionResultado>>(raw) ?? {};
 
       const nombresValidos = new Set(candidatosOrdenados.map((c) => c.nombre));
@@ -652,8 +652,11 @@ Responde SOLO con JSON:
     this.assertEmbeddingDisponible();
 
     try {
-      const result = await this.embeddingModel.embedContent(texto);
-      const values = result.embedding?.values ?? [];
+      const result = await this.ai!.models.embedContent({
+        model: 'text-embedding-004',
+        contents: texto,
+      });
+      const values = result.embeddings?.[0]?.values ?? [];
 
       if (!Array.isArray(values) || values.length !== VECTOR_DIMENSIONS) {
         throw new Error(
@@ -661,7 +664,7 @@ Responde SOLO con JSON:
         );
       }
 
-      return values;
+      return values as number[];
     } catch (err) {
       this.embeddingGeminiDisponible = false;
       this.logger.warn(

@@ -190,7 +190,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3002
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GCP_REGION: ${GCP_REGION:-us-central1}
       REDIS_URL: redis://redis:6379
       DASHBOARD_API_URL: http://dashboard-api:3000
       DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
@@ -231,8 +232,8 @@ services:
       DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
       DOCUMENT_API_INTERNAL_KEY: ${DOCUMENT_API_INTERNAL_KEY}
       DASHBOARD_TO_DOCUMENT_KEY: ${DASHBOARD_TO_DOCUMENT_KEY}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GCP_REGION: ${GCP_REGION:-us-central1}
       GCS_BUCKET_EVIDENCIAS: ${GCS_BUCKET_EVIDENCIAS:-denunciasat-evidencias}
       GCS_BUCKET_DOCUMENTOS: ${GCS_BUCKET_DOCUMENTOS:-denunciasat-documentos}
       ALLOWED_REMOTE_MEDIA_HOSTS: ${ALLOWED_REMOTE_MEDIA_HOSTS:-evolution-api}
@@ -287,7 +288,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3006
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GCP_REGION: ${GCP_REGION:-us-central1}
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT:-5432}/${DB_NAME}
       DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
     depends_on:

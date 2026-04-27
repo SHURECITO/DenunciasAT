@@ -167,10 +167,32 @@ jobs:
             NEXT_PUBLIC_WS_URL=${{ secrets.NEXT_PUBLIC_WS_URL }}
             NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
 
+  # ── Asignar rol Vertex AI al Service Account (idempotente) ────────────────
+  grant-vertex-ai-role:
+    name: IAM — roles/aiplatform.user
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Auth GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Agregar rol Vertex AI al Service Account
+        run: |
+          gcloud projects add-iam-policy-binding ${{ env.GCP_PROJECT_ID }} \
+            --member="serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT }}" \
+            --role="roles/aiplatform.user" \
+            --condition=None 2>/dev/null || true
+
   # ── Despliegue en la VM ─────────────────────────────────────────────────────
   deploy-vm:
     name: Deploy VM
-    needs: build-and-push
+    needs: [build-and-push, grant-vertex-ai-role]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -224,8 +246,8 @@ jobs:
           SEED_ENABLED=false
           SEED_ADMIN_PASSWORD=${{ secrets.SEED_ADMIN_PASSWORD }}
 
-          # IA
-          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          # IA — GEMINI_API_KEY en desuso desde sesión 46 (migración a Vertex AI + ADC)
+          # GEMINI_API_KEY=unused
 
           # GCP / GCS
           GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
@@ -293,6 +315,17 @@ jobs:
 
             export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
             export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
+            export GCP_REGION=${{ env.GCP_REGION }}
+
+            # Detectar si la contraseña de BD cambió y limpiar volumen para evitar auth failure
+            DB_USER_VAL=${{ secrets.DB_USER }}
+            CURRENT_DB_CHECK=$(docker exec denunciasat-postgres-1 \
+              psql -U "$DB_USER_VAL" -c "SELECT 1" 2>&1 || echo "AUTH_FAILED")
+            if echo "$CURRENT_DB_CHECK" | grep -q "AUTH_FAILED\|password authentication\|role.*does not exist"; then
+              echo "Contraseña de BD cambió o usuario no existe — limpiando volumen de postgres"
+              docker compose -f docker-compose.prod.yml stop postgres 2>/dev/null || true
+              docker volume rm denunciasat_postgres_data 2>/dev/null || true
+            fi
 
             gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 

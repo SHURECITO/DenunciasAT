@@ -12,7 +12,7 @@ function warnMissingEnv(vars: string[]): void {
 }
 
 async function bootstrap() {
-  warnMissingEnv(['GCS_BUCKET_DOCUMENTOS', 'DASHBOARD_API_INTERNAL_KEY', 'GEMINI_API_KEY']);
+  warnMissingEnv(['GCS_BUCKET_DOCUMENTOS', 'DASHBOARD_API_INTERNAL_KEY', 'GCP_PROJECT_ID']);
 
   const isProd = process.env.NODE_ENV === 'production';
   const app = await NestFactory.create(AppModule, {

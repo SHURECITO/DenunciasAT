@@ -1,7 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { GoogleGenAI, type GenerateContentConfig } from '@google/genai';
 import { buildDependenciasKnowledgeBase, type DependenciasKnowledgeBase } from './dependencias-kb';
+
+// Wrapper ligero sobre @google/genai para conservar la interfaz de modelo por instancia
+class VertexModel {
+  constructor(
+    private readonly ai: GoogleGenAI,
+    private readonly modelName: string,
+    private readonly config: GenerateContentConfig,
+  ) {}
+
+  async generateContent(prompt: string): Promise<{ response: { text: () => string } }> {
+    const resp = await this.ai.models.generateContent({
+      model: this.modelName,
+      contents: prompt,
+      config: this.config,
+    });
+    const textValue = resp.text ?? '';
+    return { response: { text: () => textValue } };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Contexto Medellín — usado para clasificación de denuncias
@@ -233,10 +252,10 @@ Solo cuando TODOS los datos estén completos:
 * Romper JSON
 * Responder sin analizar contexto`;
 
-// Modelos confirmados disponibles con la API key (verificado 2026-04-16)
-const MODEL_CHATBOT          = 'gemini-2.5-flash-lite';
-const MODEL_CHATBOT_FALLBACK = 'gemini-3.1-flash-lite-preview';
-const MODEL_LEGAL            = 'gemini-2.5-flash-lite';
+// Modelos disponibles en Vertex AI (ADC — sin API key)
+const MODEL_CHATBOT          = 'gemini-2.0-flash';
+const MODEL_CHATBOT_FALLBACK = 'gemini-2.0-flash';
+const MODEL_LEGAL            = 'gemini-2.0-flash';
 
 const BASE_CONFIG = { topP: 0.8, topK: 40, maxOutputTokens: 512 };
 const CHATBOT_MSG_FALLBACK = 'Disculpa, no logré entender bien. ¿Podrías explicarme nuevamente el problema?';
@@ -281,54 +300,57 @@ export interface ClasificacionEstructurada {
 @Injectable()
 export class GeminiService {
   private readonly logger = new Logger(GeminiService.name);
-  private readonly genAI: GoogleGenerativeAI;
+  private readonly ai: GoogleGenAI;
   private readonly dependenciasKb: DependenciasKnowledgeBase;
 
-  private readonly modelClasificacion: GenerativeModel;
-  private readonly modelJustificacion: GenerativeModel;
-  private readonly modelLegal: GenerativeModel;
-  private readonly modelChatbot: GenerativeModel;
-  private readonly modelChatbotFallback: GenerativeModel;
+  private readonly modelClasificacion: VertexModel;
+  private readonly modelJustificacion: VertexModel;
+  private readonly modelLegal: VertexModel;
+  private readonly modelChatbot: VertexModel;
+  private readonly modelChatbotFallback: VertexModel;
 
   constructor(private readonly config: ConfigService) {
-    const apiKey = this.config.get<string>('GEMINI_API_KEY', '');
-    this.genAI = new GoogleGenerativeAI(apiKey);
+    // Autenticación vía ADC (Application Default Credentials) — sin API key
+    const project  = this.config.get<string>('GCP_PROJECT_ID', '');
+    const location = this.config.get<string>('GCP_REGION', 'us-central1');
+    this.ai = new GoogleGenAI({ vertexai: true, project, location });
 
-    this.modelClasificacion = this.genAI.getGenerativeModel({
-      model: MODEL_LEGAL,
+    this.modelClasificacion = new VertexModel(this.ai, MODEL_LEGAL, {
       systemInstruction: CONTEXTO_MEDELLIN,
-      generationConfig: { ...BASE_CONFIG, temperature: 0.1 },
+      ...BASE_CONFIG,
+      temperature: 0.1,
     });
 
-    this.modelJustificacion = this.genAI.getGenerativeModel({
-      model: MODEL_LEGAL,
+    this.modelJustificacion = new VertexModel(this.ai, MODEL_LEGAL, {
       systemInstruction: CONTEXTO_MEDELLIN,
-      generationConfig: { ...BASE_CONFIG, temperature: 0.3 },
+      ...BASE_CONFIG,
+      temperature: 0.3,
     });
 
     // Modelo jurídico experto para hechos y asunto
-    this.modelLegal = this.genAI.getGenerativeModel({
-      model: MODEL_LEGAL,
+    this.modelLegal = new VertexModel(this.ai, MODEL_LEGAL, {
       systemInstruction: SYSTEM_PROMPT_LEGAL,
-      generationConfig: { ...BASE_CONFIG, temperature: 0.2, maxOutputTokens: 600 },
+      ...BASE_CONFIG,
+      temperature: 0.2,
+      maxOutputTokens: 600,
     });
 
-    this.modelChatbot = this.genAI.getGenerativeModel({
-      model: MODEL_CHATBOT,
+    this.modelChatbot = new VertexModel(this.ai, MODEL_CHATBOT, {
       systemInstruction: SYSTEM_PROMPT_CHATBOT,
-      generationConfig: { ...BASE_CONFIG, temperature: 0.4 },
+      ...BASE_CONFIG,
+      temperature: 0.4,
     });
 
-    this.modelChatbotFallback = this.genAI.getGenerativeModel({
-      model: MODEL_CHATBOT_FALLBACK,
+    this.modelChatbotFallback = new VertexModel(this.ai, MODEL_CHATBOT_FALLBACK, {
       systemInstruction: SYSTEM_PROMPT_CHATBOT,
-      generationConfig: { ...BASE_CONFIG, temperature: 0.4 },
+      ...BASE_CONFIG,
+      temperature: 0.4,
     });
 
     this.dependenciasKb = buildDependenciasKnowledgeBase();
 
     this.logger.log(
-      `GeminiService listo — modelo: ${MODEL_CHATBOT} | dependencias catalogadas: ${this.dependenciasKb.nombresDependencias.length}`,
+      `GeminiService listo (@google/genai Vertex AI) — modelo: ${MODEL_CHATBOT} | dependencias: ${this.dependenciasKb.nombresDependencias.length}`,
     );
   }
 
@@ -674,10 +696,11 @@ Responde SOLO con JSON sin markdown:
 }`;
 
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: MODEL_LEGAL,
+      const model = new VertexModel(this.ai, MODEL_LEGAL, {
         systemInstruction: CONTEXTO_MEDELLIN,
-        generationConfig: { ...BASE_CONFIG, temperature: 0.15, maxOutputTokens: 800 },
+        ...BASE_CONFIG,
+        temperature: 0.15,
+        maxOutputTokens: 800,
       });
       const result  = await model.generateContent(prompt);
       const jsonStr = this.extraerJson(result.response.text());
@@ -740,10 +763,11 @@ Responde SOLO con JSON sin markdown:
 }`;
 
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: MODEL_LEGAL,
+      const model = new VertexModel(this.ai, MODEL_LEGAL, {
         systemInstruction: SYSTEM_PROMPT_LEGAL,
-        generationConfig: { ...BASE_CONFIG, temperature: 0.2, maxOutputTokens: 400 },
+        ...BASE_CONFIG,
+        temperature: 0.2,
+        maxOutputTokens: 400,
       });
       const result  = await model.generateContent(prompt);
       const jsonStr = this.extraerJson(result.response.text());
@@ -828,7 +852,7 @@ USUARIO: ${mensaje}
 
 JSON:`;
 
-    const intentarConModelo = async (model: GenerativeModel): Promise<RespuestaChatbot> => {
+    const intentarConModelo = async (model: VertexModel): Promise<RespuestaChatbot> => {
       const result = await model.generateContent(prompt);
       const raw = result.response.text();
       this.logger.debug(`Gemini raw: ${raw.substring(0, 500)}`);
@@ -1019,10 +1043,10 @@ Requisitos:
 Responde SOLO con el texto del asunto, sin explicaciones.`;
 
     try {
-      const r = await this.genAI.getGenerativeModel({
-        model: MODEL_LEGAL,
+      const r = await new VertexModel(this.ai, MODEL_LEGAL, {
         systemInstruction: SYSTEM_PROMPT_LEGAL,
-        generationConfig: { temperature: 0.1, maxOutputTokens: 60 },
+        temperature: 0.1,
+        maxOutputTokens: 60,
       }).generateContent(prompt);
       const text = r.response.text().trim().toUpperCase().replace(/\.$/, '');
       return text || `SOLICITAR ATENCIÓN URGENTE POR ${datos.descripcionResumen.substring(0, 60).toUpperCase()}`;
