@@ -286,8 +286,12 @@ jobs:
             docker version
             docker compose version
 
-            # Limpiar red stale de docker compose v1 si existe (etiquetas incompatibles con v2)
-            docker network rm denunciasat_network 2>/dev/null || true
+            # Detener contenedores existentes antes de recrear la red
+            docker compose -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
+
+            # Forzar eliminación de la red por cualquier nombre que tenga
+            docker network ls --filter "label=com.docker.compose.network" -q | \
+              xargs -r docker network rm 2>/dev/null || true
 
             export IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
             export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
