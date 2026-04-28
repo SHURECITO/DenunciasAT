@@ -1,6 +1,9 @@
 -- Migración 001: tabla feedback_denuncias
 -- Ejecutar en despliegues existentes donde DB_SYNC=false no creó la tabla automáticamente.
 
+-- Habilitar extensión requerida para gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE TABLE IF NOT EXISTS feedback_denuncias (
   id                     UUID           NOT NULL DEFAULT gen_random_uuid(),
   "denunciaId"           INTEGER        NOT NULL,

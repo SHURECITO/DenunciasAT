@@ -510,6 +510,12 @@ Responde SOLO con JSON:
   }
 
   async reindexarForzado(): Promise<ResultadoReindexado> {
+    // Resetear flag de fallo para permitir retry aunque haya fallado en startup
+    // (ej: propagación IAM pendiente en primer arranque sobre GCE)
+    if (this.ai) {
+      this.embeddingGeminiDisponible = true;
+      this.clasificacionGeminiDisponible = true;
+    }
     this.assertEmbeddingDisponible();
     return this.indexarSiCambio(true);
   }

@@ -194,6 +194,8 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 
 **Sesión 48 (2026-04-27):** diagnóstico del error de claves duplicadas en prod: el `docker-compose.prod.yml` en `/opt/denunciasat/` estaba desactualizado (pre S46/47) porque el deploy no hace `git pull`; solución propuesta copiar compose actual o añadir paso de pull/scp; verificado `docker compose -f docker-compose.prod.yml config` exit 0 sin claves duplicadas.
 
+**Sesión 49 (2026-04-27):** endurecimiento deploy: verificación de credenciales Postgres antes del `down`, arranque de Postgres con espera previa a migraciones, y migración feedback habilita `pgcrypto`.
+
 ---
 
 > Al terminar cada sesión: marcar fases, comprimir historial si supera 200 líneas.

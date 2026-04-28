@@ -300,7 +300,7 @@ export interface ClasificacionEstructurada {
 @Injectable()
 export class GeminiService {
   private readonly logger = new Logger(GeminiService.name);
-  private readonly ai: GoogleGenAI;
+  private readonly ai: GoogleGenAI | null;
   private readonly dependenciasKb: DependenciasKnowledgeBase;
 
   private readonly modelClasificacion: VertexModel;
@@ -313,35 +313,49 @@ export class GeminiService {
     // Autenticación vía ADC (Application Default Credentials) — sin API key
     const project  = this.config.get<string>('GCP_PROJECT_ID', '');
     const location = this.config.get<string>('GCP_REGION', 'us-central1');
-    this.ai = new GoogleGenAI({ vertexai: true, project, location });
 
-    this.modelClasificacion = new VertexModel(this.ai, MODEL_LEGAL, {
+    if (!project) {
+      this.logger.warn('GCP_PROJECT_ID no configurada — GeminiService en modo degradado');
+      this.ai = null;
+    } else {
+      try {
+        this.ai = new GoogleGenAI({ vertexai: true, project, location });
+      } catch (err) {
+        this.logger.error(`No se pudo inicializar Vertex AI: ${(err as Error).message} — modo degradado`);
+        this.ai = null;
+      }
+    }
+
+    // ai puede ser null; los modelos usarán {} como dummy — todos los métodos tienen try/catch
+    const aiParaModelos = this.ai ?? ({} as GoogleGenAI);
+
+    this.modelClasificacion = new VertexModel(aiParaModelos, MODEL_LEGAL, {
       systemInstruction: CONTEXTO_MEDELLIN,
       ...BASE_CONFIG,
       temperature: 0.1,
     });
 
-    this.modelJustificacion = new VertexModel(this.ai, MODEL_LEGAL, {
+    this.modelJustificacion = new VertexModel(aiParaModelos, MODEL_LEGAL, {
       systemInstruction: CONTEXTO_MEDELLIN,
       ...BASE_CONFIG,
       temperature: 0.3,
     });
 
     // Modelo jurídico experto para hechos y asunto
-    this.modelLegal = new VertexModel(this.ai, MODEL_LEGAL, {
+    this.modelLegal = new VertexModel(aiParaModelos, MODEL_LEGAL, {
       systemInstruction: SYSTEM_PROMPT_LEGAL,
       ...BASE_CONFIG,
       temperature: 0.2,
       maxOutputTokens: 600,
     });
 
-    this.modelChatbot = new VertexModel(this.ai, MODEL_CHATBOT, {
+    this.modelChatbot = new VertexModel(aiParaModelos, MODEL_CHATBOT, {
       systemInstruction: SYSTEM_PROMPT_CHATBOT,
       ...BASE_CONFIG,
       temperature: 0.4,
     });
 
-    this.modelChatbotFallback = new VertexModel(this.ai, MODEL_CHATBOT_FALLBACK, {
+    this.modelChatbotFallback = new VertexModel(aiParaModelos, MODEL_CHATBOT_FALLBACK, {
       systemInstruction: SYSTEM_PROMPT_CHATBOT,
       ...BASE_CONFIG,
       temperature: 0.4,
@@ -350,7 +364,7 @@ export class GeminiService {
     this.dependenciasKb = buildDependenciasKnowledgeBase();
 
     this.logger.log(
-      `GeminiService listo (@google/genai Vertex AI) — modelo: ${MODEL_CHATBOT} | dependencias: ${this.dependenciasKb.nombresDependencias.length}`,
+      `GeminiService listo — modo: ${this.ai ? 'Vertex AI' : 'degradado'} | modelo: ${MODEL_CHATBOT} | dependencias: ${this.dependenciasKb.nombresDependencias.length}`,
     );
   }
 

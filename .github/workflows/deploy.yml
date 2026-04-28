@@ -332,6 +332,18 @@ jobs:
             docker version
             docker compose version
 
+            # Detectar si la contraseña de BD cambió y limpiar volumen para evitar auth failure
+            DB_USER_VAL=${{ secrets.DB_USER }}
+            if docker inspect -f '{{.State.Running}}' denunciasat-postgres-1 >/dev/null 2>&1; then
+              CURRENT_DB_CHECK=$(docker exec denunciasat-postgres-1 \
+                psql -U "$DB_USER_VAL" -c "SELECT 1" 2>&1 || echo "AUTH_FAILED")
+              if echo "$CURRENT_DB_CHECK" | grep -q "AUTH_FAILED\|password authentication\|role.*does not exist"; then
+                echo "Contraseña de BD cambió o usuario no existe — limpiando volumen de postgres"
+                docker compose -f docker-compose.prod.yml stop postgres 2>/dev/null || true
+                docker volume rm denunciasat_postgres_data 2>/dev/null || true
+              fi
+            fi
+
             # Detener contenedores existentes antes de recrear la red
             docker compose -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
 
@@ -343,16 +355,6 @@ jobs:
             export GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
             export GCP_REGION=${{ env.GCP_REGION }}
 
-            # Detectar si la contraseña de BD cambió y limpiar volumen para evitar auth failure
-            DB_USER_VAL=${{ secrets.DB_USER }}
-            CURRENT_DB_CHECK=$(docker exec denunciasat-postgres-1 \
-              psql -U "$DB_USER_VAL" -c "SELECT 1" 2>&1 || echo "AUTH_FAILED")
-            if echo "$CURRENT_DB_CHECK" | grep -q "AUTH_FAILED\|password authentication\|role.*does not exist"; then
-              echo "Contraseña de BD cambió o usuario no existe — limpiando volumen de postgres"
-              docker compose -f docker-compose.prod.yml stop postgres 2>/dev/null || true
-              docker volume rm denunciasat_postgres_data 2>/dev/null || true
-            fi
-
             gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
             # Limpiar imágenes y capas Docker sin uso para liberar espacio en disco
@@ -360,13 +362,33 @@ jobs:
             docker builder prune -af 2>/dev/null || true
 
             docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            docker compose -f docker-compose.prod.yml ps
+
+            # Levantar Postgres primero para garantizar migraciones antes del resto de servicios
+            docker compose -f docker-compose.prod.yml up -d postgres
+
+            # Esperar a Postgres antes de ejecutar migraciones
+            ATTEMPTS=20
+            while [ "$ATTEMPTS" -gt 0 ]; do
+              if docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U "$DB_USER_VAL" >/dev/null 2>&1; then
+                break
+              fi
+              echo "Esperando a Postgres para migraciones..."
+              ATTEMPTS=$((ATTEMPTS-1))
+              sleep 2
+            done
+            if [ "$ATTEMPTS" -eq 0 ]; then
+              echo "Postgres no respondió a tiempo — abortando despliegue"
+              exit 1
+            fi
 
             # Ejecutar migraciones de BD (idempotente — CREATE TABLE IF NOT EXISTS)
             DB_NAME_VAL=${{ secrets.DB_NAME }}
             docker compose -f docker-compose.prod.yml exec -T postgres \
               psql -U "$DB_USER_VAL" -d "$DB_NAME_VAL" -f /migrations/001_feedback_denuncias.sql || true
+
+            # Levantar el resto de servicios
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml ps
 
             # Diagnóstico: mostrar logs del dashboard-api si falla el healthcheck
             docker compose -f docker-compose.prod.yml logs --tail=50 dashboard-api || true
