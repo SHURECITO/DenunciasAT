@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     return NextResponse.json(
-      { message: (err as any).message ?? 'Error al subir imagen' },
+      { message: (err as Record<string, unknown>).message ?? 'Error al subir imagen' },
       { status: res.status },
     );
   }
