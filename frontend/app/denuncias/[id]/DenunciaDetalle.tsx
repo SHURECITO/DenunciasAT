@@ -83,7 +83,7 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
     !denuncia.documentoPendiente &&
     !tieneDocumento &&
     !denuncia.esEspecial &&
-    denuncia.estado !== 'RECIBIDA';
+    !denuncia.incompleta;
 
   useEffect(() => {
     setMensajesLive(mensajes);

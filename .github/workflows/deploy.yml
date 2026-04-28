@@ -191,10 +191,23 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Agregar rol Vertex AI al Service Account
+      - name: Agregar roles al Service Account de deploy
         run: |
           gcloud projects add-iam-policy-binding ${{ env.GCP_PROJECT_ID }} \
             --member="serviceAccount:${{ secrets.GCP_SERVICE_ACCOUNT }}" \
+            --role="roles/aiplatform.user" \
+            --condition=None 2>/dev/null || true
+
+      - name: Asignar roles al SA de Compute Engine (VM ADC)
+        run: |
+          PROJECT_NUMBER=$(gcloud projects describe ${{ env.GCP_PROJECT_ID }} --format='value(projectNumber)')
+          CE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+          gcloud projects add-iam-policy-binding ${{ env.GCP_PROJECT_ID }} \
+            --member="serviceAccount:${CE_SA}" \
+            --role="roles/storage.objectAdmin" \
+            --condition=None 2>/dev/null || true
+          gcloud projects add-iam-policy-binding ${{ env.GCP_PROJECT_ID }} \
+            --member="serviceAccount:${CE_SA}" \
             --role="roles/aiplatform.user" \
             --condition=None 2>/dev/null || true
 
@@ -345,6 +358,11 @@ jobs:
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker compose -f docker-compose.prod.yml ps
+
+            # Ejecutar migraciones de BD (idempotente — CREATE TABLE IF NOT EXISTS)
+            DB_NAME_VAL=${{ secrets.DB_NAME }}
+            docker compose -f docker-compose.prod.yml exec -T postgres \
+              psql -U "$DB_USER_VAL" -d "$DB_NAME_VAL" -f /migrations/001_feedback_denuncias.sql || true
 
             # Diagnóstico: mostrar logs del dashboard-api si falla el healthcheck
             docker compose -f docker-compose.prod.yml logs --tail=50 dashboard-api || true

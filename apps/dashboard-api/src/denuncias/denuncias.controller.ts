@@ -90,6 +90,8 @@ export class DenunciasController {
           { headers: this.getDocumentServiceHeaders() },
         )
         .catch(() => {});
+      // Retornar con documentoPendiente:true para que el UI inicie el polling inmediatamente
+      return this.denunciasService.marcarDocumentoPendiente(denuncia.id);
     }
     return denuncia;
   }
