@@ -192,6 +192,8 @@ id, nombre, email (UNIQUE), passwordHash (select:false), activo, fechaCreacion
 
 **Sesión 39 (2026-04-22):** GCS privado con ADC + IAM Service Account Credentials API: Signed URLs v4 de 15 min, sin `key.json`/`GOOGLE_APPLICATION_CREDENTIALS`, sin fallback a URLs públicas y `scripts/test-gcs.ts` validando upload/signed URL/fetch/delete.
 
+**Sesión 48 (2026-04-27):** diagnóstico del error de claves duplicadas en prod: el `docker-compose.prod.yml` en `/opt/denunciasat/` estaba desactualizado (pre S46/47) porque el deploy no hace `git pull`; solución propuesta copiar compose actual o añadir paso de pull/scp; verificado `docker compose -f docker-compose.prod.yml config` exit 0 sin claves duplicadas.
+
 ---
 
 > Al terminar cada sesión: marcar fases, comprimir historial si supera 200 líneas.

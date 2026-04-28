@@ -252,6 +252,10 @@ jobs:
             set -e
             cd /opt/denunciasat
 
+            # Actualizar archivos del repositorio en la VM
+            git fetch origin main
+            git reset --hard origin/main
+
             # Generar .env desde GitHub Secrets — sobrescribe cualquier versión manual en la VM
             cat > .env << 'ENVEOF'
           # Base de datos
