@@ -302,7 +302,13 @@ function loadDeps(): Record<string, DestinatarioConfig> {
 
 function resolveDestinatario(dependencia: string): Destinatario {
   const deps = loadDeps();
-  const dep = deps[dependencia];
+  let dep = deps[dependencia];
+  // Fallback insensible a mayúsculas si el nombre exacto no coincide
+  if (!dep) {
+    const lower = dependencia.toLowerCase().trim();
+    const matchedKey = Object.keys(deps).find((k) => k.toLowerCase().trim() === lower);
+    if (matchedKey) dep = deps[matchedKey];
+  }
   if (dep) {
     return {
       titulo: dep.titulo ?? 'Doctor',

@@ -12,10 +12,14 @@ import {
   UseGuards,
   Req,
   Delete,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import type { Response, Request } from 'express';
+import { randomUUID } from 'crypto';
+import { FileInterceptor } from '@nestjs/platform-express';
 import axios from 'axios';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EitherAuthGuard } from '../auth/guards/either-auth.guard';
@@ -67,8 +71,47 @@ export class DenunciasController {
 
   @Post('manual')
   @ApiOperation({ summary: 'Crear denuncia manual (desde el dashboard)' })
-  createManual(@Body() dto: CreateDenunciaDto) {
-    return this.denunciasService.createManual(dto);
+  async createManual(@Body() dto: CreateDenunciaDto) {
+    const denuncia = await this.denunciasService.createManual(dto);
+    // Disparar clasificación + generación de documento automáticamente para denuncias no especiales
+    if (!denuncia.esEspecial) {
+      const docServiceUrl = this.config.get<string>('DOCUMENT_SERVICE_URL', 'http://document-service:3004');
+      axios
+        .post(
+          `${docServiceUrl}/generar-desde-descripcion`,
+          {
+            denunciaId: denuncia.id,
+            descripcion: denuncia.descripcion,
+            ubicacion: denuncia.ubicacion,
+            barrio: denuncia.barrio ?? undefined,
+            esEspecial: false,
+            generarDocumento: true,
+          },
+          { headers: this.getDocumentServiceHeaders() },
+        )
+        .catch(() => {});
+    }
+    return denuncia;
+  }
+
+  @Post('evidencias/upload')
+  @UseInterceptors(FileInterceptor('file', {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    storage: require('multer').memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+  }))
+  @ApiOperation({ summary: 'Subir imagen de evidencia para denuncia manual (JPG/PNG, máx 10 MB)' })
+  async uploadEvidencia(@UploadedFile() file: any) {
+    if (!file) throw new HttpException('Archivo requerido', 400);
+    const allowed = ['image/jpeg', 'image/png'];
+    if (!allowed.includes(file.mimetype as string)) {
+      throw new HttpException('Solo se aceptan imágenes JPG o PNG', 400);
+    }
+    const ext = (file.mimetype as string) === 'image/png' ? 'png' : 'jpg';
+    const objectName = `manual/${Date.now()}-${randomUUID()}.${ext}`;
+    const bucket = this.config.get<string>('GCS_BUCKET_EVIDENCIAS', 'denunciasat-evidencias');
+    await this.storage.uploadBuffer(bucket, objectName, file.buffer as Buffer, file.mimetype as string);
+    return { url: `gs://${bucket}/${objectName}` };
   }
 
   @Post('incompleta')

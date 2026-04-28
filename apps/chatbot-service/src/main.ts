@@ -15,9 +15,19 @@ async function bootstrap() {
   warnMissingEnv(['GCP_PROJECT_ID', 'DASHBOARD_API_INTERNAL_KEY', 'REDIS_URL']);
 
   const isProd = process.env.NODE_ENV === 'production';
-  const app = await NestFactory.create(AppModule, {
-    logger: isProd ? new JsonLogger('chatbot-service') : ['error', 'warn', 'log'],
-  });
+  let app;
+  try {
+    app = await NestFactory.create(AppModule, {
+      logger: isProd ? new JsonLogger('chatbot-service') : ['error', 'warn', 'log'],
+    });
+  } catch (err) {
+    Logger.error(
+      `Error fatal al inicializar chatbot-service: ${(err as Error).message}`,
+      (err as Error).stack,
+      'Bootstrap',
+    );
+    process.exit(1);
+  }
 
   app.use(helmet());
   app.useGlobalPipes(

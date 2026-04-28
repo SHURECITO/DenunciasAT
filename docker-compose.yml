@@ -83,6 +83,7 @@ services:
       RAG_SERVICE_URL: http://rag-service:3006
       # GCS para servir .docx al frontend
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GCP_REGION: ${GCP_REGION:-us-central1}
       GCS_BUCKET_DOCUMENTOS: ${GCS_BUCKET_DOCUMENTOS:-denunciasat-documentos}
     depends_on:
       postgres:

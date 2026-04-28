@@ -19,11 +19,14 @@ jobs:
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
+        with:
+          submodules: false
+          lfs: false
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
@@ -43,11 +46,14 @@ jobs:
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
+        with:
+          submodules: false
+          lfs: false
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -75,6 +81,9 @@ jobs:
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
+        with:
+          submodules: false
+          lfs: false
 
       - name: Determinar tag
         id: meta
@@ -95,7 +104,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build dashboard-api
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/dashboard-api/Dockerfile
@@ -105,7 +114,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/dashboard-api:latest
 
       - name: Build chatbot-service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/chatbot-service/Dockerfile
@@ -115,7 +124,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/chatbot-service:latest
 
       - name: Build whatsapp-service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/whatsapp-service/Dockerfile
@@ -125,7 +134,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/whatsapp-service:latest
 
       - name: Build document-service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/document-service/Dockerfile
@@ -135,7 +144,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/document-service:latest
 
       - name: Build notification-service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/notification-service/Dockerfile
@@ -145,7 +154,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/notification-service:latest
 
       - name: Build rag-service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/rag-service/Dockerfile
@@ -155,7 +164,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/denunciasat/rag-service:latest
 
       - name: Build frontend
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: frontend
           file: frontend/Dockerfile
@@ -341,22 +350,3 @@ jobs:
             docker compose -f docker-compose.prod.yml logs --tail=50 dashboard-api || true
           EOF
 
-  # ── Verificación post-despliegue ───────────────────────────────────────────
-  verify:
-    name: Verify
-    needs: deploy-vm
-    runs-on: ubuntu-latest
-    steps:
-      - name: Healthcheck dashboard-api con reintentos
-        run: |
-          for i in $(seq 1 8); do
-            echo "Intento $i/8..."
-            if curl -sf --max-time 10 "${{ secrets.APP_PUBLIC_URL }}/health"; then
-              echo "dashboard-api OK"
-              exit 0
-            fi
-            echo "Intento $i fallido — esperando 15s..."
-            sleep 15
-          done
-          echo "::error::dashboard-api no respondió tras 8 intentos (2 min)"
-          exit 1
