@@ -251,6 +251,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ secrets.GCP_VM_USER }}@${{ secrets.GCP_VM_HOST }} << 'EOF'
             set -e
             cd /opt/denunciasat
+            sudo chmod 644 /opt/denunciasat/.env && sudo chown $USER:$USER /opt/denunciasat/.env
 
             # Actualizar archivos del repositorio en la VM
             git fetch origin main
