@@ -2,7 +2,9 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpException,
+  Logger,
   Param,
   ParseIntPipe,
   Patch,
@@ -42,6 +44,7 @@ import { DenunciaEstado } from './entities/denuncia.entity';
 export class DenunciasController {
   private readonly bucketDocumentos: string;
   private readonly dashboardToDocumentKey: string;
+  private readonly logger = new Logger(DenunciasController.name);
 
   constructor(
     private readonly denunciasService: DenunciasService,
@@ -201,7 +204,11 @@ export class DenunciasController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateDenunciaDto,
+    @Headers('x-document-error') documentError?: string,
   ) {
+    if (documentError) {
+      this.logger.error(`Error generando documento para denuncia #${id}: ${documentError}`);
+    }
     return this.denunciasService.update(id, dto);
   }
 
@@ -223,10 +230,13 @@ export class DenunciasController {
 
     const updated = await this.denunciasService.marcarDocumentoPendiente(id);
 
-    // Fire-and-forget — no esperamos la respuesta del document-service
+    this.logger.log(`Disparando generación de documento para denuncia #${id} → ${docServiceUrl}`);
+    // Fire-and-forget — document-service notifica resultado vía PATCH
     axios
       .post(`${docServiceUrl}/generar/${id}`, {}, { headers: this.getDocumentServiceHeaders() })
-      .catch(() => { /* document-service actualizará el estado vía PATCH */ });
+      .catch((err: Error & { code?: string }) => {
+        this.logger.error(`No se pudo contactar document-service para denuncia #${id}: ${err.code ?? ''} ${err.message}`);
+      });
 
     return updated;
   }

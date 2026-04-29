@@ -278,6 +278,7 @@ export class DenunciasService {
       const typedVal: any = val;
       result.push({
         nombre: key,
+        nombreTitular: typedVal.nombreTitular,
         cargoTitular: typedVal.cargoTitular,
         nivel: typedVal.nivel,
         tipo: typedVal.tipo,

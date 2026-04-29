@@ -25,6 +25,8 @@ COPY --from=build /app/dist ./dist
 # Plantilla base del documento y mapa de dependencias
 COPY infrastructure/templates/Plantilla.docx ./infrastructure/templates/Plantilla.docx
 COPY infrastructure/config/dependencias.json ./infrastructure/config/dependencias.json
+COPY infrastructure/config/dependencias.vector.db.json ./infrastructure/config/dependencias.vector.db.json
+COPY infrastructure/config/normativa.juridica.json ./infrastructure/config/normativa.juridica.json
 # Directorio de documentos generados (montado como volumen en producción)
 RUN mkdir -p /app/infrastructure/documentos
 RUN chown -R node:node /app

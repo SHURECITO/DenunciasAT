@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { readFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { GcsStorageService } from '@app/storage';
@@ -364,6 +364,9 @@ export class DocumentBuilderService {
     mkdirSync(dirname(rutaDestino), { recursive: true });
 
     // Cargar plantilla como ZIP
+    if (!existsSync(TEMPLATE_PATH)) {
+      throw new Error(`Plantilla.docx no encontrada en ${TEMPLATE_PATH}`);
+    }
     const zip = new AdmZip(TEMPLATE_PATH);
 
     // Extraer el opening tag (con TODOS los namespaces) y el sectPr del document.xml original

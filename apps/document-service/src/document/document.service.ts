@@ -72,14 +72,24 @@ export class DocumentService {
         dependenciaSecundaria: inferencia.dependenciaSecundaria,
       });
 
-      if (!admisibilidad.esAdmisible) {
+      if (!admisibilidad.esAdmisible && admisibilidad.bloquearRadicacion) {
         this.logger.warn(
           `Denuncia #${denunciaId} no admisible para documento: motivo=${admisibilidad.motivo}, bloquear=${admisibilidad.bloquearRadicacion}`,
         );
-        await this.dashboardApi.notificarDocumentoError(denunciaId);
+        await this.dashboardApi.notificarDocumentoError(
+          denunciaId,
+          `No admisible para documento: ${admisibilidad.motivo}`,
+        );
         return;
       }
 
+      if (!admisibilidad.esAdmisible) {
+        this.logger.warn(
+          `Denuncia #${denunciaId} no admisible, pero no bloquea: motivo=${admisibilidad.motivo}. Se continua con generacion.`,
+        );
+      }
+
+      this.logger.log(`Denuncia #${denunciaId} — iniciando llamadas Gemini (hechos + asunto)`);
       const dependenciaPrincipal = inferencia.dependenciaPrincipal;
       const dependenciaSecundaria = inferencia.dependenciaSecundaria;
       const hayMultiple = !!dependenciaSecundaria;
@@ -123,6 +133,7 @@ export class DocumentService {
           : this.gemini.generarAsunto({ descripcionResumen: resumen, dependencia: dependenciaPrincipal }),
       ]);
       const asunto = asuntoGenerado;
+      this.logger.log(`Denuncia #${denunciaId} — Gemini completado. Construyendo .docx`);
 
       // Deserializar imágenes de evidencia (almacenadas como JSON string)
       let imagenes: string[] = [];
@@ -148,12 +159,16 @@ export class DocumentService {
         dependenciasEstructuradas,
       });
 
-      // Leer buffer y validar integridad antes de subir a MinIO
+      // Leer buffer y validar integridad antes de subir a GCS
+      this.logger.log(`Denuncia #${denunciaId} — .docx construido. Validando e iniciando subida a GCS`);
       const docxBuffer  = await readFile(rutaArchivo);
       const validacion  = this.validarDocx(docxBuffer, denuncia);
       if (!validacion.ok) {
         this.logger.error(`Documento inválido para denuncia #${denunciaId}: ${validacion.reason}`);
-        await this.dashboardApi.notificarDocumentoError(denunciaId);
+        await this.dashboardApi.notificarDocumentoError(
+          denunciaId,
+          `Documento inválido: ${validacion.reason}`,
+        );
         return; // finally se encarga de eliminar rutaArchivo
       }
 
@@ -166,8 +181,9 @@ export class DocumentService {
       await this.dashboardApi.notificarDocumentoOk(denunciaId, objectName);
       this.logger.log(`Documento generado y subido a GCS: ${this.bucketDocumentos}/${objectName}`);
     } catch (err) {
-      this.logger.error(`Error generando documento para denuncia #${denunciaId}:`, err);
-      await this.dashboardApi.notificarDocumentoError(denunciaId);
+      const reason = this.formatErrorReason(err);
+      this.logger.error(`Error generando documento para denuncia #${denunciaId}: ${reason}`);
+      await this.dashboardApi.notificarDocumentoError(denunciaId, reason);
     } finally {
       // Eliminar archivo temporal siempre, tanto en éxito como en error
       if (rutaArchivo) {
@@ -180,6 +196,21 @@ export class DocumentService {
           this.logger.debug(`Archivo temporal eliminado tras subida exitosa: ${rutaArchivo}`);
         }
       }
+    }
+  }
+
+  private formatErrorReason(err: unknown): string {
+    if (!err) return 'Error desconocido';
+    if (err instanceof Error) {
+      const code = (err as NodeJS.ErrnoException).code;
+      const msg = err.message || 'Error desconocido';
+      return code ? `${msg} (code: ${code})` : msg;
+    }
+    if (typeof err === 'string') return err;
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return 'Error desconocido';
     }
   }
 
@@ -210,11 +241,15 @@ export class DocumentService {
         dependenciaSecundaria: inferencia.dependenciaSecundaria,
       });
 
-      if (!admisibilidad.esAdmisible) {
+      if (!admisibilidad.esAdmisible && admisibilidad.bloquearRadicacion) {
         this.logger.warn(
           `Denuncia #${dto.denunciaId} no admisible para generación manual: motivo=${admisibilidad.motivo}, bloquear=${admisibilidad.bloquearRadicacion}`,
         );
         documentoGenerado = false;
+      } else if (!admisibilidad.esAdmisible) {
+        this.logger.warn(
+          `Denuncia #${dto.denunciaId} no admisible, pero no bloquea: motivo=${admisibilidad.motivo}. Se continua con generacion manual.`,
+        );
       }
 
       if (inferencia.tipoCaso !== 'nulo') {

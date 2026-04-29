@@ -5,6 +5,7 @@ import { type Denuncia } from '@/lib/api';
 
 interface DependenciaInfo {
   nombre: string;
+  nombreTitular: string;
   cargoTitular: string;
   nivel: string;
   tipo: string;
@@ -161,7 +162,7 @@ export default function ModalEditarDenuncia({ denuncia, onClose, onSaved }: Prop
                         />
                         <div className="flex flex-col">
                           <span className={`text-sm font-medium ${dependenciasAsignadas.includes(d.nombre) ? 'text-blue-900' : 'text-gray-900'}`}>{d.nombre}</span>
-                          <span className="text-xs text-gray-500">{d.cargoTitular}</span>
+                          <span className="text-xs text-gray-500">{d.nombreTitular}</span>
                         </div>
                       </label>
                     ))}

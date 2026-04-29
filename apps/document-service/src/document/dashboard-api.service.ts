@@ -64,12 +64,16 @@ export class DashboardApiService {
     );
   }
 
-  async notificarDocumentoError(id: number): Promise<void> {
+  async notificarDocumentoError(id: number, reason?: string): Promise<void> {
     try {
+      const reasonHeader = reason?.slice(0, 300);
+      const headers = reasonHeader
+        ? { ...this.headers, 'x-document-error': reasonHeader }
+        : this.headers;
       await axios.patch(
         `${this.baseUrl}/denuncias/${id}`,
         { documentoGeneradoOk: false, documentoPendiente: false },
-        { headers: this.headers },
+        { headers },
       );
     } catch (err) {
       this.logger.warn(`No se pudo notificar error de documento para ${id}: ${(err as Error).message}`);
