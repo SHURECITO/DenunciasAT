@@ -25,7 +25,6 @@ const REDIS_QR_KEY = 'evolution:qr';
 // Mutex por número: TTL corto para evitar locks muertos, delay entre mensajes encolados
 const LOCK_TTL_SEGUNDOS = 8;
 const COLA_DELAY_MS     = 2000;
-const WEBHOOK_MAX_SKEW_SECONDS = 300;
 
 interface MensajeEncolado {
   numero: string;
@@ -65,28 +64,30 @@ export class WebhookController {
   }
 
   /**
-   * Verifica firma HMAC del webhook si WHATSAPP_WEBHOOK_HMAC_SECRET está configurado.
-   * Firma esperada: sha256(timestamp.rawBody)
+   * Verifica firma HMAC del webhook si WHATSAPP_WEBHOOK_HMAC_SECRET está configurado
+   * Y el request trae la cabecera x-webhook-signature.
+   *
+   * Evolution API v2.2.3 no envía firma por defecto: si el request llega sin cabecera
+   * de firma se acepta con una advertencia de debug, independientemente del secret.
+   * Solo se rechaza cuando el secret está configurado Y la firma llega Y no coincide.
    */
   private validarFirmaWebhook(
     signature: string | undefined,
-    timestamp: string | undefined,
     rawBody: Buffer | undefined,
   ): boolean {
+    // Sin secret configurado → aceptar siempre
     if (!this.webhookHmacSecret) return true;
-    if (!signature || !timestamp || !rawBody) return false;
 
-    const parsedTs = Number(timestamp);
-    if (!Number.isFinite(parsedTs)) return false;
-    const tsSeconds = parsedTs > 1_000_000_000_000
-      ? Math.floor(parsedTs / 1000)
-      : parsedTs;
-    const now = Math.floor(Date.now() / 1000);
-    if (Math.abs(now - tsSeconds) > WEBHOOK_MAX_SKEW_SECONDS) return false;
+    // Secret configurado pero Evolution no envió firma → aceptar (log debug)
+    if (!signature) {
+      this.logger.debug('Webhook sin cabecera x-webhook-signature — aceptado (Evolution API no firma por defecto)');
+      return true;
+    }
 
-    const payload = `${timestamp}.${rawBody.toString('utf8')}`;
+    // Firma presente → validar contra el secret (sin timestamp, Evolution no lo envía)
+    if (!rawBody) return false;
     const digest = createHmac('sha256', this.webhookHmacSecret)
-      .update(payload)
+      .update(rawBody)
       .digest('hex');
     const normalizedSignature = signature.replace(/^sha256=/i, '').trim();
     return this.secureCompare(normalizedSignature, digest);
@@ -232,10 +233,9 @@ export class WebhookController {
     @Body() payload: any,
     @Req() req: Request & { rawBody?: Buffer },
     @Headers('x-webhook-signature') signature: string | undefined,
-    @Headers('x-webhook-timestamp') timestamp: string | undefined,
   ) {
-    if (!this.validarFirmaWebhook(signature, timestamp, req.rawBody)) {
-      this.logger.warn('Webhook rechazado: firma o timestamp inválido');
+    if (!this.validarFirmaWebhook(signature, req.rawBody)) {
+      this.logger.warn('Webhook rechazado: firma HMAC inválida');
       throw new UnauthorizedException('Webhook no autorizado');
     }
 
