@@ -251,14 +251,21 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ secrets.GCP_VM_USER }}@${{ secrets.GCP_VM_HOST }} << 'EOF'
             set -e
             cd /opt/denunciasat
-            sudo chmod 644 /opt/denunciasat/.env && sudo chown $USER:$USER /opt/denunciasat/.env
+
+            # Capturar usuario real de la sesión SSH (más fiable que $USER en sesiones no-interactivas)
+            DEPLOY_USER=$(whoami)
+            echo "Usuario de deploy: ${DEPLOY_USER}"
+
+            # Reparar permisos del .env en caso de que una ejecución anterior lo dejara con root
+            sudo chown "${DEPLOY_USER}:${DEPLOY_USER}" /opt/denunciasat/.env 2>/dev/null || true
+            sudo chmod 644 /opt/denunciasat/.env 2>/dev/null || true
 
             # Actualizar archivos del repositorio en la VM
             git fetch origin main
             git reset --hard origin/main
 
-            # Generar .env desde GitHub Secrets — sobrescribe cualquier versión manual en la VM
-            cat > .env << 'ENVEOF'
+            # Generar .env desde GitHub Secrets — sudo tee funciona aunque el archivo sea de root
+            sudo tee .env > /dev/null << 'ENVEOF'
           # Base de datos
           DB_HOST=postgres
           DB_PORT=5432
@@ -317,6 +324,8 @@ jobs:
           API_PORT=8741
           FRONTEND_PORT=8742
           ENVEOF
+            # sudo tee crea el archivo como root — restaurar propiedad al usuario de deploy
+            sudo chown "${DEPLOY_USER}:${DEPLOY_USER}" .env
             chmod 600 .env
 
             # Instalar docker compose plugin si no está disponible
