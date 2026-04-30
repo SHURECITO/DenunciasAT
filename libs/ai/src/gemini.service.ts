@@ -885,17 +885,23 @@ JSON:`;
     try {
       return await intentarConModelo(this.modelChatbot);
     } catch (err) {
-      const msg = (err as Error).message ?? '';
+      const e = err as Error & { code?: string; status?: number; statusCode?: number };
+      const msg = e.message ?? '';
+      const code = e.code ?? e.status ?? e.statusCode ?? '?';
+      this.logger.error(`Error Gemini chatbot: ${msg} | code=${code}`);
+      if (e.stack) this.logger.debug(`Stack Gemini chatbot: ${e.stack.substring(0, 800)}`);
       if (msg.includes('429')) {
         this.logger.warn(`429 modelo primario — usando fallback ${MODEL_CHATBOT_FALLBACK}`);
         try {
           return await intentarConModelo(this.modelChatbotFallback);
         } catch (err2) {
-          this.logger.error(`Error Gemini chatbot fallback: ${(err2 as Error).message}`);
+          const e2 = err2 as Error & { code?: string; status?: number; statusCode?: number };
+          const code2 = e2.code ?? e2.status ?? e2.statusCode ?? '?';
+          this.logger.error(`Error Gemini chatbot fallback: ${e2.message} | code=${code2}`);
+          if (e2.stack) this.logger.debug(`Stack Gemini fallback: ${e2.stack.substring(0, 800)}`);
           return this.fallback(datosConfirmados, 'error ejecutando modelo fallback');
         }
       }
-      this.logger.error(`Error Gemini chatbot: ${msg}`);
       return this.fallback(datosConfirmados, 'error ejecutando modelo primario');
     }
   }

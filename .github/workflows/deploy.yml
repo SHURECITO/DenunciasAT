@@ -391,6 +391,36 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker compose -f docker-compose.prod.yml ps
 
+            # Verificar que al menos 8 servicios estén corriendo tras 30 s
+            echo "Esperando 30 s para que los contenedores arranquen..."
+            sleep 30
+            RUNNING=$(docker compose -f docker-compose.prod.yml ps --status running --quiet | wc -l)
+            echo "Servicios corriendo: ${RUNNING}"
+            if [ "$RUNNING" -lt 8 ]; then
+              echo "::error::Solo ${RUNNING}/10 servicios están corriendo — falla el deploy"
+              docker compose -f docker-compose.prod.yml ps
+              docker compose -f docker-compose.prod.yml logs --tail=30 || true
+              exit 1
+            fi
+
+            # Auto-seed del usuario administrador (idempotente — 409 = ya existe, ambos OK)
+            sed -i 's/^SEED_ENABLED=.*/SEED_ENABLED=true/' .env
+            docker compose -f docker-compose.prod.yml up -d dashboard-api
+            echo "Esperando a que dashboard-api esté listo para el seed..."
+            for i in $(seq 1 12); do
+              if curl -sf http://localhost:8741/health >/dev/null 2>&1; then break; fi
+              sleep 5
+            done
+            SEED_STATUS=$(curl -s -o /tmp/seed_response -w "%{http_code}" -X POST http://localhost:8741/auth/seed 2>/dev/null || echo "000")
+            SEED_BODY=$(cat /tmp/seed_response 2>/dev/null || echo "")
+            if [ "$SEED_STATUS" = "201" ] || [ "$SEED_STATUS" = "409" ]; then
+              echo "Seed completado correctamente (status ${SEED_STATUS})"
+            else
+              echo "Seed devolvió status ${SEED_STATUS}: ${SEED_BODY} — verificar manualmente (no es error crítico)"
+            fi
+            sed -i 's/^SEED_ENABLED=.*/SEED_ENABLED=false/' .env
+            docker compose -f docker-compose.prod.yml up -d dashboard-api
+
             # Diagnóstico: mostrar logs del dashboard-api si falla el healthcheck
             docker compose -f docker-compose.prod.yml logs --tail=50 dashboard-api || true
           EOF

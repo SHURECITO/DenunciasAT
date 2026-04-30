@@ -255,10 +255,12 @@ export class DenunciasController {
     }
 
     if (!denuncia.documentoUrl) {
+      this.logger.warn(`Descarga solicitada para denuncia #${id} (${denuncia.radicado}) pero documentoUrl es null`);
       throw new HttpException('Documento no disponible', 404);
     }
 
     const objectName = denuncia.documentoUrl;
+    this.logger.log(`Descargando documento denuncia #${id}: bucket=${this.bucketDocumentos}, objeto=${objectName}`);
     try {
       const signedUrl = await this.storage.getSignedUrl(this.bucketDocumentos, objectName);
       const response = await axios.get<ArrayBuffer>(signedUrl, {
@@ -273,7 +275,8 @@ export class DenunciasController {
         'Content-Length': buffer.length,
       });
       res.send(buffer);
-    } catch {
+    } catch (err) {
+      this.logger.error(`Error descargando documento denuncia #${id} (${objectName}): ${(err as Error).message}`);
       throw new HttpException('Documento no disponible', 503);
     }
   }
