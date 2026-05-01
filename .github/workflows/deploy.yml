@@ -325,8 +325,8 @@ jobs:
           FRONTEND_PORT=8742
           ENVEOF
             # sudo tee crea el archivo como root — restaurar propiedad al usuario de deploy
-            sudo chown "${DEPLOY_USER}:${DEPLOY_USER}" .env
-            chmod 600 .env
+            sudo chown $(whoami):$(whoami) /opt/denunciasat/.env
+            sudo chmod 644 /opt/denunciasat/.env
 
             # Instalar docker compose plugin si no está disponible
             if ! docker compose version &>/dev/null 2>&1; then
@@ -417,7 +417,9 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d dashboard-api
             echo "Esperando a que dashboard-api esté listo para el seed..."
             for i in $(seq 1 12); do
-              if curl -sf http://localhost:8741/health >/dev/null 2>&1; then break; fi
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8741/health)
+              if [ "$STATUS" = "200" ]; then break; fi
+              echo "Waiting for dashboard-api... ($i/12)"
               sleep 5
             done
             SEED_STATUS=$(curl -s -o /tmp/seed_response -w "%{http_code}" -X POST http://localhost:8741/auth/seed 2>/dev/null || echo "000")

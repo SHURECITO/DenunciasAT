@@ -56,46 +56,33 @@ NUNCA inventes normas. Normativa base: Const. 1991 Art.23, Ley 1437/2011 CPACA, 
 // ---------------------------------------------------------------------------
 // System prompt jurídico experto — usado para generarHechos y generarAsunto
 // ---------------------------------------------------------------------------
-const SYSTEM_PROMPT_LEGAL = `Eres un Asistente Jurídico Colombiano experto al servicio del concejal de Medellín Andrés Felipe Tobón Villada, especializado en:
-- Derecho Constitucional Colombiano
-- Derecho Administrativo Colombiano
-- Derecho Público Colombiano
-- Contratación Estatal
-- Jurisprudencia de altas cortes colombianas
+const SYSTEM_PROMPT_LEGAL = `Eres un abogado experto en derecho administrativo colombiano al servicio del concejal de Medellín Andrés Felipe Tobón Villada.
 
-Tu conocimiento se basa en:
-- Constitución Política de Colombia de 1991
-- Ley 80 de 1993 (Estatuto de Contratación)
-- Ley 1437 de 2011 (CPACA)
-- Ley 1474 de 2011 (Estatuto Anticorrupción)
-- Ley 136 de 1994 (Municipios)
-- Ley 1755 de 2015 (Derecho de Petición)
-- Acuerdo 79 de 2003 (Código de Convivencia Medellín)
-- Jurisprudencia Corte Constitucional, Consejo de Estado y Corte Suprema de Justicia
+Tu función es redactar la sección HECHOS de oficios institucionales dirigidos a dependencias de la Alcaldía de Medellín.
 
-REGLAS DE REDACCIÓN DE HECHOS EN OFICIOS:
-1. NUNCA menciones el nombre del ciudadano denunciante
-2. Redacta como si el concejal conoció la situación directamente en ejercicio de sus funciones
-3. Ejemplo INCORRECTO: "El ciudadano Juan reportó..."
-4. Ejemplo CORRECTO: "Este despacho ha conocido de una situación que afecta a la comunidad del sector..." o "En ejercicio de las funciones constitucionales de este despacho, se ha podido establecer que..."
-5. Identifica el problema jurídico concreto
-6. Describe hechos de forma objetiva y cronológica
-7. Cita normativa específica y aplicable
-8. Fundamenta la competencia de la entidad destinataria
-9. Concluye con urgencia o necesidad de intervención
+ESTILO DE REDACCIÓN:
+- Institucional, claro y directo — no técnico-jurídico complejo
+- El concejal conoció la situación en ejercicio de sus funciones, nunca a través de un ciudadano
+- Preciso y sin redundancias
+- Sin lenguaje emocional ni informal
 
-ESTILO:
-- Lenguaje técnico-jurídico formal
-- Preciso, sin rodeos
-- Enfoque práctico de abogado litigante
-- NUNCA inventes normas ni jurisprudencia
-- Solo artículos que conozcas con certeza
-- Sin frases genéricas como "según la ley"
+ESTRUCTURA DE LOS HECHOS (3 párrafos):
+1. Párrafo 1 — Contextualización: dónde ocurre y qué se encontró. Empieza con "Este despacho conoció de una problemática que afecta la comunidad del sector de [barrio]."
+2. Párrafo 2 — Descripción objetiva del problema: qué es, cómo afecta, por qué es urgente. Sin exageraciones, sin juicios de valor.
+3. Párrafo 3 — Competencia e intervención requerida: por qué esta dependencia es la responsable y qué debe hacer.
+
+NORMATIVA:
+- Solo cita normas colombianas que conozcas con certeza absoluta
+- Si no estás seguro de un artículo específico, no lo cites
+- Nunca inventes normas ni jurisprudencia
+- La normativa es opcional — solo úsala si refuerza naturalmente el argumento
 
 RESTRICCIONES ABSOLUTAS:
-- Solo normativa colombiana vigente
-- Nunca mencionar nombre del denunciante en el documento
-- Si hay ambigüedad normativa, usa el argumento más sólido disponible`;
+- Nunca mencionar el nombre del ciudadano denunciante
+- Nunca asumir información no proporcionada
+- Nunca hacer juicios de valor sobre personas o entidades
+- Máximo 3 párrafos, separados por línea en blanco
+- Sin encabezados, sin títulos, sin explicaciones adicionales`;
 
 // ---------------------------------------------------------------------------
 // System prompt del chatbot conversacional
@@ -253,9 +240,9 @@ Solo cuando TODOS los datos estén completos:
 * Responder sin analizar contexto`;
 
 // Modelos disponibles en Vertex AI (ADC — sin API key)
-const MODEL_CHATBOT          = 'gemini-2.0-flash';
-const MODEL_CHATBOT_FALLBACK = 'gemini-2.0-flash';
-const MODEL_LEGAL            = 'gemini-2.0-flash';
+const MODEL_CHATBOT          = 'gemini-2.5-flash-preview-04-17';
+const MODEL_CHATBOT_FALLBACK = 'gemini-2.0-flash-001';
+const MODEL_LEGAL            = 'gemini-2.5-flash-preview-04-17';
 
 const BASE_CONFIG = { topP: 0.8, topK: 40, maxOutputTokens: 512 };
 const CHATBOT_MSG_FALLBACK = 'Disculpa, no logré entender bien. ¿Podrías explicarme nuevamente el problema?';
@@ -346,7 +333,7 @@ export class GeminiService {
       systemInstruction: SYSTEM_PROMPT_LEGAL,
       ...BASE_CONFIG,
       temperature: 0.2,
-      maxOutputTokens: 600,
+      maxOutputTokens: 1024,
     });
 
     this.modelChatbot = new VertexModel(aiParaModelos, MODEL_CHATBOT, {
@@ -364,7 +351,7 @@ export class GeminiService {
     this.dependenciasKb = buildDependenciasKnowledgeBase();
 
     this.logger.log(
-      `GeminiService listo — modo: ${this.ai ? 'Vertex AI' : 'degradado'} | modelo: ${MODEL_CHATBOT} | dependencias: ${this.dependenciasKb.nombresDependencias.length}`,
+      `GeminiService listo — modo: ${this.ai ? 'Vertex AI' : 'degradado'} | proyecto: ${project || '(no configurado)'} | región: ${location} | modelo: ${MODEL_CHATBOT} | dependencias: ${this.dependenciasKb.nombresDependencias.length}`,
     );
   }
 
@@ -890,6 +877,11 @@ JSON:`;
       const code = e.code ?? e.status ?? e.statusCode ?? '?';
       this.logger.error(`Error Gemini chatbot: ${msg} | code=${code}`);
       if (e.stack) this.logger.debug(`Stack Gemini chatbot: ${e.stack.substring(0, 800)}`);
+      const isAuthError = msg.includes('401') || msg.includes('403') || msg.includes('UNAUTHENTICATED') ||
+        String(code) === '401' || String(code) === '403';
+      if (isAuthError) {
+        this.logger.error('ADC auth failed — verify Service Account has Vertex AI User role');
+      }
       if (msg.includes('429')) {
         this.logger.warn(`429 modelo primario — usando fallback ${MODEL_CHATBOT_FALLBACK}`);
         try {
@@ -967,57 +959,27 @@ Problema: ${(datos.descripcion ?? '').substring(0, 300)} | Entidad: ${datos.depe
 
     const ubicacionTexto = datos.ubicacion?.trim() || datos.direccion;
 
-    const prompt = `Actúa como un abogado experto en derecho administrativo colombiano, especializado en redacción de documentos oficiales para entidades públicas.
+    const prompt = `Redacta la sección HECHOS para un oficio institucional del concejal de Medellín Andrés Felipe Tobón Villada.
 
-Estás generando un oficio dentro del sistema DenunciasAT de la Alcaldía de Medellín.
+DATOS DEL CASO:
+- Problema reportado: ${datos.descripcion}
+- Dirección: ${ubicacionTexto}${locStr}
+- Dependencia principal responsable: ${datos.dependenciaPrincipal}
+${datos.dependenciaSecundaria?.trim() ? `- Dependencia secundaria: ${datos.dependenciaSecundaria}` : ''}
 
-OBJETIVO
-Redactar un documento institucional claro, formal y jurídicamente correcto, basado en los hechos reportados por el ciudadano y las competencias de la entidad asignada.
+INSTRUCCIONES:
+1. Párrafo 1: Contextualiza dónde ocurre y qué encontró este despacho. Empieza con: "Este despacho conoció de una problemática que afecta la comunidad del sector de [barrio o ubicación]."
+2. Párrafo 2: Describe el problema de forma objetiva y clara. Explica cómo afecta a la comunidad y por qué requiere intervención. No copies literalmente la descripción — redáctala de forma institucional manteniendo los hechos exactos.
+3. Párrafo 3: Indica por qué ${datos.dependenciaPrincipal} es la entidad competente y qué acción concreta se le solicita.${datos.dependenciaSecundaria?.trim() ? ` Si aplica, menciona articulación con ${datos.dependenciaSecundaria}.` : ''}
 
-CONTEXTO DE ENTRADA
-descripcion: ${datos.descripcion}
-ubicacion: ${ubicacionTexto}${locStr ? `${locStr}` : ''}
-dependenciaPrincipal: ${datos.dependenciaPrincipal}
-dependenciaSecundaria: ${dependenciaSecundariaTexto}
-normativaAplicable: ${normativaTexto}
+PROHIBIDO:
+- Copiar literalmente la descripción del ciudadano
+- Mencionar el nombre del denunciante
+- Inventar hechos no presentes en los datos
+- Agregar encabezados o explicaciones fuera de los 3 párrafos
+- Citar normas si no tienes certeza absoluta del artículo exacto
 
-USO DEL CONTEXTO JURIDICO
-La normativaAplicable es solo una guia de contexto.
-No cites leyes o articulos si no tienes certeza absoluta.
-No inventes normas.
-No uses numeracion de articulos sin seguridad.
-Usa la normativa unicamente para entender competencias y reforzar coherencia institucional.
-Si no es necesario citar normas, no las menciones.
-
-LOGICA ADMINISTRATIVA
-La dependenciaPrincipal es la responsable del tramite.
-Si existe dependenciaSecundaria, incluye articulacion institucional clara.
-No asignes multiples responsables directos.
-No generes conflictos de competencia.
-
-ESTILO DE REDACCION
-Formal y administrativo colombiano.
-Claro, sin tecnicismos innecesarios.
-Preciso y sin redundancias.
-No usar lenguaje juridico complejo innecesario.
-No usar lenguaje informal.
-
-ESTRUCTURA DEL DOCUMENTO
-1. ASUNTO: resumen breve del caso.
-2. EXPOSICION DE LOS HECHOS: redactar los hechos de forma clara, ordenada y objetiva.
-3. SOLICITUD: indicar la accion que debe realizar la entidad.
-4. ARTICULACION: si aplica, incluir exactamente esta frase:
-"Se solicita adelantar las acciones correspondientes y, de ser necesario, articular con ${dependenciaSecundariaTexto} para la atencion integral de la situacion reportada."
-5. CIERRE: lenguaje institucional adecuado.
-
-PROHIBIDO
-Inventar normas o articulos.
-Exagerar los hechos.
-Hacer juicios de valor.
-Usar lenguaje emocional.
-Asumir informacion no dada.
-
-Redacta solo la seccion HECHOS en 3 parrafos separados por una linea en blanco. No agregues encabezados ni explicaciones. El nombre del denunciante nunca debe aparecer.`;
+Responde SOLO con los 3 párrafos separados por línea en blanco.`;
 
     try {
       const r = await this.modelLegal.generateContent(prompt);
@@ -1032,11 +994,12 @@ Redacta solo la seccion HECHOS en 3 parrafos separados por una linea en blanco. 
     direccion: string; barrio: string; comuna: string; descripcion: string; dependenciaPrincipal: string;
   }): string {
     const loc = [datos.barrio, datos.comuna].filter(Boolean).join(', ');
-    return `Este despacho ha podido establecer que en la dirección ${datos.direccion}${loc ? `, ${loc}` : ''}, del municipio de Medellín, se presenta la siguiente situacion que requiere atencion por parte de las autoridades competentes.
+    const locTexto = loc ? `del sector de ${loc}, ` : '';
+    return `Este despacho conoció de una problemática que afecta la comunidad ${locTexto}en la dirección ${datos.direccion}, municipio de Medellín, que requiere atención prioritaria por parte de las autoridades competentes.
 
-${datos.descripcion}
+En el lugar referenciado se presenta la siguiente situación: ${datos.descripcion}
 
-En ese sentido, se pone en conocimiento de ${datos.dependenciaPrincipal} la situacion descrita para que proceda conforme a sus competencias y brinde una respuesta oportuna dentro de los terminos institucionales aplicables.`;
+En ese sentido, se requiere a ${datos.dependenciaPrincipal} que adelante las acciones correspondientes conforme a sus competencias y brinde respuesta oportuna a la situación reportada.`;
   }
 
   // ---------------------------------------------------------------------------
@@ -1046,21 +1009,30 @@ En ese sentido, se pone en conocimiento de ${datos.dependenciaPrincipal} la situ
     descripcionResumen: string;
     dependencia: string;
   }): Promise<string> {
-    const prompt = `Genera el ASUNTO para un oficio formal del concejal de Medellín a ${datos.dependencia}.
+    const prompt = `Genera el ASUNTO para un oficio oficial del concejal de Medellín dirigido a ${datos.dependencia}.
 
-Situación: ${datos.descripcionResumen}
-Dependencia: ${datos.dependencia}
+SITUACIÓN: ${datos.descripcionResumen}
 
-Requisitos:
-- Máximo 12 palabras
-- Inicia con verbo en infinitivo en MAYÚSCULAS: SOLICITAR, REQUERIR, GESTIONAR, INTERVENIR, VERIFICAR, ATENDER
-- Describe la acción Y el objeto claramente
-- Ejemplo bueno: "REQUERIR INTERVENCIÓN INMEDIATA POR DETERIORO DE VÍA PÚBLICA EN LAURELES"
-- Ejemplo malo: "DAÑO EN TUBO DE AGUA"
+REGLAS:
 - Todo en MAYÚSCULAS
+- Máximo 12 palabras
+- Inicia con verbo en infinitivo: SOLICITAR, REQUERIR, GESTIONAR, INTERVENIR, VERIFICAR, ATENDER
+- Incluye casi siempre la dirección o ubicación específica — da claridad al equipo del concejal
+- Describe la acción + el problema + la ubicación cuando esté disponible
 - Sin punto final
 
-Responde SOLO con el texto del asunto, sin explicaciones.`;
+EJEMPLOS DE FORMATO CORRECTO:
+- "SOLICITAR INTERVENCIÓN EN MALLA VIAL POR DETERIORO EN LA CALLE 54 #45-60, LA CANDELARIA"
+- "REQUERIR ATENCIÓN A SEMÁFORO DAÑADO EN LA CARRERA 80 CON CALLE 30, LAURELES"
+- "GESTIONAR RECOLECCIÓN DE ESCOMBROS EN LA DIAGONAL 75B #32-10, CASTILLA"
+- "ATENDER PROBLEMÁTICA DE ESPACIO PÚBLICO EN LA AVENIDA EL POBLADO, EL POBLADO"
+
+EJEMPLOS INCORRECTOS (nunca hagas esto):
+- "DAÑO EN TUBO DE AGUA" (sin verbo infinitivo, sin ubicación)
+- "SOLICITAR INTERVENCIÓN" (demasiado vago)
+- "SOLICITAR AL SEÑOR SECRETARIO QUE POR FAVOR ATIENDA EL PROBLEMA DE LA VÍA" (informal, muy largo)
+
+Responde SOLO con el texto del asunto, sin explicaciones ni comillas.`;
 
     try {
       const r = await new VertexModel(this.ai, MODEL_LEGAL, {

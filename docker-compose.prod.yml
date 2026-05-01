@@ -89,6 +89,8 @@ services:
       RAG_SERVICE_URL: http://rag-service:3006
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCP_REGION: ${GCP_REGION:-us-central1}
+      GOOGLE_CLOUD_PROJECT: ${GCP_PROJECT_ID}
+      GOOGLE_CLOUD_LOCATION: ${GCP_REGION:-us-central1}
       GCS_BUCKET_DOCUMENTOS: ${GCS_BUCKET_DOCUMENTOS:-denunciasat-documentos}
     depends_on:
       postgres:
@@ -194,6 +196,8 @@ services:
       PORT: 3002
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCP_REGION: ${GCP_REGION:-us-central1}
+      GOOGLE_CLOUD_PROJECT: ${GCP_PROJECT_ID}
+      GOOGLE_CLOUD_LOCATION: ${GCP_REGION:-us-central1}
       REDIS_URL: redis://redis:6379
       DASHBOARD_API_URL: http://dashboard-api:3000
       DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
@@ -236,6 +240,8 @@ services:
       DASHBOARD_TO_DOCUMENT_KEY: ${DASHBOARD_TO_DOCUMENT_KEY}
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCP_REGION: ${GCP_REGION:-us-central1}
+      GOOGLE_CLOUD_PROJECT: ${GCP_PROJECT_ID}
+      GOOGLE_CLOUD_LOCATION: ${GCP_REGION:-us-central1}
       GCS_BUCKET_EVIDENCIAS: ${GCS_BUCKET_EVIDENCIAS:-denunciasat-evidencias}
       GCS_BUCKET_DOCUMENTOS: ${GCS_BUCKET_DOCUMENTOS:-denunciasat-documentos}
       ALLOWED_REMOTE_MEDIA_HOSTS: ${ALLOWED_REMOTE_MEDIA_HOSTS:-evolution-api}
@@ -292,6 +298,8 @@ services:
       PORT: 3006
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCP_REGION: ${GCP_REGION:-us-central1}
+      GOOGLE_CLOUD_PROJECT: ${GCP_PROJECT_ID}
+      GOOGLE_CLOUD_LOCATION: ${GCP_REGION:-us-central1}
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT:-5432}/${DB_NAME}
       DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
     depends_on:
