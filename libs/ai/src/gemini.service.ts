@@ -253,9 +253,9 @@ Solo cuando TODOS los datos estén completos:
 * Responder sin analizar contexto`;
 
 // Modelos disponibles en Vertex AI (ADC — sin API key)
-const MODEL_CHATBOT          = 'gemini-2.5-flash-preview-04-17';
-const MODEL_CHATBOT_FALLBACK = 'gemini-2.0-flash-001';
-const MODEL_LEGAL            = 'gemini-2.5-flash-preview-04-17';
+const MODEL_CHATBOT          = 'gemini-2.5-flash';
+const MODEL_CHATBOT_FALLBACK = 'gemini-2.5-flash';
+const MODEL_LEGAL            = 'gemini-2.5-flash';
 
 const BASE_CONFIG = { topP: 0.8, topK: 40, maxOutputTokens: 1024 };
 const CHATBOT_MSG_FALLBACK = 'Disculpa, no logré entender bien. ¿Podrías explicarme nuevamente el problema?';
