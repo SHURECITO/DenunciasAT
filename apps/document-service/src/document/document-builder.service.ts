@@ -385,9 +385,6 @@ export class DocumentBuilderService {
     // ── Construir el cuerpo ───────────────────────────────────────────────────
     const body: string[] = [];
 
-    // Radicado alineado a la derecha
-    body.push(p(denuncia.radicado, { align: 'right', spacingAfter: 240 }));
-
     // Fecha
     body.push(p(formatFecha(denuncia.fechaCreacion), { spacingAfter: 480 }));
 
