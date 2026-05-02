@@ -444,7 +444,7 @@ Responde SOLO con JSON:
     this.assertClasificacionDisponible();
     try {
       const result = await this.ai!.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt,
       });
       const raw = result.text ?? '';
