@@ -48,7 +48,7 @@ describe('ChatbotClientService', () => {
         { numero: '573001234567', mensaje: 'Hola', tipo: 'conversation', mediaUrl: undefined },
         {
           headers: { 'x-internal-key': '', 'x-internal-service': 'whatsapp' },
-          timeout: 15000,
+          timeout: 40000,
         },
       );
       expect(resultado).toEqual(respuestaEsperada);
