@@ -353,12 +353,14 @@ export class GeminiService {
       systemInstruction: SYSTEM_PROMPT_CHATBOT,
       ...BASE_CONFIG,
       temperature: 0.4,
+      maxOutputTokens: 4096,
     });
 
     this.modelChatbotFallback = new VertexModel(aiParaModelos, MODEL_CHATBOT_FALLBACK, {
       systemInstruction: SYSTEM_PROMPT_CHATBOT,
       ...BASE_CONFIG,
       temperature: 0.4,
+      maxOutputTokens: 4096,
     });
 
     this.dependenciasKb = buildDependenciasKnowledgeBase();

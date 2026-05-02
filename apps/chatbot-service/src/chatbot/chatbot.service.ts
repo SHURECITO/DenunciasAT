@@ -474,30 +474,31 @@ export class ChatbotService {
       await this.actualizarClasificacionConRag(estado, numero, mensajeEfectivo, resultado);
     } catch (err) {
       if (err instanceof RagTecnicoError) {
-        this.logger.warn(`[${numero}] RAG no disponible por créditos/cuota. Se responde error técnico al ciudadano.`);
-        return this.responderErrorTecnico(estado, numero, mensajeEfectivo);
+        this.logger.warn(`[${numero}] RAG no disponible — continuando con clasificación previa o por palabras clave`);
+      } else {
+        this.logger.error(`[${numero}] Error inesperado en clasificación RAG: ${(err as Error).message}`);
       }
-
-      this.logger.error(`[${numero}] Error inesperado en clasificación RAG: ${(err as Error).message}`);
-      return this.responderErrorTecnico(estado, numero, mensajeEfectivo);
+      // RAG failure is non-fatal — Gemini's response continues normally
     }
 
-    // Evaluación de admisibilidad tras inferencia y antes de continuar flujo conversacional.
+    // Admisibilidad — only blocks when radicación is explicitly forbidden.
+    // Never replaces Gemini's conversational response for incomplete data.
     const admisibilidad = this.evaluarAdmisibilidadActual(estado, mensajeEfectivo, numero);
-    if (admisibilidad.bloquearRadicacion || admisibilidad.requiereMasInfo) {
-      const respuestaAdmisibilidad = admisibilidad.mensajeUsuario || MSG_IMPROCEDENTE_BLOQUEO;
+    if (admisibilidad.bloquearRadicacion) {
+      const respuestaBloqueo = admisibilidad.mensajeUsuario || MSG_IMPROCEDENTE_BLOQUEO;
       const timestamp = new Date().toISOString();
       estado.historial.push(
         { rol: 'user', contenido: mensajeEfectivo, timestamp },
-        { rol: 'assistant', contenido: respuestaAdmisibilidad, timestamp: new Date().toISOString() },
+        { rol: 'assistant', contenido: respuestaBloqueo, timestamp: new Date().toISOString() },
       );
       estado.datosConfirmados.etapa = 'recopilando';
       await this.conversacion.setEstado(numero, estado);
 
-      const delayAdmisibilidad = Math.min(2000 + respuestaAdmisibilidad.length * 40, 8000);
-      await new Promise((r) => setTimeout(r, delayAdmisibilidad));
-      return respuestaAdmisibilidad;
+      const delayBloqueo = Math.min(2000 + respuestaBloqueo.length * 40, 8000);
+      await new Promise((r) => setTimeout(r, delayBloqueo));
+      return respuestaBloqueo;
     }
+    // requiereMasInfo is informational only — Gemini handles asking for missing data naturally
 
     // Actualizar etapa — 'finalizado' solo lo setea radicarDenuncia() al confirmar el radicado.
     // Si Gemini devuelve 'finalizado' acá es porque quiere radicar pero aún no hemos creado la denuncia;
