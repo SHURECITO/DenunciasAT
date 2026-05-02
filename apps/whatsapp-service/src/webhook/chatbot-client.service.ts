@@ -31,7 +31,7 @@ export class ChatbotClientService {
           'x-internal-key': this.internalKey,
           'x-internal-service': 'whatsapp',
         },
-        timeout: 15000,
+        timeout: 40000,
       },
     );
     return res.data;
