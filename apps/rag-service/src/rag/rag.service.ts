@@ -428,6 +428,21 @@ ${candidatosTexto}
 
 REGLA: Selecciona SOLO las dependencias que tengan competencia directa y real sobre este problema específico. La mayoría de casos requieren UNA sola dependencia.
 
+DEFINICIÓN CRÍTICA — esEspecial:
+esEspecial SOLO puede ser true cuando la descripción menciona EXPLÍCITAMENTE alguno de estos temas:
+- Corrupción de funcionarios públicos
+- Extorsión o vacunas de grupos armados
+- Amenazas directas a la vida de personas
+- Sicariato o homicidio
+- Grupos armados o paramilitares
+- Terrorismo
+
+esEspecial debe ser false en TODOS los demás casos, incluyendo:
+- Mensajes vagos o incompletos como "hola", "quiero denunciar", "tengo un problema"
+- Problemas de infraestructura, servicios públicos, medio ambiente
+- Cualquier denuncia que no mencione explícitamente los temas anteriores
+- Cuando haya duda, siempre false
+
 Responde SOLO con JSON:
 {
   "esEspecial": boolean,

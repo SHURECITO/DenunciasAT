@@ -1,9 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosError } from 'axios';
 
 @Injectable()
-export class EvolutionService {
+export class EvolutionService implements OnModuleInit {
   private readonly logger = new Logger(EvolutionService.name);
   private readonly baseUrl: string;
   private readonly apiKey: string;
@@ -13,6 +13,41 @@ export class EvolutionService {
     this.baseUrl = this.config.get<string>('EVOLUTION_API_URL', 'http://evolution-api:8080');
     this.apiKey = this.config.get<string>('EVOLUTION_API_KEY', '');
     this.instance = this.config.get<string>('EVOLUTION_INSTANCE_NAME', 'denunciasAt');
+  }
+
+  async onModuleInit(): Promise<void> {
+    // Retry webhook configuration up to 5 times with exponential backoff.
+    // Evolution API may not be ready immediately when this service starts.
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        await this.configureWebhook();
+        return;
+      } catch (err) {
+        const waitMs = attempt * 3000;
+        this.logger.warn(
+          `Webhook config attempt ${attempt}/5 failed: ${(err as Error).message} — retrying in ${waitMs}ms`,
+        );
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+    }
+    this.logger.error('Could not configure Evolution webhook after 5 attempts — messages will not be received');
+  }
+
+  private async configureWebhook(): Promise<void> {
+    const webhookUrl = this.config.get<string>('WHATSAPP_SERVICE_URL', 'http://whatsapp-service:3003');
+    const url = `${this.baseUrl}/webhook/set/${this.instance}`;
+    const body = {
+      webhook: {
+        enabled: true,
+        url: `${webhookUrl}/webhook`,
+        webhook_by_events: true,
+        webhook_base64: false,
+        events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
+      },
+    };
+    const headers = { apikey: this.apiKey, 'Content-Type': 'application/json' };
+    const response = await axios.post(url, body, { headers, timeout: 5000 });
+    this.logger.log(`Evolution webhook configured: ${response.data?.url ?? webhookUrl}/webhook`);
   }
 
   private maskNumber(number: string): string {

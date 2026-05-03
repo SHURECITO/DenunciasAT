@@ -145,9 +145,17 @@ export class ChatbotService {
       merged.comuna = extraidos.comuna.trim();
     }
 
-    if (typeof extraidos.direccion === 'string' && esDireccionValida(extraidos.direccion)) {
-      merged.direccion = extraidos.direccion.trim();
-      merged.direccionConfirmada = true;
+    if (typeof extraidos.direccion === 'string' && extraidos.direccion.trim()) {
+      const dir = extraidos.direccion.trim();
+      if (esDireccionValida(dir)) {
+        // Direction has explicit street type — accept and confirm directly
+        merged.direccion = dir;
+        merged.direccionConfirmada = true;
+      } else if (dir.length >= 4) {
+        // Direction is ambiguous (no street type) — store as pending, let Gemini resolve
+        merged.direccion = dir;
+        merged.direccionConfirmada = false;
+      }
     }
 
     if (extraidos.direccionConfirmada === true && merged.direccion) {
@@ -449,7 +457,7 @@ export class ChatbotService {
           mensajeEfectivo,
         ),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Gemini timeout tras 15 s')), 15_000),
+          setTimeout(() => reject(new Error('Gemini timeout tras 40 s')), 40_000),
         ),
       ]);
     } catch (err) {
@@ -608,18 +616,20 @@ export class ChatbotService {
     }
 
     const prioridadDespuesTurno = this.obtenerPrioridadDinamica(estado.datosConfirmados);
-    const estancado = (estado.turnosSinNuevosDatos ?? 0) >= 3;
-    const necesitaAdaptacion =
+    // Only override Gemini's response after 6+ consecutive failures — Gemini handles
+    // the conversation naturally until then. This prevents generic hardcoded questions
+    // from replacing Gemini's intelligent contextual responses.
+    const bloqueadoPorFallos =
       prioridadDespuesTurno !== 'none' &&
       !hayDatosNuevos &&
       resultado.etapaSiguiente !== 'especial_cerrado' &&
       !resultado.listaParaRadicar &&
-      ((estado.intentosFallidos ?? 0) >= 2 || estancado);
+      (estado.intentosFallidos ?? 0) >= 6;
 
-    if (necesitaAdaptacion) {
+    if (bloqueadoPorFallos) {
       respuestaFinal = this.construirPreguntaAdaptativa(
         prioridadDespuesTurno,
-        estancado,
+        true,
         estado.intentosFallidos ?? 0,
       );
     }

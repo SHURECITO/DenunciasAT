@@ -108,7 +108,7 @@ services:
 
   evolution-api:
     <<: *service-defaults
-    image: atendai/evolution-api:v2.2.3
+    image: atendai/evolution-api:v2.2.4
     entrypoint: ["/bin/bash", "-c", "node /patches/patch-lid.js && . ./Docker/scripts/deploy_database.sh && npm run start:prod"]
     ports:
       - "127.0.0.1:8080:8080"
@@ -328,7 +328,7 @@ services:
       dashboard-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/api/health || exit 1"]
       interval: 20s
       timeout: 5s
       retries: 3

@@ -210,6 +210,10 @@ jobs:
             --member="serviceAccount:${CE_SA}" \
             --role="roles/aiplatform.user" \
             --condition=None 2>/dev/null || true
+          gcloud iam service-accounts add-iam-policy-binding "${CE_SA}" \
+            --member="serviceAccount:${CE_SA}" \
+            --role="roles/iam.serviceAccountTokenCreator" \
+            --project=${{ env.GCP_PROJECT_ID }} 2>/dev/null || true
 
   # ── Despliegue en la VM ─────────────────────────────────────────────────────
   deploy-vm:
@@ -325,8 +329,14 @@ jobs:
           FRONTEND_PORT=8742
           ENVEOF
             # sudo tee crea el archivo como root — restaurar propiedad al usuario de deploy
-            sudo chown "${DEPLOY_USER}:${DEPLOY_USER}" .env
-            chmod 600 .env
+            sudo chown "${DEPLOY_USER}:${DEPLOY_USER}" .env 2>/dev/null || true
+            sudo chmod 600 .env 2>/dev/null || true
+            # Verify .env is readable before continuing
+            if ! cat .env > /dev/null 2>&1; then
+              echo "::error::.env no es legible después de la escritura — abortando"
+              exit 1
+            fi
+            echo ".env escrito y verificado correctamente ($(wc -l < .env) líneas)"
 
             # Instalar docker compose plugin si no está disponible
             if ! docker compose version &>/dev/null 2>&1; then
@@ -400,17 +410,25 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker compose -f docker-compose.prod.yml ps
 
-            # Verificar que al menos 8 servicios estén corriendo tras 30 s
-            echo "Esperando 30 s para que los contenedores arranquen..."
-            sleep 30
-            RUNNING=$(docker compose -f docker-compose.prod.yml ps --status running --quiet | wc -l)
-            echo "Servicios corriendo: ${RUNNING}"
-            if [ "$RUNNING" -lt 8 ]; then
-              echo "::error::Solo ${RUNNING}/10 servicios están corriendo — falla el deploy"
-              docker compose -f docker-compose.prod.yml ps
-              docker compose -f docker-compose.prod.yml logs --tail=30 || true
-              exit 1
-            fi
+            # Verificar que todos los servicios estén corriendo
+            # Wait up to 90s for all 10 services to be healthy
+            echo "Esperando hasta 90s para que todos los contenedores arranquen..."
+            MAX_WAIT=18
+            for i in $(seq 1 $MAX_WAIT); do
+              RUNNING=$(docker compose -f docker-compose.prod.yml ps --status running --quiet | wc -l)
+              echo "Intento ${i}/${MAX_WAIT} — Servicios corriendo: ${RUNNING}/10"
+              if [ "$RUNNING" -ge 9 ]; then
+                echo "Todos los servicios están corriendo"
+                break
+              fi
+              if [ "$i" -eq "$MAX_WAIT" ]; then
+                echo "::error::Solo ${RUNNING}/10 servicios están corriendo tras 90s — falla el deploy"
+                docker compose -f docker-compose.prod.yml ps
+                docker compose -f docker-compose.prod.yml logs --tail=30 || true
+                exit 1
+              fi
+              sleep 5
+            done
 
             # Auto-seed del usuario administrador (idempotente — 409 = ya existe, ambos OK)
             sed -i 's/^SEED_ENABLED=.*/SEED_ENABLED=true/' .env

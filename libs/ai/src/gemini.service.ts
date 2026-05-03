@@ -167,9 +167,17 @@ Debes intentar obtener y mantener actualizados:
 
 6. VALIDACIÓN INTELIGENTE
 
-* Dirección debe tener formato real (calle, carrera, etc.)
 * Cédula: 6–10 dígitos
 * Nombre: mínimo 3 caracteres
+* Dirección: si el ciudadano da una dirección ambigua sin tipo de vía (ej: "50 con 80d",
+  "la 50 con la 80"), NO la rechaces. En cambio, ofrécele opciones resueltas. Ejemplo:
+  Usuario: "50 con 80d"
+  Tú: "¿Tu dirección es alguna de estas?
+  - Calle 50 #80D
+  - Carrera 50 #80D
+  ¿O me puedes confirmar el tipo de vía (calle, carrera, avenida)?"
+  Si el ciudadano confirma una opción, guárdala en direccion con direccionConfirmada: true.
+  Si la dirección YA tiene tipo de vía explícito (Calle, Carrera, etc.), acéptala directamente.
 
 7. CONVERSACIÓN NATURAL
 
@@ -346,7 +354,7 @@ export class GeminiService {
       systemInstruction: SYSTEM_PROMPT_LEGAL,
       ...BASE_CONFIG,
       temperature: 0.2,
-      maxOutputTokens: 600,
+      maxOutputTokens: 4096,
     });
 
     this.modelChatbot = new VertexModel(aiParaModelos, MODEL_CHATBOT, {
@@ -1068,7 +1076,7 @@ Responde SOLO con el texto del asunto, sin explicaciones.`;
       const r = await new VertexModel(this.ai, MODEL_LEGAL, {
         systemInstruction: SYSTEM_PROMPT_LEGAL,
         temperature: 0.1,
-        maxOutputTokens: 60,
+        maxOutputTokens: 512,
       }).generateContent(prompt);
       const text = r.response.text().trim().toUpperCase().replace(/\.$/, '');
       return text || `SOLICITAR ATENCIÓN URGENTE POR ${datos.descripcionResumen.substring(0, 60).toUpperCase()}`;
