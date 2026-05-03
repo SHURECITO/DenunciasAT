@@ -108,7 +108,7 @@ services:
 
   evolution-api:
     <<: *service-defaults
-    image: atendai/evolution-api:v2.2.4
+    image: atendai/evolution-api:v2.2.3
     entrypoint: ["/bin/bash", "-c", "node /patches/patch-lid.js && . ./Docker/scripts/deploy_database.sh && npm run start:prod"]
     ports:
       - "127.0.0.1:8080:8080"
