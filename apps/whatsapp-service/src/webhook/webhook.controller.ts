@@ -129,7 +129,8 @@ export class WebhookController {
     // Fallback: use sender field from the original payload if available,
     // otherwise prefix 57 + last 10 digits of JID
     const digits = remoteJid.split('@')[0].replace(/\D/g, '');
-    return '57' + digits.slice(-10);
+    const last10 = digits.replace(/^0+/, '').slice(-10);
+    return '57' + last10;
   }
 
   /**
