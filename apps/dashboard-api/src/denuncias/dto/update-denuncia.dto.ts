@@ -89,6 +89,21 @@ export class UpdateDenunciaDto {
   @IsOptional()
   imagenesEvidencia?: string;
 
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  radicadoConcejo?: string;
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  sinRadicadoConcejo?: boolean;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  documentoRespuestaUrl?: string;
+
   // Seguimiento de respuestas cuando hay múltiples dependencias
   @ApiPropertyOptional({ type: 'array' })
   @IsArray()

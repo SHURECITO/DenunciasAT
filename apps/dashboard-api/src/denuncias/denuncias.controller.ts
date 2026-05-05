@@ -5,6 +5,7 @@ import {
   Headers,
   HttpException,
   Logger,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Patch,
@@ -139,6 +140,15 @@ export class DenunciasController {
   @ApiOperation({ summary: 'Listar dependencias disponibles' })
   getDependencias() {
     return this.denunciasService.getDependencias();
+  }
+
+  @Get('buscar')
+  @UseGuards(JwtAuthGuard)
+  buscar(
+    @Query('q') termino: string,
+    @Query('estado') estado?: string,
+  ) {
+    return this.denunciasService.buscar(termino ?? '', estado);
   }
 
   @Get()
@@ -279,6 +289,33 @@ export class DenunciasController {
       this.logger.error(`Error descargando documento denuncia #${id} (${objectName}): ${(err as Error).message}`);
       throw new HttpException('Documento no disponible', 503);
     }
+  }
+
+  @Post(':id/documento-respuesta')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async subirDocumentoRespuesta(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.denunciasService.subirDocumentoRespuesta(id, file);
+  }
+
+  @Get(':id/documento-respuesta')
+  @UseGuards(JwtAuthGuard)
+  async descargarDocumentoRespuesta(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const denuncia = await this.denunciasService.findOne(id);
+    if (!denuncia.documentoRespuestaUrl) {
+      throw new NotFoundException('No hay documento de respuesta para esta denuncia');
+    }
+    const bucket = process.env.GCS_BUCKET_DOCUMENTOS ?? 'denunciasat-documentos';
+    const url = await this.storage.getSignedUrl(
+      bucket,
+      denuncia.documentoRespuestaUrl,
+    );
+    return { url };
   }
 
   @Post(':id/eliminar')

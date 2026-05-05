@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { DataSource, Repository } from 'typeorm';
+import { GcsStorageService } from '@app/storage';
 import axios from 'axios';
 import { CreateDenunciaDto } from './dto/create-denuncia.dto';
 import { CreateIncompletaDto } from './dto/create-incompleta.dto';
@@ -37,6 +38,7 @@ export class DenunciasService {
     private readonly dataSource: DataSource,
     private readonly config: ConfigService,
     private readonly eventsGateway: EventsGateway,
+    private readonly gcsStorage: GcsStorageService,
   ) {}
 
   private async createWithRunner(
@@ -363,6 +365,54 @@ export class DenunciasService {
     }
     
     return this.denunciasRepo.save(denuncia);
+  }
+
+  async buscar(
+    termino: string,
+    estado?: string,
+  ): Promise<Denuncia[]> {
+    const q = this.denunciasRepo
+      .createQueryBuilder('d')
+      .where('d.incompleta = false')
+      .andWhere('d.esEspecial = false')
+      .orderBy('d.fechaCreacion', 'DESC')
+      .take(50);
+
+    if (estado) {
+      q.andWhere('d.estado = :estado', { estado });
+    }
+
+    if (termino && termino.trim()) {
+      const t = `%${termino.trim().toLowerCase()}%`;
+      q.andWhere(
+        `(
+          LOWER(d.nombreCiudadano) LIKE :t OR
+          LOWER(d.cedula) LIKE :t OR
+          LOWER(d.radicado) LIKE :t OR
+          LOWER(COALESCE(d."radicadoConcejo", '')) LIKE :t OR
+          LOWER(COALESCE(d."dependenciaAsignada", '')) LIKE :t
+        )`,
+        { t },
+      );
+    }
+
+    return q.getMany();
+  }
+
+  async subirDocumentoRespuesta(
+    id: number,
+    file: Express.Multer.File,
+  ): Promise<Denuncia> {
+    const denuncia = await this.findOne(id);
+    const ext = file.originalname.split('.').pop() ?? 'pdf';
+    const objectName = `${denuncia.radicado}-respuesta.${ext}`;
+    await this.gcsStorage.uploadBuffer(
+      process.env.GCS_BUCKET_DOCUMENTOS ?? 'denunciasat-documentos',
+      objectName,
+      file.buffer,
+      file.mimetype,
+    );
+    return this.update(id, { documentoRespuestaUrl: objectName });
   }
 
   async eliminarDenuncia(id: number): Promise<{ success: boolean; id: number }> {

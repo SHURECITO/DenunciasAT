@@ -37,6 +37,9 @@ export interface Denuncia {
   solicitudAdicional: string | null;
   imagenesEvidencia: string | null;
   respuestasPorDependencia: RespuestaDependencia[];
+  radicadoConcejo?: string | null;
+  sinRadicadoConcejo?: boolean;
+  documentoRespuestaUrl?: string | null;
   fechaCreacion: string;
   fechaActualizacion: string;
   historialCambios?: Array<{
@@ -78,6 +81,13 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 export function getDenuncias(estado?: DenunciaEstado): Promise<Denuncia[]> {
   const query = estado ? `?estado=${estado}` : '';
   return apiFetch<Denuncia[]>(`/denuncias${query}`);
+}
+
+export async function getDenunciasClient(estado?: string): Promise<Denuncia[]> {
+  const params = estado ? `?estado=${estado}` : '';
+  const res = await fetch(`/api/denuncias${params}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Error fetching denuncias');
+  return res.json();
 }
 
 export function getDenuncia(id: number): Promise<Denuncia> {

@@ -22,6 +22,15 @@ export class Denuncia {
   @Column({ unique: true })
   radicado: string;
 
+  @Column({ nullable: true })
+  radicadoConcejo: string;
+
+  @Column({ default: false })
+  sinRadicadoConcejo: boolean;
+
+  @Column({ nullable: true, type: 'text' })
+  documentoRespuestaUrl: string;
+
   @Column()
   nombreCiudadano: string;
 

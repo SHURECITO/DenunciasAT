@@ -75,6 +75,19 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
   const [feedbackList, setFeedbackList] = useState<FeedbackEntry[]>([]);
   const [loadingFeedback, setLoadingFeedback] = useState(false);
   const [reintentandoDoc, setReintentandoDoc] = useState(false);
+
+  // Modal radicado Concejo
+  const [showModalRadicado, setShowModalRadicado] = useState(false);
+  const [radicadoConcejoInput, setRadicadoConcejoInput] = useState('');
+  const [sinRadicadoConcejoCheck, setSinRadicadoConcejoCheck] = useState(false);
+  const [loadingRadicado, setLoadingRadicado] = useState(false);
+
+  // Modal registrar respuesta
+  const [showModalRespuesta, setShowModalRespuesta] = useState(false);
+  const [archivoRespuesta, setArchivoRespuesta] = useState<File | null>(null);
+  const [loadingRespuesta, setLoadingRespuesta] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const tieneDocumento = denuncia.documentoGeneradoOk === true;
@@ -169,13 +182,50 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
 
   async function avanzarEstado() {
     if (!siguienteEstado) return;
+
+    // When moving to RADICADA, show modal to capture Concejo filing number
+    if (siguienteEstado === 'RADICADA') {
+      setRadicadoConcejoInput('');
+      setSinRadicadoConcejoCheck(false);
+      setShowModalRadicado(true);
+      return;
+    }
+
+    // When moving to CON_RESPUESTA, show modal to upload response document
+    if (siguienteEstado === 'CON_RESPUESTA') {
+      setArchivoRespuesta(null);
+      setShowModalRespuesta(true);
+      return;
+    }
+
+    // For RECIBIDA → EN_GESTION: advance directly
+    await confirmarAvanceEstado(siguienteEstado, {});
+  }
+
+  async function confirmarAvanceEstado(
+    estado: string,
+    extra: Record<string, unknown>,
+  ) {
     setLoading(true);
     setError('');
     try {
+      // First update extra fields if any
+      if (Object.keys(extra).length > 0) {
+        const patchRes = await fetch(`/api/denuncias/${denuncia.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(extra),
+        });
+        if (!patchRes.ok) {
+          const body = await patchRes.json().catch(() => ({}));
+          throw new Error(body.message ?? `Error ${patchRes.status}`);
+        }
+      }
+      // Then advance state
       const res = await fetch(`/api/denuncias/${denuncia.id}/estado`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estado: siguienteEstado }),
+        body: JSON.stringify({ estado }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -188,6 +238,46 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
       setError(e instanceof Error ? e.message : 'Error al cambiar estado');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function confirmarRadicadoConcejo() {
+    if (!radicadoConcejoInput.trim() && !sinRadicadoConcejoCheck) return;
+    setLoadingRadicado(true);
+    try {
+      const extra: Record<string, unknown> = sinRadicadoConcejoCheck
+        ? { sinRadicadoConcejo: true, radicadoConcejo: null }
+        : { radicadoConcejo: radicadoConcejoInput.trim(), sinRadicadoConcejo: false };
+      setShowModalRadicado(false);
+      await confirmarAvanceEstado('RADICADA', extra);
+    } finally {
+      setLoadingRadicado(false);
+    }
+  }
+
+  async function confirmarRespuesta() {
+    if (!archivoRespuesta) return;
+    setLoadingRespuesta(true);
+    setError('');
+    try {
+      // Upload response document
+      const formData = new FormData();
+      formData.append('file', archivoRespuesta);
+      const uploadRes = await fetch(`/api/denuncias/${denuncia.id}/documento-respuesta`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error('Error al subir el documento de respuesta');
+      const uploadedDenuncia: Denuncia = await uploadRes.json();
+      setDenuncia(uploadedDenuncia);
+
+      // Then advance to CON_RESPUESTA
+      setShowModalRespuesta(false);
+      await confirmarAvanceEstado('CON_RESPUESTA', {});
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al registrar respuesta');
+    } finally {
+      setLoadingRespuesta(false);
     }
   }
 
@@ -289,7 +379,17 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
             ← Volver
           </Link>
           <span className="text-gray-300">/</span>
-          <h1 className="text-xl font-semibold text-gray-900 font-mono">{denuncia.radicado}</h1>
+          <div className="flex flex-col">
+            <h1 className="text-xl font-semibold text-gray-900 font-mono">{denuncia.radicado}</h1>
+            {denuncia.radicadoConcejo && (
+              <span className="text-xs text-gray-500 font-normal">
+                Radicado Concejo: <span className="font-mono font-medium text-gray-700">{denuncia.radicadoConcejo}</span>
+              </span>
+            )}
+            {denuncia.sinRadicadoConcejo && (
+              <span className="text-xs text-gray-400 font-normal">Sin radicado en Concejo</span>
+            )}
+          </div>
           <DenunciaEstadoBadge estado={denuncia.estado} />
           {denuncia.esEspecial && (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
@@ -448,6 +548,50 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
               </div>
             </dl>
           </section>
+
+          {/* Documentos */}
+          {(tieneDocumento || denuncia.documentoRespuestaUrl) && (
+            <section className="rounded-xl border border-gray-200 bg-white p-6">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                Documentos
+              </h2>
+              <div className="space-y-3">
+                {tieneDocumento && (
+                  <a
+                    href={`/api/denuncias/${denuncia.id}/documento`}
+                    download
+                    className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700 hover:bg-blue-100 transition-colors"
+                  >
+                    <span className="text-lg">📄</span>
+                    <div>
+                      <p className="font-medium">Oficio generado</p>
+                      <p className="text-xs text-blue-500">{denuncia.radicado}.docx</p>
+                    </div>
+                  </a>
+                )}
+                {denuncia.documentoRespuestaUrl && (
+                  <a
+                    href={`/api/denuncias/${denuncia.id}/documento-respuesta`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 rounded-lg border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700 hover:bg-green-100 transition-colors"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      const res = await fetch(`/api/denuncias/${denuncia.id}/documento-respuesta`);
+                      const data = await res.json();
+                      if (data.url) window.open(data.url, '_blank');
+                    }}
+                  >
+                    <span className="text-lg">📨</span>
+                    <div>
+                      <p className="font-medium">Respuesta del Concejo</p>
+                      <p className="text-xs text-green-600">Click para descargar</p>
+                    </div>
+                  </a>
+                )}
+              </div>
+            </section>
+          )}
         </div>
 
         {/* Columna derecha — 40% */}
@@ -780,6 +924,126 @@ export default function DenunciaDetalle({ denuncia: initial, mensajes }: Props) 
             setShowModalFeedback(false);
           }}
         />
+      )}
+
+      {/* Modal — Radicado Concejo */}
+      {showModalRadicado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="mb-1 text-base font-semibold text-gray-900">
+              Marcar como radicada
+            </h3>
+            <p className="mb-5 text-sm text-gray-500">
+              Ingresa el número de radicado asignado por el Concejo de Medellín al entregar el oficio presencialmente.
+            </p>
+
+            <div className="mb-4">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Número de radicado del Concejo
+              </label>
+              <input
+                type="text"
+                value={radicadoConcejoInput}
+                onChange={(e) => {
+                  setRadicadoConcejoInput(e.target.value);
+                  if (e.target.value.trim()) setSinRadicadoConcejoCheck(false);
+                }}
+                disabled={sinRadicadoConcejoCheck}
+                placeholder="Ej: 2024-00123"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+
+            <div className="mb-6 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="sinRadicado"
+                checked={sinRadicadoConcejoCheck}
+                onChange={(e) => {
+                  setSinRadicadoConcejoCheck(e.target.checked);
+                  if (e.target.checked) setRadicadoConcejoInput('');
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600"
+              />
+              <label htmlFor="sinRadicado" className="text-sm text-gray-600">
+                Esta denuncia no generó radicado en el Concejo
+              </label>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowModalRadicado(false)}
+                className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarRadicadoConcejo}
+                disabled={loadingRadicado || (!radicadoConcejoInput.trim() && !sinRadicadoConcejoCheck)}
+                className="flex-1 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50"
+              >
+                {loadingRadicado ? 'Guardando...' : 'Confirmar radicación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal — Registrar respuesta */}
+      {showModalRespuesta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="mb-1 text-base font-semibold text-gray-900">
+              Registrar respuesta del Concejo
+            </h3>
+            <p className="mb-5 text-sm text-gray-500">
+              Sube el documento de respuesta recibido. Se notificará automáticamente al ciudadano por WhatsApp.
+            </p>
+
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="mb-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 py-8 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+            >
+              <span className="text-3xl mb-2">📎</span>
+              {archivoRespuesta ? (
+                <div className="text-center">
+                  <p className="text-sm font-medium text-green-700">{archivoRespuesta.name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {(archivoRespuesta.size / 1024).toFixed(0)} KB
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <p className="text-sm font-medium text-gray-600">Haz clic para seleccionar el archivo</p>
+                  <p className="text-xs text-gray-400 mt-0.5">PDF o Word (.pdf, .doc, .docx)</p>
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="hidden"
+                onChange={(e) => setArchivoRespuesta(e.target.files?.[0] ?? null)}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowModalRespuesta(false)}
+                className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarRespuesta}
+                disabled={loadingRespuesta || !archivoRespuesta}
+                className="flex-1 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50"
+              >
+                {loadingRespuesta ? 'Subiendo...' : 'Registrar respuesta'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
