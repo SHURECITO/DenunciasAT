@@ -274,12 +274,17 @@ export class WebhookController {
     if (!numero) return { ok: true };
 
     if (remoteJid.endsWith('@lid')) {
-      // Always attempt resolution for @lid JIDs regardless of digit count
-      const resolved = await this.resolverNumeroLid(remoteJid, numero);
-      if (resolved !== numero) {
-        this.logger.debug(`@lid resuelto → ${this.maskPhone(resolved)}`);
+      if (numero.length >= 10 && numero.length <= 13 && numero.startsWith('57')) {
+        // @lid already contains a valid Colombian number — use directly
+        this.logger.debug(`@lid con número válido → ${this.maskPhone(numero)}`);
+      } else {
+        // @lid needs resolution via Evolution API
+        const resolved = await this.resolverNumeroLid(remoteJid, numero);
+        if (resolved !== numero) {
+          this.logger.debug(`@lid resuelto → ${this.maskPhone(resolved)}`);
+        }
+        numero = resolved;
       }
-      numero = resolved;
     }
 
     const messageType = data.messageType ?? 'conversation';
