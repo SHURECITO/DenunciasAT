@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     httpOnly: true,
     // HTTP deployment — activar cuando se configure TLS en el proxy
     secure: process.env.COOKIE_SECURE === 'true',
-    sameSite: 'strict',
+    sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 8, // 8h
   });

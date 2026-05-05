@@ -5,8 +5,7 @@ import { DashboardApiService } from './dashboard-api.service';
 import { RagApiService, RagTecnicoError } from './rag-api.service';
 
 const MSG_BIENVENIDA =
-  '¡Hola! 👋 Soy el asistente del concejal Andrés Tobón. ' +
-  'Estoy aquí para ayudarte a presentar tu denuncia.\n\n' +
+  'Hola, bienvenido/a al canal oficial de denuncias del concejal Andrés Tobón. 😎' +
   '¿Cuál es el problema que deseas reportar?';
 
 const MSG_REINICIADO =
@@ -867,26 +866,29 @@ export class ChatbotService {
 
       // Guardar historial de la conversación (fire-and-forget, no bloquea el flujo)
       this.logger.log(`[${numero}] Guardando historial: ${estado.historial.length} mensajes para denuncia ID=${id}`);
-      Promise.allSettled(
-        estado.historial.map((m) =>
-          this.dashboardApi.guardarMensaje(id, {
-            contenido: m.contenido,
-            tipo: 'TEXTO',
-            direccion: m.rol === 'user' ? 'ENTRANTE' : 'SALIENTE',
-          }),
-        ),
-      ).then((resultados) => {
-        const fallidos = resultados.filter((r) => r.status === 'rejected');
+      // Save messages sequentially to preserve order — parallel saving causes
+      // non-deterministic ID assignment in PostgreSQL
+      (async () => {
+        const fallidos: number[] = [];
+        for (const m of estado.historial) {
+          try {
+            await this.dashboardApi.guardarMensaje(id, {
+              contenido: m.contenido,
+              tipo: 'TEXTO',
+              direccion: m.rol === 'user' ? 'ENTRANTE' : 'SALIENTE',
+            });
+          } catch {
+            fallidos.push(estado.historial.indexOf(m));
+          }
+        }
         if (fallidos.length > 0) {
-          const primerError = (fallidos[0] as PromiseRejectedResult).reason as { response?: { status: number; data?: unknown }; message?: string };
           this.logger.warn(
-            `[${numero}] ${fallidos.length}/${estado.historial.length} mensajes no guardados — status=${primerError?.response?.status ?? '?'} msg=${primerError?.message ?? 'desconocido'}`,
+            `[${numero}] ${fallidos.length}/${estado.historial.length} mensajes no guardados`,
           );
-          this.logger.warn(`[${numero}] Respuesta error: ${JSON.stringify(primerError?.response?.data ?? {})}`);
         } else {
           this.logger.log(`[${numero}] Historial guardado correctamente (${estado.historial.length} mensajes)`);
         }
-      }).catch((err: unknown) => {
+      })().catch((err: unknown) => {
         this.logger.error(`[${numero}] Error inesperado guardando historial: ${(err as Error).message}`);
       });
 

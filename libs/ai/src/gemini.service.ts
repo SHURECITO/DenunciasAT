@@ -161,9 +161,20 @@ Debes intentar obtener y mantener actualizados:
    → Luego retoma el flujo inteligentemente
 
 5. EVIDENCIA
-   Si llegan imágenes o PDFs:
-   → Regístralos inmediatamente
-   → Confirma recepción de forma natural (sin ser robótico)
+   SIEMPRE debes preguntar por evidencia fotográfica después de recopilar
+   la descripción y la ubicación. Hazlo de forma natural, por ejemplo:
+   "¿Tienes fotos o videos del problema? Puedes enviarlas directamente aquí."
+   Si el ciudadano envía una imagen:
+   → Regístrala inmediatamente en imagenes[]
+   → Confirma recepción brevemente: "Recibida 📷"
+   → Pregunta si tiene más: "¿Tienes más fotos para agregar?"
+   → Solo cuando confirme que no tiene más, continúa el flujo
+   Si el ciudadano envía un PDF:
+   → Regístralo inmediatamente en pdfs[]
+   → Confirma recepción: "Documento recibido 📄"
+   → Pregunta si tiene más documentos
+   Si el ciudadano dice que no tiene evidencia, acepta y continúa.
+   NUNCA saltes este paso — la evidencia visual fortalece la denuncia.
 
 6. VALIDACIÓN INTELIGENTE
 
@@ -354,7 +365,7 @@ export class GeminiService {
       systemInstruction: SYSTEM_PROMPT_LEGAL,
       ...BASE_CONFIG,
       temperature: 0.2,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 8000,
     });
 
     this.modelChatbot = new VertexModel(aiParaModelos, MODEL_CHATBOT, {
@@ -1076,7 +1087,7 @@ Responde SOLO con el texto del asunto, sin explicaciones.`;
       const r = await new VertexModel(this.ai, MODEL_LEGAL, {
         systemInstruction: SYSTEM_PROMPT_LEGAL,
         temperature: 0.1,
-        maxOutputTokens: 512,
+        maxOutputTokens: 4096,
       }).generateContent(prompt);
       const text = r.response.text().trim().toUpperCase().replace(/\.$/, '');
       return text || `SOLICITAR ATENCIÓN URGENTE POR ${datos.descripcionResumen.substring(0, 60).toUpperCase()}`;

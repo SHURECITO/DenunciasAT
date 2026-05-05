@@ -126,7 +126,8 @@ export class WebhookController {
     } catch (e) {
       this.logger.warn(`resolverNumeroLid: no se pudo resolver ${remoteJid}: ${(e as Error).message}`);
     }
-    // Fallback: prefijo colombiano + últimos 10 dígitos del JID
+    // Fallback: use sender field from the original payload if available,
+    // otherwise prefix 57 + last 10 digits of JID
     const digits = remoteJid.split('@')[0].replace(/\D/g, '');
     return '57' + digits.slice(-10);
   }
@@ -271,10 +272,13 @@ export class WebhookController {
     let numero = this.extraerNumeroPreferente(data, remoteJid);
     if (!numero) return { ok: true };
 
-    // Si es @lid y el número tiene más de 13 dígitos, intentar resolución real
-    if (remoteJid.endsWith('@lid') && numero.length > 13) {
-      numero = await this.resolverNumeroLid(remoteJid, numero);
-      this.logger.debug(`@lid resuelto → ${this.maskPhone(numero)}`);
+    if (remoteJid.endsWith('@lid')) {
+      // Always attempt resolution for @lid JIDs regardless of digit count
+      const resolved = await this.resolverNumeroLid(remoteJid, numero);
+      if (resolved !== numero) {
+        this.logger.debug(`@lid resuelto → ${this.maskPhone(resolved)}`);
+      }
+      numero = resolved;
     }
 
     const messageType = data.messageType ?? 'conversation';

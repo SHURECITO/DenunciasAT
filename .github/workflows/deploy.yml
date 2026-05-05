@@ -446,9 +446,21 @@ jobs:
               echo "Seed devolvió status ${SEED_STATUS}: ${SEED_BODY} — verificar manualmente (no es error crítico)"
             fi
             sed -i 's/^SEED_ENABLED=.*/SEED_ENABLED=false/' .env
-            docker compose -f docker-compose.prod.yml up -d dashboard-api
 
-            # Diagnóstico: mostrar logs del dashboard-api si falla el healthcheck
-            docker compose -f docker-compose.prod.yml logs --tail=50 dashboard-api || true
+            # Restart dashboard-api with SEED_ENABLED=false and ensure ALL services are up
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Final verification — all 9+ services must be running
+            echo "Verificación final de servicios..."
+            sleep 15
+            FINAL_RUNNING=$(docker compose -f docker-compose.prod.yml ps --status running --quiet | wc -l)
+            echo "Servicios corriendo al finalizar: ${FINAL_RUNNING}/10"
+            if [ "$FINAL_RUNNING" -lt 9 ]; then
+              echo "::warning::Solo ${FINAL_RUNNING}/10 servicios corriendo al finalizar"
+              docker compose -f docker-compose.prod.yml ps
+            fi
+
+            # Diagnóstico: mostrar logs del dashboard-api
+            docker compose -f docker-compose.prod.yml logs --tail=20 dashboard-api || true
           EOF
 
