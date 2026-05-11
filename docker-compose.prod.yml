@@ -15,30 +15,6 @@ x-service-defaults: &service-defaults
       max-file: "3"
 
 services:
-  postgres:
-    <<: *service-defaults
-    image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - ./infrastructure/postgres/migrations:/migrations:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
-
   redis:
     <<: *service-defaults
     image: redis:7-alpine
@@ -63,7 +39,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DB_HOST: postgres
+      DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -90,9 +66,6 @@ services:
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCP_REGION: ${GCP_REGION:-us-central1}
       GCS_BUCKET_DOCUMENTOS: ${GCS_BUCKET_DOCUMENTOS:-denunciasat-documentos}
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
       interval: 15s
@@ -116,7 +89,7 @@ services:
       AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
       DATABASE_ENABLED: "true"
       DATABASE_PROVIDER: postgresql
-      DATABASE_CONNECTION_URI: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/evolution
+      DATABASE_CONNECTION_URI: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT:-5432}/evolution
       DATABASE_CONNECTION_CLIENT_NAME: evolution
       CACHE_REDIS_ENABLED: "true"
       CACHE_REDIS_URI: redis://redis:6379
@@ -133,8 +106,6 @@ services:
       - ./infrastructure/evolution-api:/patches:ro
     depends_on:
       redis:
-        condition: service_healthy
-      postgres:
         condition: service_healthy
     deploy:
       resources:
@@ -292,11 +263,8 @@ services:
       PORT: 3006
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCP_REGION: ${GCP_REGION:-us-central1}
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT:-5432}/${DB_NAME}
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}
       DASHBOARD_API_INTERNAL_KEY: ${DASHBOARD_API_INTERNAL_KEY}
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3006/health || exit 1"]
       interval: 15s
@@ -341,7 +309,6 @@ services:
           memory: 256M
 
 volumes:
-  postgres_data:
   redis_data:
   evolution_data:
 
