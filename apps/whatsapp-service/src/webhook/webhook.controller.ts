@@ -139,6 +139,7 @@ export class WebhookController {
    */
   private extraerNumeroPreferente(data: any, remoteJid: string): string {
     const candidatos = [
+      data?.remoteJidAlt,
       remoteJid,
       data?.key?.participant,
       data?.participant,
