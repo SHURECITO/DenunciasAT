@@ -430,29 +430,9 @@ jobs:
               sleep 5
             done
 
-            # Auto-seed del usuario administrador (idempotente — 409 = ya existe, ambos OK)
-            sed -i 's/^SEED_ENABLED=.*/SEED_ENABLED=true/' .env
-            docker compose -f docker-compose.prod.yml up -d dashboard-api
-            echo "Esperando a que dashboard-api esté listo para el seed..."
-            for i in $(seq 1 12); do
-              if curl -sf http://localhost:8741/health >/dev/null 2>&1; then break; fi
-              sleep 5
-            done
-            SEED_STATUS=$(curl -s -o /tmp/seed_response -w "%{http_code}" -X POST http://localhost:8741/auth/seed 2>/dev/null || echo "000")
-            SEED_BODY=$(cat /tmp/seed_response 2>/dev/null || echo "")
-            if [ "$SEED_STATUS" = "201" ] || [ "$SEED_STATUS" = "409" ]; then
-              echo "Seed completado correctamente (status ${SEED_STATUS})"
-            else
-              echo "Seed devolvió status ${SEED_STATUS}: ${SEED_BODY} — verificar manualmente (no es error crítico)"
-            fi
-            sed -i 's/^SEED_ENABLED=.*/SEED_ENABLED=false/' .env
-
-            # Restart dashboard-api with SEED_ENABLED=false and ensure ALL services are up
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-
             # Final verification — all 9+ services must be running
             echo "Verificación final de servicios..."
-            sleep 15
+            sleep 30
             FINAL_RUNNING=$(docker compose -f docker-compose.prod.yml ps --status running --quiet | wc -l)
             echo "Servicios corriendo al finalizar: ${FINAL_RUNNING}/10"
             if [ "$FINAL_RUNNING" -lt 9 ]; then
