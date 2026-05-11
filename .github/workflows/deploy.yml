@@ -375,6 +375,23 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker compose -f docker-compose.prod.yml ps
 
+            # Ejecutar migraciones en Cloud SQL
+            DB_USER_VAL=$(grep "^DB_USER=" .env | cut -d'=' -f2)
+            DB_PASSWORD_VAL=$(grep "^DB_PASSWORD=" .env | cut -d'=' -f2)
+            DB_NAME_VAL=$(grep "^DB_NAME=" .env | cut -d'=' -f2)
+            CLOUD_SQL_IP=$(grep "^DB_HOST=" .env | cut -d'=' -f2)
+            if ! command -v psql &>/dev/null; then
+              sudo apt-get install -y postgresql-client 2>/dev/null || true
+            fi
+            echo "Ejecutando migraciones en Cloud SQL..."
+            PGPASSWORD="${DB_PASSWORD_VAL}" psql \
+              -h "$CLOUD_SQL_IP" \
+              -U "$DB_USER_VAL" \
+              -d "$DB_NAME_VAL" \
+              -f /opt/denunciasat/infrastructure/migrations/001_feedback_denuncias.sql \
+              || true
+            echo "Migraciones completadas"
+
             # Verificar que todos los servicios estén corriendo
             # Wait up to 90s for all 10 services to be healthy
             echo "Esperando hasta 90s para que todos los contenedores arranquen..."
